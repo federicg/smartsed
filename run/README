@@ -1,3 +1,6 @@
-just type on the terminal ./runAll.sh 1
+before run: modify SMARTSED_input to change input of the deterministic part
 
-where the number after the call is trelated to the number of conditional simulations
+to run: execute submission.sub as a bash script, just change res and nsim
+res, scaling factor wrt 5 meters, in order to set the desired resolution of the simulation, e.g. if res=4 the elevation model resolution will be 20 meters 
+nsim, integer semi-positive number indicating the number of gaussian simulation to perform, 
+if zero no gaussian simulation are performed and returns the downscaled particle size fractions which results from the area-to-point regression kriging.
