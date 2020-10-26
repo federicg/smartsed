@@ -1,5 +1,7 @@
-you must have installed R with the following libraries,
-raster, compositions, gstat, fields, rgdal
+you must have installed R with the following libraries :
+
+Rcpp, sp, raster, compositions, gstat, fields, rgdal,
+tensorA, bayesm, robustbase, DEoptimR, zoo, spacetime
 
 and the gdal binaries 
 
