@@ -1,4 +1,4 @@
-you must have installed R with the following library,
+you must have installed R with the following libraries,
 raster, compositions, gstat, fields, rgdal
 
 and the gdal binaries 
