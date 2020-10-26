@@ -1,3 +1,8 @@
+you must have installed R with the following library,
+raster, compositions, gstat, fields, rgdal
+
+and the gdal binaries 
+
 before run: modify SMARTSED_input to change input of the deterministic part
 
 to run: execute submission.sub as a bash script, just change res and nsim
