@@ -95,8 +95,9 @@
 //#include "Python.h"
 
 //! for parallelize with openmp
+#if defined(_OPENMP)
 #include <omp.h>
-
+#endif
 
 
 //! Generic real data
