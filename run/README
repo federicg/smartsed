@@ -1,7 +1,8 @@
 you must have installed R with the following libraries :
 
 Rcpp, sp, raster, compositions, gstat, fields, rgdal,
-tensorA, bayesm, robustbase, DEoptimR, zoo, spacetime
+tensorA, bayesm, robustbase, DEoptimR, zoo, spacetime,
+xts, intervals, FNN, spam
 
 and the gdal binaries 
 
