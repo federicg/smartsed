@@ -3,7 +3,7 @@ OPENMPFLAG =
 OPENMPLINKINGFLAG =
 CXXFLAGS = -std=c++11 -g -O2 -fpic 
 CPPFLAGS = -DNDEBUG -Iinclude
-PROGRAM = main_final_H
+PROGRAM = main_final_eta
 
 
 #LIB_CHOLMOD = -Linclude/suitesparse/SuiteSparse/CHOLMOD/lib -lcholmod #-Linclude/suitesparse/SuiteSparse/lib
