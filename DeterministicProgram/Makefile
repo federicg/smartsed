@@ -4,6 +4,7 @@ OPENMPLINKINGFLAG =
 CXXFLAGS = -std=c++11 -g -O2 -fpic 
 CPPFLAGS = -DNDEBUG -Iinclude
 PROGRAM = main_final_eta
+CPPFLAGS = -DNDEBUG -Iinclude -DENABLE_TIMING
 OBJ = main_final_H.o utils_H.o
 
 

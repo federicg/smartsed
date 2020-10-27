@@ -758,16 +758,16 @@ Rain::computePrecipitation (const UInt&              n,
   //        std::cout << Hyetograph.size() << " " << IDW_weights.size() << std::endl;
   for ( UInt Id = 0; Id < Hyetograph.size(); Id++ )
     {
-
+            
       //            std::cout << ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) << " ietogramma" << std::endl;
-
-
+            
+            
       const UInt i_index = std::floor( ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) );
-
+            
 
       for ( const auto & IDcenter : idBasinVect )
         {
-
+                
           if ( Id == 0 )
             {
               DP_total      [ IDcenter ] = 0.;
@@ -776,18 +776,18 @@ Rain::computePrecipitation (const UInt&              n,
             }
 
           rainfall_intensity = Hyetograph[ Id ][ i_index ] * IDW_weights[ IDcenter ][ Id ];
-
-
+                
+                        
           const Real deltaSoilMoisture = h_G[ IDcenter ] - S[ IDcenter ];
-
+                
           Real weight = 0.;
           if ( S[ IDcenter ] > 0 && deltaSoilMoisture < 0. )
             {
               weight = std::pow( deltaSoilMoisture / S[ IDcenter ], 2. );
             }
-
-
-
+                
+                
+                
           if ( weight > 1. || h_G[ IDcenter ] < 0 )
             {
               std::cout << "Error in weight infiltration model\n" <<
@@ -795,14 +795,14 @@ Rain::computePrecipitation (const UInt&              n,
                 "\nmax soil moisture ret. = " << S[ IDcenter ] << std::endl;
               exit( -1 );
             }
+                
 
-
-
-
+                
+                
           Real infiltrationRate = weight * rainfall_intensity * melt_mask[ IDcenter ],
             potential_runoff = std::max( rainfall_intensity * melt_mask[ IDcenter ] - infiltrationRate, 0. );
-
-
+                
+                
           if ( ( ( H( IDcenter ) + h_G[ IDcenter ] ) < ( c * S[ IDcenter ] ) ) && M_isInitialLoss ) // initial loss
             {
               //                    std::cout << H[ IDcenter ] << " " << h_G[ IDcenter ] << " " << c << " " << S[IDcenter ] << std::endl;
@@ -810,21 +810,22 @@ Rain::computePrecipitation (const UInt&              n,
               potential_runoff = 0.;
               infiltrationRate = rainfall_intensity * melt_mask[ IDcenter ];
             }
-
-
-
+                
+                
+                
           DP_total      [ IDcenter ] += rainfall_intensity;
-          DP_cumulative [ IDcenter ] += potential_runoff;
+          DP_cumulative [ IDcenter ] += potential_runoff; 
           DP_infiltrated[ IDcenter ] += infiltrationRate;
-
+                
           //std::cout << DP_total[ IDcenter ] << " " << DP_cumulative[ IDcenter ] << " " << DP_infiltrated[ IDcenter ] << " " << potential_runoff << " " << infiltrationRate << std::endl;
-
-
-
+                
+                
+                
         }
-
+        
     }
-  exit (1);
+  //        exit(1);
+                    
 }
 
 
