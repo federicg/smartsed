@@ -94,8 +94,11 @@
 //! Python interface --> correctly the QGIS path in Makefile
 //#include "Python.h"
 
+
 //! for parallelize with openmp
+#if defined(_OPENMP)
 #include <omp.h>
+#endif
 
 
 
