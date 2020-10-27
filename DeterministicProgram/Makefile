@@ -4,6 +4,7 @@ OPENMPLINKINGFLAG =
 CXXFLAGS = -std=c++11 -g -O2 -fpic 
 CPPFLAGS = -DNDEBUG -Iinclude
 PROGRAM = main_final_eta
+OBJ = main_final_H.o utils_H.o
 
 
 #LIB_CHOLMOD = -Linclude/suitesparse/SuiteSparse/CHOLMOD/lib -lcholmod #-Linclude/suitesparse/SuiteSparse/lib
@@ -20,12 +21,12 @@ PROGRAM = main_final_eta
 all : main
 
 
-main : $(PROGRAM).o
-	$(CXX) $(OPENMPLINKINGFLAG) $(PROGRAM).o -o main.exe
+main : $(OBJ)
+	$(CXX) $(OPENMPLINKINGFLAG) $(OBJ) -o main.exe
 
 
-$(PROGRAM).o : $(PROGRAM).cpp
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(OPENMPFLAG) -c $(PROGRAM).cpp
+$(OBJ) : %.o : %.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(OPENMPFLAG) -c $<
 
 
 
