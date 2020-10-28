@@ -1790,7 +1790,7 @@ main (int argc, char** argv)
           Eigen::saveMarket (A, tmpname, false);
           tmpname = vector_name + std::to_string (n);
           std::cout << "saving " << tmpname << std::endl;
-          Eigen::saveMarket (rhs, tmpname, false);
+          Eigen::saveMarketVector_lis (rhs, tmpname);
         }
       toc("spit out matrix for debug");
         
