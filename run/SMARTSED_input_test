@@ -148,8 +148,8 @@
 [linear_solver]
     direct_method = false
 
-
-
-
-
+[debug]
+    spit_out_matrix = true
+    matrix_name = matrice_passo_
+    vector_name = vettore_passo_
 

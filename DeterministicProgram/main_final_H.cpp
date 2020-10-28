@@ -117,6 +117,11 @@ main (int argc, char** argv)
   const bool        save_temporal_sequence = dataFile( "discretization/save_temporal_sequence", false );
   const bool        isNonReflectingBC      = dataFile( "discretization/isNonReflectingBC", false );
 
+  const bool        spit_out_matrix        = dataFile( "debug/spit_out_matrix", false );
+  const std::string matrix_name            = dataFile( "debug/matrix_name", "/tmp/matrix_" );
+  const std::string vector_name            = dataFile( "debug/vector_name", "/tmp/vector_" );
+  std::string tmpname = "";
+  
   const Vector2D    XX_gauges( std::array<Real,2>{{ X_gauges, Y_gauges }} );
   const Vector2D    XX_1     ( std::array<Real,2>{{ X_1,      Y_1 }} );
   const Vector2D    XX_2     ( std::array<Real,2>{{ X_2,      Y_2 }} );
@@ -1774,8 +1779,18 @@ main (int argc, char** argv)
         
       toc("assemble matrix");
         
+      tic();
+      if (spit_out_matrix) {
+        tmpname = matrix_name + std::to_string (n);
+        std::cout << "saving " << tmpname << std::endl;
+        Eigen::saveMarket (A, tmpname, false);
+        tmpname = vector_name + std::to_string (n);
+        std::cout << "saving " << tmpname << std::endl;
+        Eigen::saveMarket (rhs, tmpname, false);
+      }
+      toc("spit out matrix for debug");
+
       
-        
       tic();
       if ( direct_method )  // Direct Sparse method: Cholesky being A spd 
         {
