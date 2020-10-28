@@ -10,7 +10,8 @@
 
 
 //! Eigen library    
-#include "Eigen/Sparse"
+#include <Eigen/Sparse>
+#include <unsupported/Eigen/SparseExtra>
 
 //! Generic real data
 typedef double Real;
