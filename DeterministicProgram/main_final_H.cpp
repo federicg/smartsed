@@ -1783,13 +1783,13 @@ main (int argc, char** argv)
         
       tic();
       if (spit_out_matrix) {
-          tmpname = matrix_name + std::to_string (n);
-          std::cout << "saving " << tmpname << std::endl;
-          Eigen::saveMarket (A, tmpname, false);
-          tmpname = vector_name + std::to_string (n);
-          std::cout << "saving " << tmpname << std::endl;
-          Eigen::saveMarket (rhs, tmpname, false);
-        }
+        tmpname = matrix_name + std::to_string (n);
+        std::cout << "saving " << tmpname << std::endl;
+        Eigen::saveMarket (A, tmpname, false);
+        tmpname = vector_name + std::to_string (n);
+        std::cout << "saving " << tmpname << std::endl;
+        Eigen::saveMarketVector (rhs, tmpname);
+      }
       toc("spit out matrix for debug");
       
         
