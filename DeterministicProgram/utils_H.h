@@ -454,36 +454,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                     const UInt&              N_rows,
                     const UInt&              N_cols);
 
-void
-buildMatrix (const std::vector<Real>& H_int_x,
-             const std::vector<Real>& H_int_y,
-             const std::vector<Real>& orography,
-             const std::vector<Real>& u_star,
-             const std::vector<Real>& v_star,
-             const Eigen::VectorXd&   H,
-             const UInt&              N_cols,
-             const UInt&              N_rows,
-             const Real&              c1,
-             const Real&              c3,
-             const Real&              H_min,
-             const std::vector<Real>& precipitation,
-             const Real&              dt_DSV,
-             const std::vector<Real>& alfa_x,
-             const std::vector<Real>& alfa_y,
-             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-             const std::vector<UInt>& idStaggeredInternalVectVertical,
-             const std::vector<UInt>& idStaggeredBoundaryVectWest,
-             const std::vector<UInt>& idStaggeredBoundaryVectEast,
-             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-             const std::vector<UInt>& idBasinVect,
-             const std::vector<UInt>& idBasinVectReIndex,
-             const bool&              isNonReflectingBC,
-
-             std::vector<Eigen::Triplet<Real> >& coefficients,
-             Eigen::VectorXd&                    rhs
-
-             );
 
 void
 buildMatrix (const std::vector<Real>& H_int_x,
@@ -510,7 +480,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<UInt>& idBasinVect,
              const std::vector<UInt>& idBasinVectReIndex,
              const bool&              isNonReflectingBC,
-             const Real&              alp,  // 0 < alp <= 1
+             const bool&              isH,
 
              std::vector<Eigen::Triplet<Real> >& coefficients,
              Eigen::VectorXd&                    rhs);

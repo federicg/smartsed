@@ -824,7 +824,6 @@ Rain::computePrecipitation (const UInt&              n,
         }
         
     }
-  //        exit(1);
                     
 }
 
@@ -1348,6 +1347,36 @@ frictionClass::frictionClass (const std::string& friction_model,
   alfa_x.resize( S_x.size() );
   alfa_y.resize( S_y.size() );
 
+  M_gamma_dt_DSV_x = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
+  M_gamma_dt_DSV_y = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
+    
+ 
+  M_expo_r_x_vect.resize( S_x.size() );
+  M_gamma_dt_DSV_x_.resize( S_x.size() );
+  for ( UInt k = 0; k < S_x.size(); k++ )
+    {
+        M_expo_r_x_vect[ k ] = M_expo_r1 * ( std::abs( S_x[ k ] ) >   .006 ) +
+        M_expo_r2 * ( std::abs( S_x[ k ] ) <=  .006 );
+        
+        const auto M_Rick_x = ( M_fc0_greater_x[ k ] * std::pow( std::abs( S_x[ k ] ), .33 ) ) * ( std::abs( S_x[ k ] ) >  .006 ) +
+          ( M_fc0_lower_x[ k ]   * std::pow( std::abs( S_x[ k ] ), .08 ) ) * ( std::abs( S_x[ k ] ) <= .006 );
+        M_gamma_dt_DSV_x_[ k ] = M_dt_DSV * M_g * std::pow( M_Rick_x, 2 );
+        
+    }
+    
+  M_expo_r_y_vect.resize( S_y.size() );
+  M_gamma_dt_DSV_y_.resize( S_y.size() );
+  for ( UInt k = 0; k < S_y.size(); k++ )
+    {
+        M_expo_r_y_vect[ k ] = M_expo_r1 * ( std::abs( S_y[ k ] ) >   .006 ) +
+        M_expo_r2 * ( std::abs( S_y[ k ] ) <=  .006 );
+
+        const auto M_Rick_y = ( M_fc0_greater_y[ k ] * std::pow( std::abs( S_y[ k ] ), .33 ) ) * ( std::abs( S_y[ k ] ) >  .006 ) +
+          ( M_fc0_lower_y[ k ]   * std::pow( std::abs( S_y[ k ] ), .08 ) ) * ( std::abs( S_y[ k ] ) <= .006 );
+        M_gamma_dt_DSV_y_ [ k ] = M_dt_DSV * M_g * std::pow( M_Rick_y, 2 );
+        
+    }
+    
   if ( friction_model == "None" )
     {
       M_frictionModel = 0;
@@ -1355,47 +1384,10 @@ frictionClass::frictionClass (const std::string& friction_model,
   else if ( friction_model == "Manning" )
     {
       M_frictionModel = 1;
-
-
-      M_gamma_dt_DSV_x = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-      M_gamma_dt_DSV_y = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-
     }
   else if ( friction_model == "Rickenmann" )
     {
       M_frictionModel = 2;
-
-      M_gamma_dt_DSV_x = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-      M_gamma_dt_DSV_y = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-
-
-
-      M_expo_r_x_vect.resize( S_x.size() );
-      M_gamma_dt_DSV_x_.resize  ( S_x.size() );
-      for ( UInt k = 0; k < S_x.size(); k++ )
-        {
-          M_expo_r_x_vect[ k ] = M_expo_r1 * ( std::abs( S_x[ k ] ) >   .006 ) +
-            M_expo_r2 * ( std::abs( S_x[ k ] ) <=  .006 );
-
-
-          const auto M_Rick_x = ( M_fc0_greater_x[ k ] * std::pow( std::abs( S_x[ k ] ), .33 ) ) * ( std::abs( S_x[ k ] ) >  .006 ) +
-            ( M_fc0_lower_x[ k ]   * std::pow( std::abs( S_x[ k ] ), .08 ) ) * ( std::abs( S_x[ k ] ) <= .006 );
-          M_gamma_dt_DSV_x_[ k ] = M_dt_DSV * M_g * std::pow( M_Rick_x, 2 );
-        }
-
-
-      M_expo_r_y_vect.resize( S_y.size() );
-      M_gamma_dt_DSV_y_.resize  ( S_y.size() );
-      for ( UInt k = 0; k < S_y.size(); k++ )
-        {
-          M_expo_r_y_vect[ k ] = M_expo_r1 * ( std::abs( S_y[ k ] ) >   .006 ) +
-            M_expo_r2 * ( std::abs( S_y[ k ] ) <=  .006 );
-
-          const auto M_Rick_y = ( M_fc0_greater_y[ k ] * std::pow( std::abs( S_y[ k ] ), .33 ) ) * ( std::abs( S_y[ k ] ) >  .006 ) +
-            ( M_fc0_lower_y[ k ]   * std::pow( std::abs( S_y[ k ] ), .08 ) ) * ( std::abs( S_y[ k ] ) <= .006 );
-          M_gamma_dt_DSV_y_ [ k ] = M_dt_DSV * M_g * std::pow( M_Rick_y, 2 );
-        }
-
     }
   else
     {
@@ -1411,192 +1403,259 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
                     const std::vector<UInt>& idStaggeredBoundaryVectEast )
 {
-
-  switch ( M_frictionModel )
+    
+  for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
-    case 0:
-
-
-
-      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-        {
-          alfa_x[ Id ] = 1;
-        }
-
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectWest )
-        {
-          alfa_x[ Id ] = 1;
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectEast )
-        {
-          alfa_x[ Id ] = 1;
-        }
-
-
-
-      break;
-
-    case 1:
-
-
-      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-        {
-
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_x[ Id ] = alfa;
-        }
-
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectWest )
-        {
-
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_x[ Id ] = alfa;
-
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectEast )
-        {
-
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-          alfa_x[ Id ] = alfa;
-
-
-        }
-
-
-      break;
-
-    case 2:
-
-      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-        {
-
-          Real alfa = 1.;
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_x[ Id ] = alfa;
-        }
-
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectWest )
-        {
-
-
-          Real alfa = 1.;
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_x[ Id ] = alfa;
-
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectEast )
-        {
-
-          Real alfa = 1.;
-
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-
-          alfa_x[ Id ] = alfa;
-
-        }
-
-      break;
-
-    default:
-      std::cout << "Error in frictionClass" << std::endl;
-      exit( -1. );
+        Real alfa = 1.;
+        
+        const auto & H_int = H_interface[ Id ];
+        const auto & exponent = M_expo_r_x_vect[ Id ];
+        const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+        
+        if ( den > M_H_min )
+          {
+              
+              const auto u_abs = std::abs( u[ Id ] );
+        
+              Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
+              coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+              alfa = 1. / ( 1. + coeff );
+          }
+        
+        alfa_x[ Id ] = alfa;
+        
     }
+    
+    for ( const auto & Id : idStaggeredBoundaryVectWest )
+      {
+          Real alfa = 1.;
+          
+          const auto & H_int = H_interface[ Id ];
+          const auto & exponent = M_expo_r_x_vect[ Id ];
+          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+          
+          if ( den > M_H_min )
+            {
+                
+                const auto u_abs = std::abs( u[ Id ] );
+          
+                Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                alfa = 1. / ( 1. + coeff );
+            }
+          
+          alfa_x[ Id ] = alfa;
+          
+      }
+    
+    for ( const auto & Id : idStaggeredBoundaryVectEast )
+      {
+          Real alfa = 1.;
+          
+          const auto & H_int = H_interface[ Id ];
+          const auto & exponent = M_expo_r_x_vect[ Id ];
+          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+          
+          if ( den > M_H_min )
+            {
+                
+                const auto u_abs = std::abs( u[ Id ] );
+          
+                Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                alfa = 1. / ( 1. + coeff );
+            }
+          
+          alfa_x[ Id ] = alfa;
+          
+      }
+    
+//
+//  switch ( M_frictionModel )
+//    {
+//    case 0:
+//
+//
+//
+//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
+//        {
+//          alfa_x[ Id ] = 1;
+//        }
+//
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectWest )
+//        {
+//          alfa_x[ Id ] = 1;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectEast )
+//        {
+//          alfa_x[ Id ] = 1;
+//        }
+//
+//
+//
+//      break;
+//
+//    case 1:
+//
+//
+//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
+//        {
+//
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_x[ Id ] = alfa;
+//        }
+//
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectWest )
+//        {
+//
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_x[ Id ] = alfa;
+//
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectEast )
+//        {
+//
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//          alfa_x[ Id ] = alfa;
+//
+//
+//        }
+//
+//
+//      break;
+//
+//    case 2:
+//
+//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
+//        {
+//
+//          Real alfa = 1.;
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_x[ Id ] = alfa;
+//        }
+//
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectWest )
+//        {
+//
+//
+//          Real alfa = 1.;
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_x[ Id ] = alfa;
+//
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectEast )
+//        {
+//
+//          Real alfa = 1.;
+//
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//
+//          alfa_x[ Id ] = alfa;
+//
+//        }
+//
+//      break;
+//
+//    default:
+//      std::cout << "Error in frictionClass" << std::endl;
+//      exit( -1. );
+//    }
 
 }
 
@@ -1609,186 +1668,255 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
                     const std::vector<UInt>& idStaggeredBoundaryVectSouth)
 {
 
-  switch ( M_frictionModel )
-    {
-    case 0:
-
-
-      for ( const auto & Id : idStaggeredInternalVectVertical )
-        {
-          alfa_y[ Id ] = 1.;
-        }
-
-
+    for ( const auto & Id : idStaggeredInternalVectVertical )
+      {
+          Real alfa = 1.;
+          
+          const auto & H_int = H_interface[ Id ];
+          const auto & exponent = M_expo_r_y_vect[ Id ];
+          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+          
+          if ( den > M_H_min )
+            {
+                
+                const auto v_abs = std::abs( v[ Id ] );
+          
+                Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                alfa = 1. / ( 1. + coeff );
+            }
+          
+          
+          alfa_y[ Id ] = alfa;
+          
+      }
+      
       for ( const auto & Id : idStaggeredBoundaryVectNorth )
         {
-          alfa_y[ Id ] = 1.;
+            Real alfa = 1.;
+            
+            const auto & H_int = H_interface[ Id ];
+            const auto & exponent = M_expo_r_y_vect[ Id ];
+            const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+            
+            if ( den > M_H_min )
+              {
+                  
+                  const auto v_abs = std::abs( v[ Id ] );
+            
+                  Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
+                  coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                  alfa = 1. / ( 1. + coeff );
+              }
+            
+            
+            alfa_y[ Id ] = alfa;
+            
         }
-
-
+      
       for ( const auto & Id : idStaggeredBoundaryVectSouth )
         {
-          alfa_y[ Id ] = 1.;
+            Real alfa = 1.;
+            
+            const auto & H_int = H_interface[ Id ];
+            const auto & exponent = M_expo_r_y_vect[ Id ];
+            const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+            
+            if ( den > M_H_min )
+              {
+                  
+                  const auto v_abs = std::abs( v[ Id ] );
+            
+                  Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
+                  coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                  alfa = 1. / ( 1. + coeff );
+              }
+            
+            
+            alfa_y[ Id ] = alfa;
+            
         }
-
-
-
-      break;
-
-    case 1:
-
-      for ( const auto & Id : idStaggeredInternalVectVertical )
-        {
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-        {
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-        {
-          Real alfa = 1.;
-          const Real den = std::pow( H_interface[ Id ], M_expo );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-
-
-
-      break;
-
-    case 2:
-
-      for ( const auto & Id : idStaggeredInternalVectVertical )
-        {
-
-          Real alfa = 1.;
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-        {
-
-          Real alfa = 1.;
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-        {
-
-          Real alfa = 1.;
-
-          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-          if ( den > M_H_min )
-            {
-              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-            }
-
-          if ( std::isnan( alfa ) )
-            {
-              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-              std::cout << "nan in frictionClass" << std::endl;
-              exit( -1. );
-            }
-
-          alfa_y[ Id ] = alfa;
-        }
-
-
-
-
-
-      break;
-
-    default:
-
-      std::cout << "Error in frictionClass" << std::endl;
-      exit( -1. );
-
-    }
+    
+//  switch ( M_frictionModel )
+//    {
+//    case 0:
+//
+//
+//      for ( const auto & Id : idStaggeredInternalVectVertical )
+//        {
+//          alfa_y[ Id ] = 1.;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
+//        {
+//          alfa_y[ Id ] = 1.;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
+//        {
+//          alfa_y[ Id ] = 1.;
+//        }
+//
+//
+//
+//      break;
+//
+//    case 1:
+//
+//      for ( const auto & Id : idStaggeredInternalVectVertical )
+//        {
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
+//        {
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
+//        {
+//          Real alfa = 1.;
+//          const Real den = std::pow( H_interface[ Id ], M_expo );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//
+//
+//
+//      break;
+//
+//    case 2:
+//
+//      for ( const auto & Id : idStaggeredInternalVectVertical )
+//        {
+//
+//          Real alfa = 1.;
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
+//        {
+//
+//          Real alfa = 1.;
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
+//        {
+//
+//          Real alfa = 1.;
+//
+//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
+//          if ( den > M_H_min )
+//            {
+//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
+//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
+//            }
+//
+//          if ( std::isnan( alfa ) )
+//            {
+//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
+//              std::cout << "nan in frictionClass" << std::endl;
+//              exit( -1. );
+//            }
+//
+//          alfa_y[ Id ] = alfa;
+//        }
+//
+//
+//
+//
+//
+//      break;
+//
+//    default:
+//
+//      std::cout << "Error in frictionClass" << std::endl;
+//      exit( -1. );
+//
+//    }
 
 }
 
@@ -2689,6 +2817,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
 }
 
 
+
 void
 buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<Real>& H_int_y,
@@ -2714,17 +2843,11 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<UInt>& idBasinVect,
              const std::vector<UInt>& idBasinVectReIndex,
              const bool&              isNonReflectingBC,
+             const bool&              isH,
 
              std::vector<Eigen::Triplet<Real> >& coefficients,
              Eigen::VectorXd&                    rhs)
-
-
 {
-
-  coefficients.reserve( idBasinVect.size() +
-                        4 * idStaggeredInternalVectHorizontal.size() +
-                        4 * idStaggeredInternalVectVertical.size() );
-
 
 
 
@@ -2733,249 +2856,6 @@ buildMatrix (const std::vector<Real>& H_int_x,
       const auto IDreIndex = idBasinVectReIndex[ Id ];
       coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
       rhs( IDreIndex ) = H( Id ) + precipitation[ Id ] * dt_DSV;
-    }
-
-
-
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
-    {
-
-      const UInt i       = Id / ( N_cols + 1 ),
-
-        IDleft  = Id - i - 1, // H
-        IDright = Id - i, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-
-      if ( H_interface > H_min )
-        {
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-
-
-
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( c3 * coeff_m * orography[ IDleft ]
-                                                                            - c3 * coeff_m * orography[ IDright ] );
-
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( c3 * coeff_m * orography[ IDright ]
-                                                                            - c3 * coeff_m * orography[ IDleft ] );
-
-        }
-
-
-
-
-    }
-
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
-    {
-
-      const UInt i            = Id / ( N_cols + 1 ),
-
-        IDright      = Id - i,
-        IDrightright = IDright + 1, // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( c3 * coeff_m * orography[ IDrightright ]
-                                                       - c3 * coeff_m * orography[ IDright ] ) );
-        }
-
-    }
-
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectEast )
-    {
-
-      const UInt i          = Id / ( N_cols + 1 ),
-
-        IDleft     = Id - i - 1,
-        IDleftleft = IDleft - 1, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDleftReIndex ) += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( c3 * coeff_m * orography[ IDleftleft ]
-                                                       - c3 * coeff_m * orography[ IDleft ] ) );
-        }
-
-    }
-
-  for ( const auto & Id : idStaggeredInternalVectVertical )
-    {
-
-      const UInt IDleft  = Id - N_cols, // H
-        IDright = Id, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-
-
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( c3 * coeff_m * orography[ IDleft ]
-                                                                            - c3 * coeff_m * orography[ IDright ] );
-
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( c3 * coeff_m * orography[ IDright ]
-                                                                            - c3 * coeff_m * orography[ IDleft ] );
-        }
-
-    }
-
-
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-    {
-
-      const UInt IDright      = Id,
-        IDrightright = Id + N_cols, //
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( c3 * coeff_m * orography[ IDrightright ]
-                                                       - c3 * coeff_m * orography[ IDright ] ) );
-        }
-
-    }
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-    {
-
-      const UInt IDleft     = Id - N_cols, // H
-        IDleftleft = IDleft - N_cols, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDleftReIndex )  += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( c3 * coeff_m * orography[ IDleftleft ]
-                                                       - c3 * coeff_m * orography[ IDleft ] ) );
-        }
-
-    }
-
-}
-
-
-void
-buildMatrix (const std::vector<Real>& H_int_x,
-             const std::vector<Real>& H_int_y,
-             const std::vector<Real>& orography,
-             const std::vector<Real>& u_star,
-             const std::vector<Real>& v_star,
-             const Eigen::VectorXd&   H,
-             const UInt&              N_cols,
-             const UInt&              N_rows,
-             const Real&              c1,
-             const Real&              c3,
-             const Real&              H_min,
-             const std::vector<Real>& precipitation,
-             const Real&              dt_DSV,
-             const std::vector<Real>& alfa_x,
-             const std::vector<Real>& alfa_y,
-             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-             const std::vector<UInt>& idStaggeredInternalVectVertical,
-             const std::vector<UInt>& idStaggeredBoundaryVectWest,
-             const std::vector<UInt>& idStaggeredBoundaryVectEast,
-             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-             const std::vector<UInt>& idBasinVect,
-             const std::vector<UInt>& idBasinVectReIndex,
-             const bool&              isNonReflectingBC,
-             const Real&              alp,  // 0 < alp <= 1
-
-             std::vector<Eigen::Triplet<Real> >& coefficients,
-             Eigen::VectorXd&                    rhs)
-{
-
-  coefficients.reserve( idBasinVect.size() +
-                        4 * idStaggeredInternalVectHorizontal.size() +
-                        4 * idStaggeredInternalVectVertical.size() );
-
-
-
-
-  for ( const auto & Id : idBasinVect )
-    {
-      const auto IDreIndex = idBasinVectReIndex[ Id ];
-      coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
-      rhs( IDreIndex ) = ( H( Id ) + precipitation[ Id ] * dt_DSV ) * alp;
       //        if (precipitation[ Id ] != 0) std::cout << precipitation[ Id ] << std::endl;
     }
 
@@ -3011,9 +2891,9 @@ buildMatrix (const std::vector<Real>& H_int_x,
 
 
 
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * alp;
+          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
 
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * alp;
+          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
 
         }
 
@@ -3043,7 +2923,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
         {
 
           rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m * alp );
+            ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
         }
 
 
@@ -3074,7 +2954,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
         {
 
           rhs( IDleftReIndex ) += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m * alp );
+            ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
         }
 
     }
@@ -3105,9 +2985,9 @@ buildMatrix (const std::vector<Real>& H_int_x,
           coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
 
 
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * alp;
+          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
 
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * alp;
+          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
 
         }
 
@@ -3132,7 +3012,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
         {
 
           rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m * alp );
+            ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
         }
 
     }
@@ -3156,7 +3036,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
         {
 
           rhs( IDleftReIndex )  += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m * alp );
+            ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
         }
 
     }
