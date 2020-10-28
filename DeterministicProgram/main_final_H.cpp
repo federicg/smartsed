@@ -9,7 +9,7 @@
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
+ 
     SMART-SED is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
@@ -121,7 +121,7 @@ main (int argc, char** argv)
   const std::string matrix_name            = dataFile( "debug/matrix_name", "/tmp/matrix_" );
   const std::string vector_name            = dataFile( "debug/vector_name", "/tmp/vector_" );
   std::string tmpname = "";
-  
+    
   const Vector2D    XX_gauges( std::array<Real,2>{{ X_gauges, Y_gauges }} );
   const Vector2D    XX_1     ( std::array<Real,2>{{ X_1,      Y_1 }} );
   const Vector2D    XX_2     ( std::array<Real,2>{{ X_2,      Y_2 }} );
@@ -137,8 +137,6 @@ main (int argc, char** argv)
   const Real t_final = max_Days * 24 * 3600;
   const Real dt_DSV  = t_final / Real( nstep );
     
-  const Real scale_coeff = dataFile( "discretization/scale_coeff", 1. );
-    
 
 
   std::cout << "------------------------ "                            << std::endl;
@@ -150,7 +148,6 @@ main (int argc, char** argv)
   std::cout << "t_final                = " << t_final    << " sec."   << std::endl;
   std::cout << "dt_DSV                 = " << dt_DSV     << " sec."   << std::endl;
   std::cout << "H_min                  = " << H_min                   << std::endl;
-  //    std::cout << "scale_coeff            = " << scale_coeff             << std::endl;
   std::cout << "------------------------ "                            << std::endl;
 
   toc("parse command line");
@@ -1288,7 +1285,7 @@ main (int argc, char** argv)
                 
               if ( basin_mask_Vec[ k ] == 1 )
                 {
-                  H_basin( h ) = H( k ) * scale_coeff;
+                  H_basin( h ) = H( k );
                   h++;
                 }
             }
@@ -1568,8 +1565,17 @@ main (int argc, char** argv)
     #endif
   */
     
+  SpMat A( numberCellsInBasin, numberCellsInBasin );
+
+  // row, column and value in the Triplet
+  std::vector<Eigen::Triplet<Real> > coefficients;
+    
+  coefficients.reserve( idBasinVect.size() +
+                        4 * idStaggeredInternalVectHorizontal.size() +
+                        4 * idStaggeredInternalVectVertical.size() );
+    
   toc("prepare loop");
-  
+    
   for ( Int n = 1; n <= nstep; n++ )
     {
 
@@ -1737,10 +1743,6 @@ main (int argc, char** argv)
 
 
       tic();
-      // row, column and value in the Triplet
-      std::vector<Eigen::Triplet<Real> > coefficients;           
-        
-        
         
         
       buildMatrix( H_interface.horizontal,
@@ -1753,7 +1755,7 @@ main (int argc, char** argv)
                    N_rows,
                    c1_DSV,
                    c3_DSV,
-                   H_min,  // 0
+                   0,  // 0
                    precipitation.DP_cumulative,
                    dt_DSV,
                    alfa.alfa_x,
@@ -1767,30 +1769,30 @@ main (int argc, char** argv)
                    idBasinVect,
                    idBasinVectReIndex,
                    isNonReflectingBC,
-                   scale_coeff,
+                   true,
                    coefficients,
                    rhs );
         
          
         
-      SpMat A( numberCellsInBasin, numberCellsInBasin );
       A.setFromTriplets( coefficients.begin(), coefficients.end() );         
       A.makeCompressed();
+      coefficients.clear();
         
       toc("assemble matrix");
         
       tic();
       if (spit_out_matrix) {
-        tmpname = matrix_name + std::to_string (n);
-        std::cout << "saving " << tmpname << std::endl;
-        Eigen::saveMarket (A, tmpname, false);
-        tmpname = vector_name + std::to_string (n);
-        std::cout << "saving " << tmpname << std::endl;
-        Eigen::saveMarket (rhs, tmpname, false);
-      }
+          tmpname = matrix_name + std::to_string (n);
+          std::cout << "saving " << tmpname << std::endl;
+          Eigen::saveMarket (A, tmpname, false);
+          tmpname = vector_name + std::to_string (n);
+          std::cout << "saving " << tmpname << std::endl;
+          Eigen::saveMarket (rhs, tmpname, false);
+        }
       toc("spit out matrix for debug");
-
       
+        
       tic();
       if ( direct_method )  // Direct Sparse method: Cholesky being A spd 
         {
@@ -1832,7 +1834,7 @@ main (int argc, char** argv)
       for ( const UInt & Id : idBasinVect )
         {
           const UInt IDreIndex = idBasinVectReIndex[ Id ];
-          H( Id ) = H_basin( IDreIndex ) / scale_coeff;
+          H( Id ) = H_basin( IDreIndex );
           eta( Id ) = H( Id ) + orography[ Id ];
         }
       toc("solve");
@@ -1867,7 +1869,7 @@ main (int argc, char** argv)
                  isNonReflectingBC );
         
         
-      std::cout << "min H: " << H_basin.minCoeff() /scale_coeff << " max H: " << H_basin.maxCoeff() /scale_coeff << std::endl;
+      std::cout << "min H: " << H_basin.minCoeff() << " max H: " << H_basin.maxCoeff() << std::endl;
         
       for ( const UInt & k : idBasinVect )
         {
@@ -1920,7 +1922,8 @@ main (int argc, char** argv)
 
       for ( const UInt & k : idBasinVect )
         {
-          W_Gav[ k ] = M_PI * Z_Gav[ k ] * std::sqrt( std::abs( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed;
+          // 1.e-3 is the conversion factor, look at EPM theory
+          W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt( std::abs( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed;
         }
         
         

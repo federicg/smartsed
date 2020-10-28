@@ -123,7 +123,6 @@
 
 [discretization]
 
-   scale_coeff       = 1.
 
    FillSinks         = false
 
