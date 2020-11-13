@@ -1,7 +1,7 @@
 #ifndef TYPDEFS_H_H
 #  define TYPDEFS_H_H
 
-//! std library
+  //! std library
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -12,6 +12,9 @@
 //! Eigen library    
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
+
+//! IML++ CG template
+#include "cg.hpp"
 
 //! Generic real data
 typedef double Real;
