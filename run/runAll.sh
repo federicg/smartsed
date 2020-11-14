@@ -33,7 +33,7 @@ if [[ $nsim -ne 0 ]]; then
 	for (( i = 1; i <= $nsim; i++ )); do
 		OUTFILE=../Outputs/$i/outdeterministic.txt
 		ERRFILE=../Outputs/$i/errDeterministic.txt
-	    OMP_NUM_THREADS=4 ./../DeterministicProgram/main.exe -f SMARTSED_input -sim $i -scale #$res >>$OUTFILE 2>$ERRFILE
+	    OMP_NUM_THREADS=4 ./../DeterministicProgram/main.exe -f SMARTSED_input -sim $i -scale $res #>>$OUTFILE 2>$ERRFILE
 	done
 else
 	OUTFILE=../Outputs/$nsim/outdeterministic.txt
