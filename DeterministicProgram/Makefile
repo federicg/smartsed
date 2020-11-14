@@ -2,18 +2,12 @@ CXX = g++
 OPENMPFLAG = 
 OPENMPLINKINGFLAG =
 CXXFLAGS = -std=c++11 -g -O2 -fpic 
-CPPFLAGS = -DNDEBUG -Iinclude
+CPPFLAGS = -DNDEBUG 
 PROGRAM = main_final_eta
-CPPFLAGS = -DNDEBUG -Iinclude -DENABLE_TIMING
+CPPFLAGS = -DNDEBUG -Iinclude/eigen3 -Iinclude -Iinclude/eigen_forma -Iinclude/eigen_forma/Utilities -DENABLE_TIMING
 OBJ = main_final_H.o utils_H.o
 
 
-#LIB_CHOLMOD = -Linclude/suitesparse/SuiteSparse/CHOLMOD/lib -lcholmod #-Linclude/suitesparse/SuiteSparse/lib
-#LIB_AMD = -Linclude/suitesparse/SuiteSparse/AMD/lib -lamd
-#LIB_CAMD = -Linclude/suitesparse/SuiteSparse/CAMD/lib -lcamd
-#LIB_COLAMD = -Linclude/suitesparse/SuiteSparse/COLAMD/lib -lcolamd
-#LIB_CCOLAMD = -Linclude/suitesparse/SuiteSparse/CCOLAMD/lib -lccolamd
-#LIB_SUITESPARSECONFIG = -Linclude/suitesparse/SuiteSparse/SuiteSparse_config -lsuitesparseconfig
 
 
 
