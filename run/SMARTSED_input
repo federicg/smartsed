@@ -87,18 +87,20 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_50m.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/H_5m.asc   #realOrography/H.asc
     
     restart_vel                 = true
-    vel_file_u                  = ../Outputs/initial_cond/u_50m.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_50m.asc
+    vel_file_u                  = ../Outputs/initial_cond/u_5m.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_5m.asc
 
     [../]
 
     [./infiltration]
     infiltration_model           = SCS-CN # None, SCS-CN
     isInitialLoss                = false
-    roughness_scale_factor       = 1.e2
+    roughness_scale_factor1      = 1.e2
+    roughness_scale_factor2      = 1.e3
+    roughness_scale_factor3      = 1.e4
     perc_initialLoss             = 0.2  # i.e. c in I_a <= c * S
     corineCode_file              = CorineLandCover/CaldoneCLC_5.asc  
 
@@ -123,7 +125,6 @@
 
 [discretization]
 
-   scale_coeff       = 1.
 
    FillSinks         = false
 
@@ -149,7 +150,10 @@
     direct_method = false
 
 
-
+[debug]
+    spit_out_matrix = true
+    matrix_name = matrice_passo_
+    vector_name = vettore_passo_
 
 
 

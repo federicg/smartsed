@@ -235,7 +235,8 @@ main (int argc, char** argv)
       h_interface_y,
       slope_x,
       slope_y,
-      soilMoistureRetention;
+      soilMoistureRetention,
+      roughness_vect;
 
   Eigen::VectorXd   eta,
         H,
@@ -349,6 +350,7 @@ main (int argc, char** argv)
     d_90                 .resize ( N );
     soilMoistureRetention.resize ( N );
     hydraulic_conductivity.resize ( N );
+    roughness_vect        .resize( N );
 
     u             .resize ( ( N_cols + 1 ) * N_rows );
     v             .resize ( ( N_rows + 1 ) * N_cols );
@@ -1517,8 +1519,33 @@ main (int argc, char** argv)
 
   tic();
   upwind H_interface ( u, v, N_rows, N_cols );
+  
+  
+  for (int ii = 0; ii < roughness_vect.size(); ii++)
+  {
+    const auto r1 =  dataFile ( "files/infiltration/roughness_scale_factor1", 100. );
+    const auto r2 =  dataFile ( "files/infiltration/roughness_scale_factor2", 100. );
+    const auto r3 =  dataFile ( "files/infiltration/roughness_scale_factor3", 100. );
+    
+    const auto slope_cell_x = (slope_x[ii] + slope_x[ii+1])/2.;
+    const auto slope_cell_y = (slope_y[ii] + slope_y[ii+N_cols])/2.;
+    
+    slope_cell = std::sqrt(std::pow(slope_cell_x,2.) + std::pow(slope_cell_y,2.));
+    if (slope_cell <= 0.2)
+    {
+      roughness_vect[ ii ] = r1;
+    }
+    else if (slope_cell <= 0.6)
+    {
+      roughness_vect[ ii ] = r2;
+    }
+    else
+    {
+      roughness_vect[ ii ] = r3;
+    }
+  }
 
-  frictionClass alfa ( friction_model, n_manning, dt_DSV, d_90, dataFile ( "files/infiltration/roughness_scale_factor", 100. ), H_min, N_rows, N_cols, slope_x, slope_y );
+  frictionClass alfa ( friction_model, n_manning, dt_DSV, d_90, roughness_vect, H_min, N_rows, N_cols, slope_x, slope_y );
 
 
 

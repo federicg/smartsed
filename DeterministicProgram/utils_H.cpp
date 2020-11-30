@@ -12,7 +12,7 @@
 
 #include <chrono>
 #include <ctime>
-#include <functional> 
+#include <functional>
 
 //! Eigen library
 #include "Eigen/Sparse"
@@ -327,7 +327,7 @@ Raster::Raster (const std::string& file)
 {
   std::vector<Eigen::Triplet<Real> > cc;
 
-  std::ifstream ff( file );
+  std::ifstream ff ( file );
   if ( ff.is_open() )
     {
       std::string str;
@@ -429,6 +429,8 @@ Rain::Rain (const std::string& infiltrationModel,
 {
   M_isInitialLoss = isInitialLoss;
   c = perc_initialLoss;
+    
+    
 
   if ( infiltrationModel == "None" )
     {
@@ -460,13 +462,14 @@ Rain::constant_precipitation (const std::string&       file,
 {
   M_time_spacing_vect.resize( 1 );
   M_time_spacing_vect[ 0 ] = time_spacing;
-
+  
   Hyetograph.resize( 1 );
-
-
+  
+  
+  
   if ( is_precipitation )
-    {
-      std::ifstream ff( file );
+{
+    std::ifstream ff( file );
 
       if ( ff.is_open() )
         {
@@ -556,11 +559,10 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
                          const UInt&                     N_cols,
                          const std::vector<UInt>&        idBasinVect )
 {
-
+  
   M_time_spacing_vect = time_spacing_vect;
-
+  
   Hyetograph.resize( ndata_vec.size() );
-
 
 
   for ( UInt k = 0; k < file_vect.size(); k++ )
@@ -814,7 +816,7 @@ Rain::computePrecipitation (const UInt&              n,
                 
                 
           DP_total      [ IDcenter ] += rainfall_intensity;
-          DP_cumulative [ IDcenter ] += potential_runoff; 
+          DP_cumulative [ IDcenter ] += potential_runoff;
           DP_infiltrated[ IDcenter ] += infiltrationRate;
                 
           //std::cout << DP_total[ IDcenter ] << " " << DP_cumulative[ IDcenter ] << " " << DP_infiltrated[ IDcenter ] << " " << potential_runoff << " " << infiltrationRate << std::endl;
@@ -845,19 +847,21 @@ Temperature::Temperature (const std::string&       file,
 
   T_raster          .resize( N );
   melt_mask         .resize( N );
-
+  
   T_dailyMean       .resize( max_Days );
   T_dailyMin        .resize( max_Days );
   T_dailyMax        .resize( max_Days );
   J                 .resize( max_Days );
-
+  
   Temperature_Graph .reserve( ndata );
-
+  
   std::vector<Real> J_ndata;
   J_ndata.reserve( ndata );
 
 
   std::ifstream ff( file );
+  
+  
 
   if ( ff.is_open() )
     {
@@ -1298,7 +1302,7 @@ frictionClass::frictionClass (const std::string& friction_model,
                               const Real& n_manning,
                               const Real& dt_DSV,
                               const std::vector<Real>& d_90,
-                              const Real& r,
+                              const std::vector<Real>& rough,
                               const Real& H_min,
                               const UInt& N_rows,
                               const UInt& N_cols,
@@ -1327,7 +1331,7 @@ frictionClass::frictionClass (const std::string& friction_model,
             IDup = IDcell,
             IDdown = IDcell + N_cols;
 
-          const auto d_90_cell = r * d_90[ IDcell ];
+          const auto d_90_cell = rough[ IDcell ] * d_90[ IDcell ];
 
           M_fc0_greater_x[ IDleft ] = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
           M_fc0_lower_x  [ IDleft ] = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
@@ -1403,71 +1407,71 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
                     const std::vector<UInt>& idStaggeredBoundaryVectEast )
 {
-    
+
   for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
         Real alfa = 1.;
-        
+
         const auto & H_int = H_interface[ Id ];
         const auto & exponent = M_expo_r_x_vect[ Id ];
         const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-        
+
         if ( den > M_H_min )
           {
-              
+
               const auto u_abs = std::abs( u[ Id ] );
-        
+
               Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
               coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
               alfa = 1. / ( 1. + coeff );
           }
-        
+
         alfa_x[ Id ] = alfa;
-        
+
     }
-    
+
     for ( const auto & Id : idStaggeredBoundaryVectWest )
       {
           Real alfa = 1.;
-          
+
           const auto & H_int = H_interface[ Id ];
           const auto & exponent = M_expo_r_x_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-          
+
           if ( den > M_H_min )
             {
-                
+
                 const auto u_abs = std::abs( u[ Id ] );
-          
+
                 Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
                 coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
-          
+
           alfa_x[ Id ] = alfa;
-          
+
       }
-    
+
     for ( const auto & Id : idStaggeredBoundaryVectEast )
       {
           Real alfa = 1.;
-          
+
           const auto & H_int = H_interface[ Id ];
           const auto & exponent = M_expo_r_x_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-          
+
           if ( den > M_H_min )
             {
-                
+
                 const auto u_abs = std::abs( u[ Id ] );
-          
+
                 Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
                 coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
-          
+
           alfa_x[ Id ] = alfa;
-          
+
       }
     
 //
@@ -1671,72 +1675,72 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
     for ( const auto & Id : idStaggeredInternalVectVertical )
       {
           Real alfa = 1.;
-          
+
           const auto & H_int = H_interface[ Id ];
           const auto & exponent = M_expo_r_y_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-          
+
           if ( den > M_H_min )
             {
-                
+
                 const auto v_abs = std::abs( v[ Id ] );
-          
+
                 Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
                 coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
-          
-          
+
+
           alfa_y[ Id ] = alfa;
-          
+
       }
-      
+
       for ( const auto & Id : idStaggeredBoundaryVectNorth )
         {
             Real alfa = 1.;
-            
+
             const auto & H_int = H_interface[ Id ];
             const auto & exponent = M_expo_r_y_vect[ Id ];
             const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-            
+
             if ( den > M_H_min )
               {
-                  
+
                   const auto v_abs = std::abs( v[ Id ] );
-            
+
                   Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
                   coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                   alfa = 1. / ( 1. + coeff );
               }
-            
-            
+
+
             alfa_y[ Id ] = alfa;
-            
+
         }
-      
+
       for ( const auto & Id : idStaggeredBoundaryVectSouth )
         {
             Real alfa = 1.;
-            
+
             const auto & H_int = H_interface[ Id ];
             const auto & exponent = M_expo_r_y_vect[ Id ];
             const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-            
+
             if ( den > M_H_min )
               {
-                  
+
                   const auto v_abs = std::abs( v[ Id ] );
-            
+
                   Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
                   coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                   alfa = 1. / ( 1. + coeff );
               }
-            
-            
+
+
             alfa_y[ Id ] = alfa;
-            
+
         }
-    
+//    
 //  switch ( M_frictionModel )
 //    {
 //    case 0:
