@@ -1530,7 +1530,7 @@ main (int argc, char** argv)
     const auto slope_cell_x = (slope_x[ii] + slope_x[ii+1])/2.;
     const auto slope_cell_y = (slope_y[ii] + slope_y[ii+N_cols])/2.;
     
-    slope_cell = std::sqrt(std::pow(slope_cell_x,2.) + std::pow(slope_cell_y,2.));
+    const auto slope_cell = std::sqrt(std::pow(slope_cell_x,2.) + std::pow(slope_cell_y,2.));
     if (slope_cell <= 0.2)
     {
       roughness_vect[ ii ] = r1;

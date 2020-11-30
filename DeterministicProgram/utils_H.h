@@ -6,34 +6,34 @@
 
 
 namespace Eigen {
-
-namespace internal {
-
-template<typename Scalar>
-inline void putVectorElt(Scalar value, std::ofstream& out, const UInt& i)
-{
-  out << i << " " << value << "\n";
-}
-template<typename Scalar>
-inline void putVectorElt(std::complex<Scalar> value, std::ofstream& out, const UInt& i)
-{
-  out << i << " " << value.real << " " << value.imag()<< "\n";
-}
-
-}
-
-template<typename VectorType>
-bool saveMarketVector_lis (const VectorType& vec, const std::string& filename)
-{
- typedef typename VectorType::Scalar Scalar;
- std::ofstream out(filename.c_str(),std::ios::out);
+  
+  namespace internal {
+    
+    template<typename Scalar>
+    inline void putVectorElt(Scalar value, std::ofstream& out, const UInt& i)
+    {
+    out << i << " " << value << "\n";
+    }
+    template<typename Scalar>
+    inline void putVectorElt(std::complex<Scalar> value, std::ofstream& out, const UInt& i)
+    {
+    out << i << " " << value.real << " " << value.imag()<< "\n";
+    }
+    
+  }
+  
+  template<typename VectorType>
+  bool saveMarketVector_lis (const VectorType& vec, const std::string& filename)
+  {
+  typedef typename VectorType::Scalar Scalar;
+  std::ofstream out(filename.c_str(),std::ios::out);
   if(!out)
     return false;
   
   out.flags(std::ios_base::scientific);
   out.precision(64);
   if(internal::is_same<Scalar, std::complex<float> >::value || internal::is_same<Scalar, std::complex<double> >::value)
-      out << "%%MatrixMarket vector coordinate complex general\n";
+    out << "%%MatrixMarket vector coordinate complex general\n";
   else
     out << "%%MatrixMarket vector coordinate real general\n";
   out << vec.size() << "\n";
@@ -42,14 +42,14 @@ bool saveMarketVector_lis (const VectorType& vec, const std::string& filename)
   }
   out.close();
   return true;
-}
-
+  }
+  
 }
 
 class
 Vector2D
 {
-
+  
 public:
 
   //! Empty constructor (all components are set to zero)
@@ -356,7 +356,7 @@ public:
                  const Real& n_manning,
                  const Real& dt_DSV,
                  const std::vector<Real>& d_90,
-                 const Real& r,
+                 const std::vector<Real>& r,
                  const Real& H_min,
                  const UInt& N_rows,
                  const UInt& N_cols,
