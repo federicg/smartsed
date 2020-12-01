@@ -87,11 +87,11 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_50m.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/H_35m.asc   #realOrography/H.asc
     
     restart_vel                 = true
-    vel_file_u                  = ../Outputs/initial_cond/u_50m.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_50m.asc
+    vel_file_u                  = ../Outputs/initial_cond/u_35m.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_35m.asc
 
     [../]
 
@@ -129,7 +129,7 @@
    FillSinks         = false
 
    # per ora time_spacing deve essere un numero intero
-   steps_per_hour    = 700    # number of time steps per hour 
+   steps_per_hour    = 1000    # number of time steps per hour 
    max_Days          = 35   # maximum number of simulated days
    H_min             = 0.e-3 #lasciamolo a zero!!  # threshold under which there is no mass flux [ meters ]
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
