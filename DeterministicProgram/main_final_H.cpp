@@ -122,6 +122,8 @@ main (int argc, char** argv)
   const std::string vector_name            = dataFile ( "debug/vector_name", "/tmp/vector_" );
   std::string tmpname = "";
 
+  const bool        spit_out_solutions_each_time_step = dataFile ( "debug/spit_out_solutions_each_time_step", false );
+  
   const Vector2D    XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
   const Vector2D    XX_1     ( std::array<Real, 2> {{ X_1,      Y_1 }} );
   const Vector2D    XX_2     ( std::array<Real, 2> {{ X_2,      Y_2 }} );
@@ -196,8 +198,7 @@ main (int argc, char** argv)
 
   UInt N_rows,
        N_cols,
-       N,
-       numberCellsInBasin;
+       N;
 
   std::vector<UInt> idStaggeredBoundaryVectSouth,
       idStaggeredBoundaryVectNorth,
@@ -206,12 +207,25 @@ main (int argc, char** argv)
       idStaggeredInternalVectHorizontal,
       idStaggeredInternalVectVertical,
       idBasinVect,
-      idBasinVectReIndex;
+      idBasinVectReIndex,
+  
+      idStaggeredBoundaryVectSouth_excluded,
+      idStaggeredBoundaryVectNorth_excluded,
+      idStaggeredBoundaryVectWest_excluded,
+      idStaggeredBoundaryVectEast_excluded,
+      idStaggeredInternalVectHorizontal_excluded,
+      idStaggeredInternalVectVertical_excluded,
+      idBasinVect_excluded,
+      idBasinVectReIndex_excluded;
 
+  
   std::vector<std::array<Real, 2> > Gamma_vect_x,
       Gamma_vect_y;
 
 
+  std::vector<std::tuple<bool, int> > excluded_ids;
+  std::vector<Real> additional_source_term;
+  
   std::vector<Real> basin_mask_Vec,
       orography,
       h_G,
@@ -235,6 +249,7 @@ main (int argc, char** argv)
       h_interface_y,
       slope_x,
       slope_y,
+      slope_cell,
       soilMoistureRetention,
       roughness_vect;
 
@@ -334,23 +349,26 @@ main (int argc, char** argv)
     N      = N_rows * N_cols;
 
 
-    H                    .resize ( N );
-    orography            .resize ( N );
-    basin_mask_Vec       .resize ( N );
-    eta                  .resize ( N );
-    h_G                  .resize ( N );
-    h_sd                 .resize ( N );
-    h_sn                 .resize ( N );
-    S_coeff              .resize ( N );
-    W_Gav                .resize ( N );
-    W_Gav_cum            .resize ( N );
-    Res_x                .resize ( N );
-    Res_y                .resize ( N );
-    Z_Gav                .resize ( N );
-    d_90                 .resize ( N );
-    soilMoistureRetention.resize ( N );
+    H                     .resize ( N );
+    orography             .resize ( N );
+    basin_mask_Vec        .resize ( N );
+    eta                   .resize ( N );
+    h_G                   .resize ( N );
+    h_sd                  .resize ( N );
+    h_sn                  .resize ( N );
+    S_coeff               .resize ( N );
+    W_Gav                 .resize ( N );
+    W_Gav_cum             .resize ( N );
+    Res_x                 .resize ( N );
+    Res_y                 .resize ( N );
+    Z_Gav                 .resize ( N );
+    d_90                  .resize ( N );
+    soilMoistureRetention .resize ( N );
     hydraulic_conductivity.resize ( N );
     roughness_vect        .resize( N );
+    excluded_ids          .resize( N );
+    additional_source_term.resize( N );
+    slope_cell            .resize( N );
 
     u             .resize ( ( N_cols + 1 ) * N_rows );
     v             .resize ( ( N_rows + 1 ) * N_cols );
@@ -727,8 +745,7 @@ main (int argc, char** argv)
           Y_Gav ( N );
 
 
-
-      if ( infiltrationModel != "None" )
+      if ( infiltrationModel != "None" || friction_model == "Rickenmann" )
         {
 
           const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
@@ -747,10 +764,12 @@ main (int argc, char** argv)
           }
 
           Raster corineCode    ( output_dir + "CLC.asc" ),
-                 clayPercentage ( output_dir + "/clay_sim_" + std::to_string ( currentSimNumber ) + ".asc" ),
-                 sandPercentage ( output_dir + "/sand_sim_" + std::to_string ( currentSimNumber ) + ".asc" );
+                 clayPercentage ( output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc" ),
+                 sandPercentage ( output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc" );
 
-
+          
+          
+          
           if ( corineCode.cellsize != pixel_size )
             {
               std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with "
@@ -888,10 +907,10 @@ main (int argc, char** argv)
                               if ( e1.dot ( point - A ) >= 0 && e1.dot ( point - A ) <= ( B ( 0 ) - A ( 0 ) ) ) d3 = std::abs ( ( point - A ).dot ( e2 ) );
                               if ( e2.dot ( point - C ) >= 0 && e2.dot ( point - C ) <= ( B ( 1 ) - C ( 1 ) ) ) d4 = std::abs ( ( point - C ).dot ( e1 ) );
 
-                              if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4 );
-                              if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4 );
-                              if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4 );
-                              if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4 );
+                              if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4. );
+                              if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4. );
+                              if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4. );
+                              if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4. );
 
 
                             }
@@ -926,7 +945,6 @@ main (int argc, char** argv)
                         }
                       else
                         {
-                          //std::cout << clay << " " << sand << std::endl;
                           HSG[ k ] = -1;
                         }
 
@@ -948,8 +966,8 @@ main (int argc, char** argv)
           saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
         }
 
-
-
+      
+      
       const Real S_0 = .254;  // 254 mm
 
       const auto CN_map = createCN_map( );
@@ -963,15 +981,13 @@ main (int argc, char** argv)
 
           if ( it != CN_map.end( ) )
             {
-              soilMoistureRetention[ k ] = S_0 * ( 100 / Real ( it->second ) - 1 ) * basin_mask_Vec[ k ];
-              //                std::cout << soilMoistureRetention[ k ] << " " << Real( it->second ) << std::endl;
+              soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
             }
           else
             {
-              soilMoistureRetention[ k ] = 0;
+              soilMoistureRetention[ k ] = 0.;
             }
         }
-      //        exit(1);
 
       saveSolution ( output_dir + "soilMoistureRetention", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, soilMoistureRetention );
 
@@ -995,38 +1011,44 @@ main (int argc, char** argv)
           Z_Gav[ k ] = X_Gav[ k ] * Y_Gav[ k ];
 
         }
-
-
+      
+      
+      if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
+      {
+        std::cout << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
+        exit( 1. );
+      }
 
       // build d_10 (for k_c) and d_90 (frictionClass)
-      const auto d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
-
-      //std::cout << "maximum and minimum d_10  " << *std::max_element( d_10.begin(), d_10.end() ) << " " << *std::min_element( d_10.begin(), d_10.end() ) << std::endl;
-
-      for ( UInt i = 0; i < d_10.size(); i++ )
+      auto d_10 = d_90;
+      if (infiltrationModel != "None")
+      {
+        d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
+        
+        for ( UInt i = 0; i < N; i++ )
         {
-          // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
-          // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
+            // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
+            // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
           const Real C_H = 6.54e-4;
           const Real gravity = 9.81;
           const Real kin_visc = 0.89e-6;
-
+          
           hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
         }
+      }
 
 
-      d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
+      if (infiltrationModel != "None" || friction_model == "Rickenmann") d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
 
       saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
       saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
       saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
-
-
-      //std::cout << "maximum and minimum d  " << *std::max_element( d_90.begin(), d_90.end() ) << " " << *std::min_element( d_90.begin(), d_90.end() ) << std::endl;
+      
 
     }
   else
     {
+
       {
         const std::string restart_soilMoistureRetention_file = dataFile ( "files/initial_conditions/soilMoistureFile", "soilMoisture.asc" ),
                           restart_CLC_file                   = dataFile ( "files/initial_conditions/corineCode_file", "CLC.asc" ),
@@ -1268,39 +1290,8 @@ main (int argc, char** argv)
                        idBasinVectReIndex,
                        N_rows,
                        N_cols );
-
-  numberCellsInBasin = idBasinVect.size();
-  H_basin.resize ( numberCellsInBasin );
-  rhs    .resize ( numberCellsInBasin );
-
-
-
-  // maybe if H_basin is inizialized the restart
-  if ( restart_H )
-    {
-      UInt h = 0;
-      for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const UInt k = j + i * N_cols;
-
-              if ( basin_mask_Vec[ k ] == 1 )
-                {
-                  H_basin ( h ) = H ( k );
-                  h++;
-                }
-            }
-        }
-
-    }
-  else
-    {
-      for ( UInt k = 0; k < numberCellsInBasin; k++ )
-        {
-          H_basin ( k ) = 0.;
-        }
-    }
+  
+  
   toc ("compute basin boundaries");
 
   // +-----------------------------------------------+
@@ -1311,9 +1302,9 @@ main (int argc, char** argv)
   for ( const auto& k : idBasinVect )
     {
       const UInt i = k / N_cols;
-      const auto Sga = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
+      slope_cell[ k ] = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
 
-      Z_Gav[ k ] *= ( .5 + std::sqrt ( Sga ) );
+      Z_Gav[ k ] *= ( .5 + std::sqrt ( slope_cell[ k ] ) );
       Z_Gav[ k ] = std::pow ( Z_Gav[ k ], 1.5 );
     }
   toc ("gavrilovic coeff");
@@ -1521,21 +1512,18 @@ main (int argc, char** argv)
   upwind H_interface ( u, v, N_rows, N_cols );
   
   
-  for (int ii = 0; ii < roughness_vect.size(); ii++)
+  for (int ii = 0; ii < N; ii++)
   {
     const auto r1 =  dataFile ( "files/infiltration/roughness_scale_factor1", 100. );
     const auto r2 =  dataFile ( "files/infiltration/roughness_scale_factor2", 100. );
     const auto r3 =  dataFile ( "files/infiltration/roughness_scale_factor3", 100. );
     
-    const auto slope_cell_x = (slope_x[ii] + slope_x[ii+1])/2.;
-    const auto slope_cell_y = (slope_y[ii] + slope_y[ii+N_cols])/2.;
     
-    const auto slope_cell = std::sqrt(std::pow(slope_cell_x,2.) + std::pow(slope_cell_y,2.));
-    if (slope_cell <= 0.2)
+    if (slope_cell[ ii ] <= 0.2)
     {
       roughness_vect[ ii ] = r1;
     }
-    else if (slope_cell <= 0.6)
+    else if (slope_cell[ ii ] <= 0.6)
     {
       roughness_vect[ ii ] = r2;
     }
@@ -1554,7 +1542,7 @@ main (int argc, char** argv)
     {
       if ( kk * ( dt_min / pixel_size ) > 1. )
         {
-          std::cout << "Error! Courant number for gravitational layer is greater than 1" << std::endl;
+          std::cout << "Error! Courant number for gravitational layer is greater than 1!" << std::endl;
           exit ( -1. );
         }
     }
@@ -1583,25 +1571,184 @@ main (int argc, char** argv)
   UInt numberOfSteps = 1;
 
   bool isHNegative =  false;
-
-  /*
-    #if defined(_OPENMP)
-    start = omp_get_wtime();
-    #else
-    start = std::clock();
-    #endif
-  */
-
-  SpMat A ( numberCellsInBasin, numberCellsInBasin );
-
-  // row, column and value in the Triplet
-  std::vector<Eigen::Triplet<Real> > coefficients;
-
-  coefficients.reserve ( idBasinVect.size() +
-                         4 * idStaggeredInternalVectHorizontal.size() +
-                         4 * idStaggeredInternalVectVertical.size() );
+  
+  
 
   toc ("prepare loop");
+  
+  
+  
+  // +-----------------------------------------------+
+  // |              compute_sub_basins               |
+  // +-----------------------------------------------+
+  
+  excluded_ids.assign(N, std::tuple<bool,int>( false, -1 ));
+  additional_source_term.assign(N, 0.);
+  
+  const bool static_subbasin_approx = dataFile ( "discretization/static_subbasin_approx", false );
+  if (static_subbasin_approx)
+  {
+  
+    tic();
+    
+    const std::set<UInt> idBasinVect_set(idBasinVect.begin(), idBasinVect.end()),
+    idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(), idStaggeredBoundaryVectSouth.end()),
+    idStaggeredBoundaryVectNorth_set(idStaggeredBoundaryVectNorth.begin(), idStaggeredBoundaryVectNorth.end()),
+    idStaggeredBoundaryVectWest_set(idStaggeredBoundaryVectWest.begin(),   idStaggeredBoundaryVectWest.end()),
+    idStaggeredBoundaryVectEast_set(idStaggeredBoundaryVectEast.begin(),   idStaggeredBoundaryVectEast.end());
+    
+    const Real slope_thr = dataFile("discretization/slope_thr", 1.);
+    
+    
+    
+    // exclude high slopes,
+    for ( const UInt& Id : idBasinVect )
+    {
+      
+      const auto & current_slope_cell = slope_cell[ Id ];
+      if (current_slope_cell > slope_thr)
+      {
+        std::get<0>( excluded_ids[ Id ] ) = true;
+      }
+    }
+    
+    // exclude also isolated cells, see below,
+    // maybe cycle on intefaces, build a list of bool for each id
+    std::vector<UInt> counter_near_excl;
+    counter_near_excl.resize(N);
+    counter_near_excl.assign(N, 0);
+    
+    // cycle over interfaces, internal vertical and horizontal
+    for ( const auto & Id : idStaggeredInternalVectHorizontal )
+    {
+      const UInt i       = Id / ( N_cols + 1 ),
+      
+      IDleft  = Id - i - 1, // H
+      IDright = Id - i;
+      
+      if ( std::get<0>(excluded_ids[ IDleft ]) )
+      {
+        counter_near_excl[ IDright ] += 1;
+      }
+      if ( std::get<0>(excluded_ids[ IDright ]) )
+      {
+        counter_near_excl[ IDleft ] += 1;
+      }
+      
+    }
+    
+    
+    for ( const auto & Id : idStaggeredInternalVectVertical )
+    {
+      
+      const UInt IDleft  = Id - N_cols, // H
+      IDright = Id;
+      
+      if ( std::get<0>(excluded_ids[ IDleft ]) )
+      {
+        counter_near_excl[ IDright ] += 1;
+      }
+      if ( std::get<0>(excluded_ids[ IDright ]) )
+      {
+        counter_near_excl[ IDleft ] += 1;
+      }
+      
+    }
+
+    for ( const auto & Id : idBasinVect )
+    {
+      if ( counter_near_excl[ Id ] == 4 ) // it is surely an isolated cell! (can be also an excluded cell but no problem..)
+      {
+        std::get<0>( excluded_ids[ Id ] ) = true;
+      }
+    }
+    
+
+    // compute pour points, local movement in the 8 directions! (also diagonal ones)
+    for ( const UInt& Id : idBasinVect )
+    {
+
+      auto & current_tuple = excluded_ids[ Id ];
+
+      const auto & current_is      = std::get<0>( current_tuple );
+            auto & current_pour_id = std::get<1>( current_tuple );
+
+      if ( current_is )
+      {
+        // start from Id and perform a local search (by means of the gradient) to get the pour point
+        int candidate_pour_id = Id;
+
+        while (true)
+        {
+
+          candidate_pour_id = computePourCell(candidate_pour_id,
+                                              N_cols,
+                                              orography,
+                                              idBasinVect_set,
+                                              idStaggeredBoundaryVectSouth_set,
+                                              idStaggeredBoundaryVectNorth_set,
+                                              idStaggeredBoundaryVectWest_set,
+                                              idStaggeredBoundaryVectEast_set);
+
+
+
+          // if the gradient points outside the basin leave current_pour_id = -1
+          if (candidate_pour_id < 0) break;
+
+
+          const auto& is_current_id_again_excluded = std::get<0> ( excluded_ids[ candidate_pour_id ] );
+          if ( !is_current_id_again_excluded )
+          {
+            current_pour_id = candidate_pour_id;
+            break;
+          }
+
+
+        }
+
+      }
+    }
+    
+
+    toc ("get sub-basins");
+    
+  }
+  
+  
+  computeAdjacencies ( basin_mask_Vec,
+                      excluded_ids,
+                      idStaggeredBoundaryVectSouth_excluded,
+                      idStaggeredBoundaryVectNorth_excluded,
+                      idStaggeredBoundaryVectWest_excluded,
+                      idStaggeredBoundaryVectEast_excluded,
+                      idStaggeredInternalVectHorizontal_excluded,
+                      idStaggeredInternalVectVertical_excluded,
+                      idBasinVect_excluded,
+                      idBasinVectReIndex_excluded,
+                      N_rows,
+                      N_cols );
+  
+  
+  H_basin.resize ( idBasinVect_excluded.size() );
+  rhs    .resize ( idBasinVect_excluded.size() );
+  
+  for (int i = 0; i < H_basin.size(); i++) H_basin( i ) = 0.;
+  for (int i = 0; i < rhs.size(); i++) rhs( i ) = 0.;
+  
+  saveSolution (output_dir + "excluded_ids", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, excluded_ids);
+  
+  
+  SpMat A ( idBasinVect_excluded.size(), idBasinVect_excluded.size() );
+  
+  // row, column and value in the Triplet
+  std::vector<Eigen::Triplet<Real> > coefficients;
+  
+  coefficients.reserve ( idBasinVect_excluded.size() +
+                        4 * idStaggeredInternalVectHorizontal_excluded.size() +
+                        4 * idStaggeredInternalVectVertical_excluded.size() );
+  
+  
+  const bool save_all_time_steps = dataFile("discretization/save_all_time_steps", false);
 
   for ( Int n = 1; n <= nstep; n++ )
     {
@@ -1615,30 +1762,30 @@ main (int argc, char** argv)
       // Compute interface fluxes via upwind method
       H_interface.computeHorizontal ( H,
                                       u,
-                                      idStaggeredInternalVectHorizontal,
-                                      idStaggeredBoundaryVectWest,
-                                      idStaggeredBoundaryVectEast );
+                                      idStaggeredInternalVectHorizontal_excluded,
+                                      idStaggeredBoundaryVectWest_excluded,
+                                      idStaggeredBoundaryVectEast_excluded );
 
       H_interface.computeVertical  ( H,
                                      v,
-                                     idStaggeredInternalVectVertical,
-                                     idStaggeredBoundaryVectNorth,
-                                     idStaggeredBoundaryVectSouth );
+                                     idStaggeredInternalVectVertical_excluded,
+                                     idStaggeredBoundaryVectNorth_excluded,
+                                     idStaggeredBoundaryVectSouth_excluded );
       toc ("H_interface");
 
       tic();
       // Compute alfa coefficients
       alfa.f_x ( H_interface.horizontal,
                  u,
-                 idStaggeredInternalVectHorizontal,
-                 idStaggeredBoundaryVectWest,
-                 idStaggeredBoundaryVectEast );
+                 idStaggeredInternalVectHorizontal_excluded,
+                 idStaggeredBoundaryVectWest_excluded,
+                 idStaggeredBoundaryVectEast_excluded );
 
       alfa.f_y ( H_interface.vertical,
                  v,
-                 idStaggeredInternalVectVertical,
-                 idStaggeredBoundaryVectNorth,
-                 idStaggeredBoundaryVectSouth );
+                 idStaggeredInternalVectVertical_excluded,
+                 idStaggeredBoundaryVectNorth_excluded,
+                 idStaggeredBoundaryVectSouth_excluded );
       toc ("alfa");
 
       tic();
@@ -1749,22 +1896,14 @@ main (int argc, char** argv)
                               N_cols,
                               dt_DSV,
                               pixel_size,
-                              idStaggeredInternalVectHorizontal,
-                              idStaggeredInternalVectVertical,
-                              idStaggeredBoundaryVectWest,
-                              idStaggeredBoundaryVectEast,
-                              idStaggeredBoundaryVectNorth,
-                              idStaggeredBoundaryVectSouth );
+                              idStaggeredInternalVectHorizontal_excluded,
+                              idStaggeredInternalVectVertical_excluded,
+                              idStaggeredBoundaryVectWest_excluded,
+                              idStaggeredBoundaryVectEast_excluded,
+                              idStaggeredBoundaryVectNorth_excluded,
+                              idStaggeredBoundaryVectSouth_excluded );
 
-      /*
-        bilinearInterpolation( u,
-        v,
-        u_star,
-        v_star,
-        N_rows,
-        N_cols,
-        dt_DSV,
-        pixel_size );*/
+      
       toc ("bilinearInterpolation");
 
 
@@ -1773,32 +1912,71 @@ main (int argc, char** argv)
 
 
       buildMatrix ( H_interface.horizontal,
-                    H_interface.vertical,
-                    orography,
-                    u_star,
-                    v_star,
-                    H,
-                    N_cols,
-                    N_rows,
-                    c1_DSV,
-                    c3_DSV,
-                    0,  // 0
-                    precipitation.DP_cumulative,
-                    dt_DSV,
-                    alfa.alfa_x,
-                    alfa.alfa_y,
-                    idStaggeredInternalVectHorizontal,
-                    idStaggeredInternalVectVertical,
-                    idStaggeredBoundaryVectWest,
-                    idStaggeredBoundaryVectEast,
-                    idStaggeredBoundaryVectNorth,
-                    idStaggeredBoundaryVectSouth,
-                    idBasinVect,
-                    idBasinVectReIndex,
-                    isNonReflectingBC,
-                    true,
-                    coefficients,
-                    rhs );
+                   H_interface.vertical,
+                   orography,
+                   u_star,
+                   v_star,
+                   u,
+                   v,
+                   H,
+                   N_cols,
+                   N_rows,
+                   N,
+                   c1_DSV,
+                   c3_DSV,
+                   0,  // 0
+                   precipitation.DP_cumulative,
+                   dt_DSV,
+                   alfa.alfa_x,
+                   alfa.alfa_y,
+                   idStaggeredInternalVectHorizontal_excluded,
+                   idStaggeredInternalVectVertical_excluded,
+                   idStaggeredBoundaryVectWest_excluded,
+                   idStaggeredBoundaryVectEast_excluded,
+                   idStaggeredBoundaryVectNorth_excluded,
+                   idStaggeredBoundaryVectSouth_excluded,
+                   idBasinVect_excluded,
+                   idBasinVect,
+                   idStaggeredInternalVectHorizontal,
+                   idStaggeredInternalVectVertical,
+                   idBasinVectReIndex_excluded,
+                   isNonReflectingBC,
+                   true,
+                   excluded_ids,
+                   additional_source_term,
+                   coefficients,
+                   rhs );
+      
+      
+      
+      
+//      buildMatrix ( H_interface.horizontal,
+//                    H_interface.vertical,
+//                    orography,
+//                    u_star,
+//                    v_star,
+//                    H,
+//                    N_cols,
+//                    N_rows,
+//                    c1_DSV,
+//                    c3_DSV,
+//                    0,  // 0
+//                    precipitation.DP_cumulative,
+//                    dt_DSV,
+//                    alfa.alfa_x,
+//                    alfa.alfa_y,
+//                    idStaggeredInternalVectHorizontal,
+//                    idStaggeredInternalVectVertical,
+//                    idStaggeredBoundaryVectWest,
+//                    idStaggeredBoundaryVectEast,
+//                    idStaggeredBoundaryVectNorth,
+//                    idStaggeredBoundaryVectSouth,
+//                    idBasinVect,
+//                    idBasinVectReIndex,
+//                    isNonReflectingBC,
+//                    true,
+//                    coefficients,
+//                    rhs );
 
 
 
@@ -1869,15 +2047,29 @@ main (int argc, char** argv)
            
 
         }
+    
+      // put this correction in another side to make sure to have no discontinuities at the excluded-included interface
+//      for ( const auto & Id : idBasinVect )
+//      {
+//        const auto & current_tuple = excluded_ids[ Id ];
+//        if ( std::get<0>( current_tuple ) )
+//        {
+//          const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
+//          H_basin( IDreIndex ) = 0.;
+//
+//            //          const auto & k_pour = std::get<1>( current_tuple );
+//            //          if (k_pour>=0)
+//            //          {
+//            //            H_basin( k_pour ) += H( IDreIndex );
+//            //            H_basin( IDreIndex ) = 0.;
+//            //          }
+//        }
+//      }
+      
 
-      //        std::cout << "save matrix" << std::endl;
-      //        saveMatrix(A, output_dir+"A_"+std::to_string(n)+".txt");
-      //        saveVector(rhs, output_dir+"b_"+std::to_string(n)+".txt");
-      //        saveVector(H_basin, output_dir+"H_"+std::to_string(n)+".txt");
-
-      for ( const UInt& Id : idBasinVect )
+      for ( const UInt& Id : idBasinVect_excluded )
         {
-          const UInt IDreIndex = idBasinVectReIndex[ Id ];
+          const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
           H ( Id ) = H_basin ( IDreIndex );
           eta ( Id ) = H ( Id ) + orography[ Id ];
         }
@@ -1888,14 +2080,33 @@ main (int argc, char** argv)
       // |                  Update u, v                  |
       // +-----------------------------------------------+
 
-
-
+//      updateVel ( u,
+//                 v,
+//                 u_star,
+//                 v_star,
+//                 alfa.alfa_x,
+//                 alfa.alfa_y,
+//                 N_rows,
+//                 N_cols,
+//                 c2_DSV,
+//                 H_min,
+//                 eta,
+//                 H,
+//                 orography,
+//                 excluded_ids,
+//                 idStaggeredInternalVectHorizontal,
+//                 idStaggeredInternalVectVertical,
+//                 idStaggeredBoundaryVectWest,
+//                 idStaggeredBoundaryVectEast,
+//                 idStaggeredBoundaryVectNorth,
+//                 idStaggeredBoundaryVectSouth,
+//                 isNonReflectingBC );
+      
+      
       updateVel ( u,
                   v,
                   u_star,
                   v_star,
-                  H_interface.horizontal,
-                  H_interface.vertical,
                   alfa.alfa_x,
                   alfa.alfa_y,
                   N_rows,
@@ -1903,27 +2114,53 @@ main (int argc, char** argv)
                   c2_DSV,
                   H_min,
                   eta,
+                  H,
                   orography,
-                  idStaggeredInternalVectHorizontal,
-                  idStaggeredInternalVectVertical,
-                  idStaggeredBoundaryVectWest,
-                  idStaggeredBoundaryVectEast,
-                  idStaggeredBoundaryVectNorth,
-                  idStaggeredBoundaryVectSouth,
+                  idStaggeredInternalVectHorizontal_excluded,
+                  idStaggeredInternalVectVertical_excluded,
+                  idStaggeredBoundaryVectWest_excluded,
+                  idStaggeredBoundaryVectEast_excluded,
+                  idStaggeredBoundaryVectNorth_excluded,
+                  idStaggeredBoundaryVectSouth_excluded,
                   isNonReflectingBC );
+      
+//      updateVel ( u,
+//                 v,
+//                 u_star,
+//                 v_star,
+//                 H_interface.horizontal,
+//                 H_interface.vertical,
+//                 alfa.alfa_x,
+//                 alfa.alfa_y,
+//                 N_rows,
+//                 N_cols,
+//                 c2_DSV,
+//                 H_min,
+//                 eta,
+//                 orography,
+//                 idStaggeredInternalVectHorizontal_excluded,
+//                 idStaggeredInternalVectVertical_excluded,
+//                 idStaggeredBoundaryVectWest_excluded,
+//                 idStaggeredBoundaryVectEast_excluded,
+//                 idStaggeredBoundaryVectNorth_excluded,
+//                 idStaggeredBoundaryVectSouth_excluded,
+//                 isNonReflectingBC );
 
 
       std::cout << "min H: " << H_basin.minCoeff() << " max H: " << H_basin.maxCoeff() << std::endl;
 
+      
+      
+      
       for ( const UInt& k : idBasinVect )
         {
           if ( H ( k ) < 0 )
             {
-              H ( k ) *= 0.;
+              H ( k ) = 0.;
               isHNegative = true;
-              //                std::cout << "negative H!" << std::endl;
+              
+              eta ( k ) = H ( k ) + orography[ k ];
             }
-          eta ( k ) = H ( k ) + orography[ k ];
         }
 
 
@@ -1949,7 +2186,7 @@ main (int argc, char** argv)
                                   slope_y,
                                   2.5,   // alfa
                                   1.6,   // beta
-                                  1, // gamma
+                                  1., // gamma
                                   idStaggeredInternalVectHorizontal,
                                   idStaggeredInternalVectVertical,
                                   idStaggeredBoundaryVectWest,
@@ -2123,23 +2360,32 @@ main (int argc, char** argv)
           W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV / dt_sed );
         }
 
-
-
-      //        if ( std::floor( ( n - 1 ) * ( dt_DSV / dt_min ) ) > std::floor( ( n - 2 ) * ( dt_DSV / dt_min ) ) )
-      //        {
-      //            const auto currentTime = std::floor( n * ( dt_DSV / dt_min ) );
-      //
-      //            saveSolution( output_dir + "q_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentTime, u, v, precipitation.DP_cumulative );
-      //            saveSolution( output_dir + "p_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentTime, u, v, precipitation.DP_total );
-      //            saveSolution( output_dir + "f_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentTime, u, v, precipitation.DP_infiltrated );
-      //        }
-
-      //        std::cout << int(36000 * ( dt_DSV / (24*3600) )) << " " << std::floor( n * ( dt_DSV / (24*3600) ) ) << " " << std::floor( ( n - 1 ) * ( dt_DSV / (24*3600) ) ) << std::endl;
-
-      if ( std::floor ( ( n + 1 ) * ( dt_DSV / (24 * 3600) ) ) > std::floor ( n * ( dt_DSV / (24 * 3600) ) ) )
+      
+      if ( spit_out_solutions_each_time_step )
+      {
+        const auto currentDay = n;
+        
+        saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
+        saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
+        saveSolution ( output_dir + "H_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, H );
+        saveSolution ( output_dir + "hsd_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sd );
+        saveSolution ( output_dir + "w_cum_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum );
+        saveSolution ( output_dir + "ET_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec );
+        saveSolution ( output_dir + "q_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative );
+        saveSolution ( output_dir + "p_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total );
+        saveSolution ( output_dir + "f_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+        saveSolution ( output_dir + "hG_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_G );
+        saveSolution ( output_dir + "hsn_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sn );
+        
+        
+      }
+      else
+      {
+        
+        if ( std::floor ( ( n + 1 ) * ( dt_DSV / (24. * 3600) ) ) > std::floor ( n * ( dt_DSV / (24. * 3600) ) ) || save_all_time_steps )
         {
-          const auto currentDay = std::floor ( ( n + 1 ) * ( dt_DSV / (24 * 3600) ) );
-
+          const auto currentDay = std::floor ( ( n + 1 ) * ( dt_DSV / (24. * 3600) ) );
+          
           saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
           saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
           saveSolution ( output_dir + "H_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, H );
@@ -2152,18 +2398,10 @@ main (int argc, char** argv)
           saveSolution ( output_dir + "hG_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_G );
           saveSolution ( output_dir + "hsn_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sn );
         }
-
-      //        saveSolution( output_dir + "H_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, n, u, v, H );
-      //        saveSolution( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, n, u, v, H );
-      //        saveSolution( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, n, u, v, H );
-
-      //        saveSolution( output_dir + "hG_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, n, u, v, h_G );
-      //        saveSolution( output_dir + "ET_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, n, u, v, ET.ET_vec );
-
-      //        if ( n == 2 )
-      //            exit(1);
-
-
+      }
+      
+      
+      
       toc ("file output");
 
     } // End Time Loop
