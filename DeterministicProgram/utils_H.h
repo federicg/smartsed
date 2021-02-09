@@ -480,6 +480,37 @@ bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<UInt>& idStaggeredBoundaryVectSouth);
 
 void
+bilinearInterpolation (const std::vector<Real>& u,
+                       const std::vector<Real>& v,
+                       const std::vector<Real>& slope_x,
+                       const std::vector<Real>& slope_y,
+                       const Real& slope_thr,
+                       std::vector<Real>& u_star,
+                       std::vector<Real>& v_star,
+                       const UInt&              nrows,
+                       const UInt&              ncols,
+                       const Real&              dt_DSV,
+                       const Real&              pixel_size,
+                       const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                       const std::vector<UInt>& idStaggeredInternalVectVertical,
+                       const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                       const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                       const std::vector<UInt>& idStaggeredBoundaryVectSouth);
+
+
+int
+computePourCell(const int& IDcell,
+                const UInt& N_cols,
+                const std::vector<Real>& oro,
+                const std::set<UInt>& idBasinVect,
+                const std::set<UInt>& idStaggeredBoundaryVectSouth,
+                const std::set<UInt>& idStaggeredBoundaryVectNorth,
+                const std::set<UInt>& idStaggeredBoundaryVectWest,
+                const std::set<UInt>& idStaggeredBoundaryVectEast); 
+
+
+void
 computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
 
                     std::vector<UInt>& idStaggeredBoundaryVectSouth,
@@ -493,6 +524,24 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                     std::vector<UInt>& idBasinVect,
                     std::vector<UInt>& idBasinVectReIndex,
 
+                    const UInt&              N_rows,
+                    const UInt&              N_cols);
+
+void
+computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
+                    const std::vector<std::tuple<bool, int> >& excluded_ids,
+                    
+                    std::vector<UInt>& idStaggeredBoundaryVectSouth,
+                    std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                    std::vector<UInt>& idStaggeredBoundaryVectWest,
+                    std::vector<UInt>& idStaggeredBoundaryVectEast,
+                    
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                    std::vector<UInt>& idStaggeredInternalVectVertical,
+                    
+                    std::vector<UInt>& idBasinVect,
+                    std::vector<UInt>& idBasinVectReIndex,
+                    
                     const UInt&              N_rows,
                     const UInt&              N_cols);
 
@@ -528,6 +577,50 @@ buildMatrix (const std::vector<Real>& H_int_x,
              Eigen::VectorXd&                    rhs);
 
 
+
+
+void
+buildMatrix (const std::vector<Real>& H_int_x,
+             const std::vector<Real>& H_int_y,
+             const std::vector<Real>& orography,
+             const std::vector<Real>& u_star,
+             const std::vector<Real>& v_star,
+             const std::vector<Real>& u,
+             const std::vector<Real>& v,
+             const Eigen::VectorXd&   H,
+             const UInt&              N_cols,
+             const UInt&              N_rows,
+             const UInt&              N,
+             const Real&              c1,
+             const Real&              c3,
+             const Real&              H_min,
+             const std::vector<Real>& precipitation,
+             const Real&              dt_DSV,
+             const std::vector<Real>& alfa_x,
+             const std::vector<Real>& alfa_y,
+             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+             const std::vector<UInt>& idStaggeredInternalVectVertical,
+             const std::vector<UInt>& idStaggeredBoundaryVectWest,
+             const std::vector<UInt>& idStaggeredBoundaryVectEast,
+             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+             const std::vector<UInt>& idBasinVect,
+             const std::vector<UInt>& idBasinVect_not_excluded,
+             const std::vector<UInt>& idStaggeredInternalVectHorizontal_not_excluded,
+             const std::vector<UInt>& idStaggeredInternalVectVertical_not_excluded,
+             const std::vector<UInt>& idBasinVectReIndex,
+             const bool&              isNonReflectingBC,
+             const bool&              isH,
+             
+             const std::vector<std::tuple<bool, int> >& excluded_ids,
+                   std::vector<Real>&                   additional_source_term,
+             
+             std::vector<Eigen::Triplet<Real> >& coefficients,
+             Eigen::VectorXd&                    rhs);
+
+
+
+
 void
 updateVel (std::vector<Real>& u,
            std::vector<Real>& v,
@@ -550,6 +643,74 @@ updateVel (std::vector<Real>& u,
            const std::vector<UInt>& idStaggeredBoundaryVectNorth,
            const std::vector<UInt>& idStaggeredBoundaryVectSouth,
            const bool&              isNonReflectingBC);
+
+void
+updateVel (std::vector<Real>& u,
+           std::vector<Real>& v,
+           const std::vector<Real>& u_star,
+           const std::vector<Real>& v_star,
+           const std::vector<Real>& alfa_x,
+           const std::vector<Real>& alfa_y,
+           const Real&              N_rows,
+           const Real&              N_cols,
+           const Real&              c2,
+           const Real&              H_min,
+           const Eigen::VectorXd&   eta,
+           const Eigen::VectorXd&   H,
+           const std::vector<Real>& orography,
+           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+           const std::vector<UInt>& idStaggeredInternalVectVertical,
+           const std::vector<UInt>& idStaggeredBoundaryVectWest,
+           const std::vector<UInt>& idStaggeredBoundaryVectEast,
+           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+           const bool&              isNonReflectingBC);
+
+
+void
+updateVel (std::vector<Real>& u,
+           std::vector<Real>& v,
+           const std::vector<Real>& u_star,
+           const std::vector<Real>& v_star,
+           const std::vector<Real>& alfa_x,
+           const std::vector<Real>& alfa_y,
+           const Real&              N_rows,
+           const Real&              N_cols,
+           const Real&              c2,
+           const Real&              H_min,
+           const Eigen::VectorXd&   eta,
+           const Eigen::VectorXd&   H,
+           const std::vector<Real>& orography,
+           const std::vector<std::tuple<bool, int> >& excluded_ids,
+           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+           const std::vector<UInt>& idStaggeredInternalVectVertical,
+           const std::vector<UInt>& idStaggeredBoundaryVectWest,
+           const std::vector<UInt>& idStaggeredBoundaryVectEast,
+           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+           const bool&              isNonReflectingBC);
+
+
+void
+putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                     const std::vector<UInt>& idStaggeredInternalVectVertical,
+                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                     const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                     const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                     const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+                     const std::vector<UInt>& idBasinVect,
+                     const UInt& N_cols,
+                     const std::vector<std::tuple<bool, int> >& excluded_ids,
+                     
+                     Eigen::VectorXd&   H,
+                     Eigen::VectorXd&   eta,
+                     const std::vector<Real>& orography,
+                     std::vector<Real>& u, 
+                     std::vector<Real>& v );
+
+
+
+
 
 
 Real
@@ -628,6 +789,17 @@ saveSolution(const std::string& preName,
              const std::vector<Real>& u,
              const std::vector<Real>& v,
              const Eigen::VectorXd& H); // it is H or orography
+
+void
+saveSolution (const std::string& preName,
+              const UInt& N_rows,
+              const UInt& N_cols,
+              const Real& xllcorner,
+              const Real& yllcorner,
+              const Real& cellsize,
+              const Real& NODATA_value,
+              const std::vector<std::tuple<bool,int>> excluded_ids); // excluded regions, high slopes I hope
+
 
 
 void
