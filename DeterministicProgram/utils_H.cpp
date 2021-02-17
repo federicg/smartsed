@@ -4130,7 +4130,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
       const auto & k_pour = std::get<1>( current_tuple );
       if ( k_pour >= 0 )
       {
-        additional_source_term[ k_pour ] = precipitation[ k_ex ] * dt_DSV;
+        additional_source_term[ k_pour ] += precipitation[ k_ex ] * dt_DSV;
       }
     }
   }
