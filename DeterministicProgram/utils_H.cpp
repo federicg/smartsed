@@ -747,8 +747,7 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
 
 
 void
-Rain::computePrecipitation (const UInt&              n,
-                            const UInt&              steps_per_hour,
+Rain::computePrecipitation (const Real&              time,
                             const std::vector<Real>& S,
                             const std::vector<Real>& melt_mask,
                             const std::vector<Real>& h_G,
@@ -766,7 +765,7 @@ Rain::computePrecipitation (const UInt&              n,
       //            std::cout << ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) << " ietogramma" << std::endl;
             
             
-      const UInt i_index = std::floor( ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) );
+      const UInt i_index = std::floor( time / (M_time_spacing_vect[ Id ]*3600) ); //std::floor( ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) );
             
 
       for ( const auto & IDcenter : idBasinVect )
@@ -1189,13 +1188,10 @@ Temperature::Temperature (const std::string&       file,
 }
 
 void
-Temperature::computeTemperature (const UInt&              n,
-                                 const UInt&              steps_per_hour,
-                                 const Real&              time_spacing,
+Temperature::computeTemperature (const UInt&              i,
                                  const std::vector<Real>& orography,
                                  const std::vector<UInt>& idBasinVect )
 {
-  const auto i = std::floor( ( n - 1 ) / ( steps_per_hour * time_spacing ) );
   const Real T = Temperature_Graph[ i ];
 
   if ( std::isnan(T) )
@@ -1258,10 +1254,9 @@ void
 evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore delle temperature in °C
                         const std::vector<Real>& T_min,  // lungo nstep
                         const std::vector<Real>& T_max,  // lungo nstep
-                        const Int&               n,       // time step number
+                        const Int&               i,
                         const std::vector<UInt>& idBasinVect,
-                        const std::vector<Real>& orography,
-                        const Real&              steps_per_hour)
+                        const std::vector<Real>& orography)
 {
 
   switch ( M_evapoTranspiration_model )
@@ -1272,7 +1267,7 @@ evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore
 
     case 1:
 
-      const Int i = std::floor( ( n - 1 ) / ( steps_per_hour * 24 ) );
+//        const Int i = std::floor( time / ( 24 * 3600 ) ); //std::floor( ( n - 1 ) / ( steps_per_hour * 24 ) );
       //                std::cout << "Evvv" << i << std::endl;
       //                exit(1);
       for ( const auto & k : idBasinVect )
@@ -1353,23 +1348,22 @@ frictionClass::frictionClass (const std::string& friction_model,
   alfa_x.resize( S_x.size() );
   alfa_y.resize( S_y.size() );
 
-  M_gamma_dt_DSV_x = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-  M_gamma_dt_DSV_y = M_dt_DSV * M_g * std::pow( M_n_manning, 2 );
-    
- 
+  M_coeff = M_g * std::pow( M_n_manning, 2. );
+
+
   M_expo_r_x_vect.resize( S_x.size() );
   M_gamma_dt_DSV_x_.resize( S_x.size() );
   for ( UInt k = 0; k < S_x.size(); k++ )
     {
         M_expo_r_x_vect[ k ] = M_expo_r1 * ( std::abs( S_x[ k ] ) >   .006 ) +
         M_expo_r2 * ( std::abs( S_x[ k ] ) <=  .006 );
-        
+
         const auto M_Rick_x = ( M_fc0_greater_x[ k ] * std::pow( std::abs( S_x[ k ] ), .33 ) ) * ( std::abs( S_x[ k ] ) >  .006 ) +
           ( M_fc0_lower_x[ k ]   * std::pow( std::abs( S_x[ k ] ), .08 ) ) * ( std::abs( S_x[ k ] ) <= .006 );
-        M_gamma_dt_DSV_x_[ k ] = M_dt_DSV * M_g * std::pow( M_Rick_x, 2 );
-        
+        M_gamma_dt_DSV_x_[ k ] = M_g * std::pow( M_Rick_x, 2 );
+
     }
-    
+
   M_expo_r_y_vect.resize( S_y.size() );
   M_gamma_dt_DSV_y_.resize( S_y.size() );
   for ( UInt k = 0; k < S_y.size(); k++ )
@@ -1379,10 +1373,10 @@ frictionClass::frictionClass (const std::string& friction_model,
 
         const auto M_Rick_y = ( M_fc0_greater_y[ k ] * std::pow( std::abs( S_y[ k ] ), .33 ) ) * ( std::abs( S_y[ k ] ) >  .006 ) +
           ( M_fc0_lower_y[ k ]   * std::pow( std::abs( S_y[ k ] ), .08 ) ) * ( std::abs( S_y[ k ] ) <= .006 );
-        M_gamma_dt_DSV_y_ [ k ] = M_dt_DSV * M_g * std::pow( M_Rick_y, 2 );
-        
+        M_gamma_dt_DSV_y_ [ k ] = M_g * std::pow( M_Rick_y, 2 );
+
     }
-    
+
   if ( friction_model == "None" )
     {
       M_frictionModel = 0;
@@ -1410,6 +1404,7 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
                     const std::vector<UInt>& idStaggeredBoundaryVectEast )
 {
 
+  
   for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
         Real alfa = 1.;
@@ -1423,8 +1418,8 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
 
               const auto u_abs = std::abs( u[ Id ] );
 
-              Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
-              coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+              Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+              coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
               alfa = 1. / ( 1. + coeff );
           }
 
@@ -1445,8 +1440,8 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
 
                 const auto u_abs = std::abs( u[ Id ] );
 
-                Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
 
@@ -1467,8 +1462,8 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
 
                 const auto u_abs = std::abs( u[ Id ] );
 
-                Real coeff = M_gamma_dt_DSV_x * u_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
 
@@ -1687,8 +1682,8 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
 
                 const auto v_abs = std::abs( v[ Id ] );
 
-                Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                 alfa = 1. / ( 1. + coeff );
             }
 
@@ -1710,8 +1705,8 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
 
                   const auto v_abs = std::abs( v[ Id ] );
 
-                  Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
-                  coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                  Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+                  coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                   alfa = 1. / ( 1. + coeff );
               }
 
@@ -1733,8 +1728,8 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
 
                   const auto v_abs = std::abs( v[ Id ] );
 
-                  Real coeff = M_gamma_dt_DSV_y * v_abs / den * (M_frictionModel > 0);
-                  coeff = std::max( coeff, M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+                  Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+                  coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
                   alfa = 1. / ( 1. + coeff );
               }
 
@@ -5094,7 +5089,30 @@ updateVel (std::vector<Real>& u,
 
 
 
-
+Real
+maxdt (const std::vector<Real>& u,
+       const std::vector<Real>& v,
+       const Real&              pixel_size)
+{
+  
+    // +-----------------------------------------------+
+    // |      Estimate vertical max Courant number     |
+    // +-----------------------------------------------+
+  
+  const Real vel_max_y = std::max( *std::max_element( v.begin(), v.end() ), std::abs( *std::min_element( v.begin(), v.end() ) ) );
+  
+    // +-----------------------------------------------+
+    // |    Estimate horizontal max Courant number     |
+    // +-----------------------------------------------+
+  
+  const Real vel_max_x = std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
+  
+  const Real Co = 0.3;
+  
+  return( Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon()) );
+  
+  
+}
 
 
 Real
@@ -6049,35 +6067,29 @@ saveSolution (const std::string& preName,
 
 void
 saveTemporalSequence (const Vector2D&    X_gauges,
-                      const Real&        dt,
-                      const UInt&        n,
+                      const Real&        time,
                       const std::string& preName,
                       const Real&        H)
 {
   std::ofstream ff( preName + ".txt", std::ofstream::out | std::ofstream::app );
-  if ( n == 1 )
-    {
-      ff << X_gauges( 0 ) << " " << X_gauges( 1 ) << std::endl;
-      ff << dt << std::endl;
-    }
-  ff << H << std::endl;
+//  if ( time == 0 )
+//    {
+//      ff << X_gauges( 0 ) << " " << X_gauges( 1 ) << std::endl;
+//      ff << dt << std::endl;
+//    }
+  ff << H << " " << time << std::endl;
   ff.close();
 }
 
 
 
 void
-saveTemporalSequence (const Real&        dt,
-                      const UInt&        n,
+saveTemporalSequence (const Real&        time,
                       const std::string& preName,
                       const Real&        H)
 {
   std::ofstream ff( preName + ".txt", std::ofstream::out | std::ofstream::app );
-  if ( n == 1 )
-    {
-      ff << dt << std::endl;
-    }
-  ff << H << std::endl;
+  ff << H << " " << time << std::endl;
   ff.close();
 }
 

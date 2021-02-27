@@ -137,8 +137,8 @@ main (int argc, char** argv)
 
   const UInt nstep   = steps_per_hour * max_Days * 24;
   const Real t_final = max_Days * 24 * 3600;
-  const Real dt_DSV  = t_final / Real ( nstep );
-
+  const Real dt_DSV_given  = t_final / Real ( nstep );
+  Real dt_DSV = dt_DSV_given;
 
 
   std::cout << "------------------------ "                            << std::endl;
@@ -146,9 +146,8 @@ main (int argc, char** argv)
   std::cout << "n_manning              = " << n_manning               << std::endl;
   std::cout << "steps_per_hour         = " << steps_per_hour          << std::endl;
   std::cout << "max_Days               = " << max_Days                << std::endl;
-  std::cout << "nstep                  = " << nstep                   << std::endl;
   std::cout << "t_final                = " << t_final    << " sec."   << std::endl;
-  std::cout << "dt_DSV                 = " << dt_DSV     << " sec."   << std::endl;
+  std::cout << "dt_DSV_given           = " << dt_DSV     << " sec."   << std::endl;
   std::cout << "H_min                  = " << H_min                   << std::endl;
   std::cout << "------------------------ "                            << std::endl;
 
@@ -1553,13 +1552,14 @@ main (int argc, char** argv)
 
 
   const Real g = 9.81;
-  const Real c1_DSV = dt_DSV / pixel_size;
-  const Real c2_DSV = g * c1_DSV;
-  const Real c3_DSV = g * std::pow ( c1_DSV, 2 );
+  std::function<Real(Real const&, Real const&)> c1_DSV = [](Real const& dt_DSV, Real const& pixel_size){return dt_DSV / pixel_size;};
+  std::function<Real(Real const&, Real const&)> c2_DSV = [](Real const& g, Real const& c1){return g * c1;};
+  std::function<Real(Real const&, Real const&)> c3_DSV = [](Real const& g, Real const& c1){return g * c1 * c1;};
+  
 
   const Real area = std::pow ( pixel_size, 2 ) * 1.e-6; // km^2
 
-  std::cout << "c1_DSV " << c1_DSV << "   c2_DSV " << c2_DSV << "   c3_DSV " << c3_DSV << std::endl;
+//  std::cout << "c1_DSV " << c1_DSV(dt_DSV, pixel_size) << "   c2_DSV " << c2_DSV(g, c1_DSV(dt_DSV, pixel_size)) << "   c3_DSV " << c3_DSV(g, c1_DSV(dt_DSV, pixel_size)) << std::endl;
 
 
   const Real slope_y_max = std::max ( *std::max_element ( slope_y.begin(), slope_y.end() ), std::abs ( *std::min_element ( slope_y.begin(), slope_y.end() ) ) );
@@ -1750,13 +1750,20 @@ main (int argc, char** argv)
   
   const bool save_all_time_steps = dataFile("discretization/save_all_time_steps", false);
 
-  for ( Int n = 1; n <= nstep; n++ )
+  
+  dt_DSV = maxdt(u, v, pixel_size);
+  dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
+  
+  double c1_DSV_ = c1_DSV(dt_DSV, pixel_size), c2_DSV_ = c2_DSV(g, c1_DSV_), c3_DSV_ = c3_DSV(g, c1_DSV_);
+   
+  int iter = 0;
+  double time = 0.;
+  bool is_last_step = false;
+  while ( !is_last_step )
     {
-
-
-
-      std::cout << "Time step number: " << n << "/" << nstep << " Simulation progress: " << n / Real (nstep) * 100 << " %" << " max surface runoff vel. based Courant: " << maxCourant ( u, v, c1_DSV ) << " max surface runoff cel. based Courant: " << maxCourant ( H, g, c1_DSV ) << " H has been negative: " << isHNegative << std::endl;
-
+      
+      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runoff vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runoff cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << " H has been negative: " << isHNegative << std::endl;
+      std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
 
       tic();
       // Compute interface fluxes via upwind method
@@ -1790,25 +1797,25 @@ main (int argc, char** argv)
 
       tic();
       // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
-      if ( std::floor ( ( n - 1 ) * ( dt_DSV / dt_temp ) ) > std::floor ( ( n - 2 ) * ( dt_DSV / dt_temp ) ) )
+      if ( std::floor ( time / dt_temp ) > std::floor ( (time - dt_DSV) / dt_temp ) )
         {
           // Compute temperature map
-          temp.computeTemperature ( n, steps_per_hour, time_spacing_temp, orography, idBasinVect );
+          temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect );
         }
       toc ("temperature");
 
       tic();
       // ET varies daily
-      if ( std::floor ( ( n - 1 ) * ( dt_DSV / (24 * 3600) ) ) > std::floor ( ( n - 2 ) * ( dt_DSV / (24 * 3600) ) ) )
+      if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) )
         {
           // Get ET rate at the current time
-          ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, n, idBasinVect, orography, steps_per_hour );
+          ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24 * 3600 ) ), idBasinVect, orography );
         }
       toc ("ET");
 
       tic();
       // update only if necessary
-      if ( std::floor ( ( n - 1 ) * ( dt_DSV / dt_min ) ) > std::floor ( ( n - 2 ) * ( dt_DSV / dt_min ) ) )
+      if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
 
           // +-----------------------------------------------+
@@ -1839,8 +1846,7 @@ main (int argc, char** argv)
 
       tic();
       //
-      precipitation.computePrecipitation (n,
-                                          steps_per_hour,
+      precipitation.computePrecipitation (time,
                                           soilMoistureRetention,
                                           temp.melt_mask,
                                           h_G,
@@ -1852,7 +1858,7 @@ main (int argc, char** argv)
 
       tic();
       // update only if necessary
-      if ( std::floor ( ( n - 1 ) * ( dt_DSV / dt_min ) ) > std::floor ( ( n - 2 ) * ( dt_DSV / dt_min ) ) )
+      if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
 
           for ( const UInt& k : idBasinVect )
@@ -1873,7 +1879,7 @@ main (int argc, char** argv)
 
           for ( const auto& k : idBasinVect )
             {
-              const auto snow_acc = precipitation.DP_total[ k ] * ( 1 - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
+              const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
               h_sn[ k ] += snow_acc;
             }
 
@@ -1924,8 +1930,8 @@ main (int argc, char** argv)
                    N_cols,
                    N_rows,
                    N,
-                   c1_DSV,
-                   c3_DSV,
+                   c1_DSV_,
+                   c3_DSV_,
                    0,  // 0
                    precipitation.DP_cumulative,
                    dt_DSV,
@@ -1991,10 +1997,10 @@ main (int argc, char** argv)
       tic();
       if (spit_out_matrix)
         {
-          tmpname = matrix_name + std::to_string (n);
+          tmpname = matrix_name + std::to_string (iter);
           std::cout << "saving " << tmpname << std::endl;
           Eigen::saveMarket (A, tmpname, false);
-          tmpname = vector_name + std::to_string (n);
+          tmpname = vector_name + std::to_string (iter);
           std::cout << "saving " << tmpname << std::endl;
           Eigen::saveMarketVector_lis (rhs, tmpname);
         }
@@ -2113,7 +2119,7 @@ main (int argc, char** argv)
                   alfa.alfa_y,
                   N_rows,
                   N_cols,
-                  c2_DSV,
+                  c2_DSV_,
                   H_min,
                   eta,
                   H,
@@ -2411,28 +2417,48 @@ main (int argc, char** argv)
 
       toc ("advance");
 
-
+      
 
       tic();
-      if ( save_temporal_sequence )
-        {
-          const UInt i = kk_gauges / N_cols;
+      
 
-          saveTemporalSequence ( XX_gauges, dt_DSV, n, output_dir + "waterSurfaceHeight", H[ kk_gauges ] );
-          saveTemporalSequence ( XX_gauges, dt_DSV, n, output_dir + "waterSurfaceMassFlux",
-                                 H[ kk_gauges ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges ]     + v[ kk_gauges + N_cols ] ) / 2. ), 2. ) +
-                                                              std::pow ( ( ( u[ kk_gauges - i ] + u[ kk_gauges - i + 1 ]  ) / 2. ), 2. ) ) );
-
-
-        }
-
-
-
+      // +-----------------------------------------------+
+      // |               Update time step                |
+      // +-----------------------------------------------+
+      
+      
+      dt_DSV = maxdt(u, v, pixel_size);
+      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
+      
+      c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
+      c2_DSV_ = c2_DSV (g, c1_DSV_);
+      c3_DSV_ = c3_DSV (g, c1_DSV_);
+      
+      time += dt_DSV;
+      if (time > t_final)
+      {
+        dt_DSV -= (time - t_final);
+        time = t_final;
+        is_last_step = true;
+      }
+      
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
       // +-----------------------------------------------+
 
-      // zone sorgenti
+      
+      if ( save_temporal_sequence )
+      {
+        const UInt i = kk_gauges / N_cols;
+        
+        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight", H[ kk_gauges ] );
+        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux",
+                              H[ kk_gauges ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges ] + v[ kk_gauges + N_cols ] ) / 2. ), 2. ) +
+                                                          std::pow ( ( ( u[ kk_gauges - i ] + u[ kk_gauges - i + 1 ]  ) / 2. ), 2. ) ) );
+      }
+      
+      
+      // zone sorgenti,
       for ( const UInt& k : idBasinVect )
         {
           W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV / dt_sed );
@@ -2441,7 +2467,7 @@ main (int argc, char** argv)
       
       if ( spit_out_solutions_each_time_step )
       {
-        const auto currentDay = n;
+        const auto currentDay = iter;
         
         saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
         saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
@@ -2460,9 +2486,9 @@ main (int argc, char** argv)
       else
       {
         
-        if ( std::floor ( ( n + 1 ) * ( dt_DSV / (24. * 3600) ) ) > std::floor ( n * ( dt_DSV / (24. * 3600) ) ) || save_all_time_steps )
+        if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) || save_all_time_steps )
         {
-          const auto currentDay = std::floor ( ( n + 1 ) * ( dt_DSV / (24. * 3600) ) );
+          const auto currentDay = std::floor ( time / (24. * 3600) );
           
           saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
           saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
@@ -2481,7 +2507,12 @@ main (int argc, char** argv)
       
       
       toc ("file output");
-
+      
+      iter++;
+      
+      
+      
+      
     } // End Time Loop
 
 

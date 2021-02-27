@@ -239,8 +239,7 @@ public:
                      const std::vector<UInt>&        idBasinVect);
 
   void
-  computePrecipitation (const UInt&              n,
-                        const UInt&              steps_per_hour,
+  computePrecipitation (const Real&              time,
                         const std::vector<Real>& S,
                         const std::vector<Real>& melt_mask,
                         const std::vector<Real>& h_G,
@@ -286,9 +285,7 @@ public:
 
 
   void
-  computeTemperature (const UInt&              n,
-                      const UInt&              steps_per_hour,
-                      const Real&              time_spacing,
+  computeTemperature (const UInt&              i,
                       const std::vector<Real>& orography,
                       const std::vector<UInt>& idBasinVect);
 
@@ -328,10 +325,9 @@ public:
   void ET (const std::vector<Real>& T_mean, // lungo nstep: vettore delle temperature in °C
            const std::vector<Real>& T_min,  // lungo nstep
            const std::vector<Real>& T_max,  // lungo nstep
-           const Int&               n,       // time step number
+           const Int&               i,       
            const std::vector<UInt>& idBasinVect,
-           const std::vector<Real>& orography,
-           const Real&              steps_per_hour);
+           const std::vector<Real>& orography);
 
 
   std::vector<Real> ET_vec;
@@ -356,7 +352,7 @@ public:
                  const Real& n_manning,
                  const Real& dt_DSV,
                  const std::vector<Real>& d_90,
-                 const std::vector<Real>& r,
+                 const std::vector<Real>& rough,
                  const Real& H_min,
                  const UInt& N_rows,
                  const UInt& N_cols,
@@ -386,16 +382,18 @@ private:
 
   UInt M_frictionModel;
 
-  const Real M_n_manning,
-    M_dt_DSV;
+  const Real& M_n_manning;
+  const Real& M_dt_DSV;
 
-  Real M_gamma_dt_DSV_x,
-    M_gamma_dt_DSV_y;
+  Real M_coeff;
+  std::function<Real(Real const&, Real const&)> M_gamma_dt_DSV = [](Real const& dt, Real const& cc){return dt * cc;};
+  
+  
 
   Real M_H_min;
 
-  const UInt N_rows,
-    N_cols;
+  const UInt& N_rows;
+  const UInt& N_cols;
 
   static constexpr Real M_expo    = 4./3.;
   static constexpr Real M_expo_r1 = .11 * 2;
@@ -446,8 +444,8 @@ public:
 
 private:
 
-  UInt N_cols,
-    N_rows;
+  UInt N_cols;
+  UInt N_rows;
 
 };
 
@@ -711,7 +709,10 @@ putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal
 
 
 
-
+Real
+maxdt (const std::vector<Real>& u,
+       const std::vector<Real>& v,
+       const Real&              pixel_size);
 
 Real
 maxCourant (const std::vector<Real>& u,
@@ -818,14 +819,12 @@ saveSolution(const std::string& preName,
 
 void
 saveTemporalSequence (const Vector2D&    X_gauges,
-                      const Real&        dt,
-                      const UInt&        n,
+                      const Real&        time,
                       const std::string& preName,
                       const Real&        H);
 
 void
-saveTemporalSequence (const Real&        dt,
-                      const UInt&        n,
+saveTemporalSequence (const Real&        time,
                       const std::string& preName,
                       const Real&        H);
 
