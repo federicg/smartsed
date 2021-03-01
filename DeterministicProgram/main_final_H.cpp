@@ -1748,15 +1748,16 @@ main (int argc, char** argv)
                         4 * idStaggeredInternalVectVertical_excluded.size() );
   
   
-  const bool save_all_time_steps = dataFile("discretization/save_all_time_steps", false);
-
+  int iter = 0;
   
-  dt_DSV = maxdt(u, v, pixel_size);
+  
+  dt_DSV = maxdt(u, v, g, H, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
+//  dt_DSV = iter < 100 ? dt_DSV/10. : dt_DSV;
   
   double c1_DSV_ = c1_DSV(dt_DSV, pixel_size), c2_DSV_ = c2_DSV(g, c1_DSV_), c3_DSV_ = c3_DSV(g, c1_DSV_);
    
-  int iter = 0;
+  
   double time = 0.;
   bool is_last_step = false;
   while ( !is_last_step )
@@ -2074,6 +2075,20 @@ main (int argc, char** argv)
 //        }
 //      }
       
+      const double minH = H_basin.minCoeff();
+      std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
+      
+      if (minH < 0.)
+      {
+        dt_DSV = dt_DSV/10.;
+
+        c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
+        c2_DSV_ = c2_DSV (g, c1_DSV_);
+        c3_DSV_ = c3_DSV (g, c1_DSV_);
+
+        continue;
+      }
+      
 
       for ( const UInt& Id : idBasinVect_excluded )
         {
@@ -2153,9 +2168,7 @@ main (int argc, char** argv)
 //                 idStaggeredBoundaryVectNorth_excluded,
 //                 idStaggeredBoundaryVectSouth_excluded,
 //                 isNonReflectingBC );
-
-
-      std::cout << "min H: " << H_basin.minCoeff() << " max H: " << H_basin.maxCoeff() << std::endl;
+      
 
       
       
@@ -2228,7 +2241,7 @@ main (int argc, char** argv)
           W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed + additional_source_term[ k ];
         }
 
-
+      std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
 
       for ( UInt kk = 0; kk < numberOfSteps; kk++ )
         {
@@ -2427,8 +2440,9 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
       
       
-      dt_DSV = maxdt(u, v, pixel_size);
+      dt_DSV = maxdt(u, v, g, H, pixel_size);
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
+//      dt_DSV = iter < 100 ? dt_DSV/10. : dt_DSV;
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
@@ -2486,7 +2500,7 @@ main (int argc, char** argv)
       else
       {
         
-        if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) || save_all_time_steps )
+        if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) )
         {
           const auto currentDay = std::floor ( time / (24. * 3600) );
           

@@ -5092,6 +5092,8 @@ updateVel (std::vector<Real>& u,
 Real
 maxdt (const std::vector<Real>& u,
        const std::vector<Real>& v,
+       const Real&              gravity,
+       const Eigen::VectorXd&   H,
        const Real&              pixel_size)
 {
   
@@ -5108,8 +5110,15 @@ maxdt (const std::vector<Real>& u,
   const Real vel_max_x = std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
   
   const Real Co = 0.3;
+  const Real Co_cel = 10;
   
-  return( Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon()) );
+  const Real cel = std::sqrt( H.maxCoeff() * gravity );
+  
+  Real dt_candidate = Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon());
+  dt_candidate = std::min(dt_candidate, Co_cel * pixel_size / (cel+std::numeric_limits<double>::epsilon()));
+  
+  
+  return( dt_candidate );
   
   
 }
