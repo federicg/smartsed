@@ -16,7 +16,7 @@ res=$2
 #OUTFILE=../Inputs/Geostatistics/outStochastic.txt
 #ERRFILE=../Inputs/Geostatistics/errStochastic.txt
 
-Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020.R $nsim $res #>>$OUTFILE 2>$ERRFILE
+Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020_field.R $nsim $res #>>$OUTFILE 2>$ERRFILE
 
 chmod +x ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/convertToRasterASCII.sh
 ./../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/convertToRasterASCII.sh $nsim
