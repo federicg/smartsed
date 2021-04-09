@@ -10,13 +10,14 @@
 
 
 NPROCS=1 #$(wc -l < $PBS_NODEFILE)
-JOBID=35m_rr #${PBS_JOBID}
+JOBID=initial_cond_sim #${PBS_JOBID}
 OUTFILE=out.$NPROCS
 ERRFILE=err.$NPROCS
 
 PBS_O_WORKDIR=$PWD
 # Start the job in the current directory (PBS starts in the home folder)
 # Così lancio nella cartella corrente
+rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
@@ -24,6 +25,8 @@ mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
 #cd ${PBS_O_WORKDIR}/$JOBID
 
 #cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond_H ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
+cp ${PBS_O_WORKDIR}/../Outputs/*.m ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
+
 cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
 cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
@@ -69,13 +72,13 @@ cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs
 # completo di redirezione di input e/o output se necessario
 #  YOUR LAUNCH COMMAND BELOW completed with I/O redirection if needed
 
-nsim=1
+nsim=0
 res=7
 
 
 cd ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
 ./runAll.sh $nsim $res >>$OUTFILE 2>$ERRFILE
-#./../runStochastic.sh $nsim $res >>$OUTFILE 2>$ERRFILE
+
 
 
 #export mkPrefix=/u/sw

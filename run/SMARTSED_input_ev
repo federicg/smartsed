@@ -4,6 +4,8 @@
 
 # All the files are AAIGrid files so --> ( provide a .txt and a .prj file )
 
+# the initial condition is done with constant rain and no initial loss
+
 
 # X = 532714.4289
 # Y = 5081673.379
@@ -29,7 +31,7 @@
     format_temp                 = arpa # comune, arpa
 
     precipitation               = true
-    constant_precipitation      = false  # false: IDW
+    constant_precipitation      = true  # false: IDW
 
     # comune lecco files
     rain_file                   = rain/event/pioggia.txt 
@@ -87,11 +89,11 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_50m.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/H_35m_river.asc   #realOrography/H.asc
     
     restart_vel                 = true
-    vel_file_u                  = ../Outputs/initial_cond/u_50m.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_50m.asc
+    vel_file_u                  = ../Outputs/initial_cond/u_35m_river.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_35m_river.asc
 
     [../]
 
@@ -99,8 +101,8 @@
     infiltration_model           = SCS-CN # None, SCS-CN
     isInitialLoss                = true
     roughness_scale_factor1      = 1.e2
-    roughness_scale_factor2      = 1.e3
-    roughness_scale_factor3      = 1.e4
+    roughness_scale_factor2      = 1.e2
+    roughness_scale_factor3      = 1.e2
     perc_initialLoss             = 0.2  # i.e. c in I_a <= c * S
     corineCode_file              = CorineLandCover/CaldoneCLC_5.asc  
 
@@ -129,8 +131,8 @@
    FillSinks         = false
 
    # per ora time_spacing deve essere un numero intero
-   steps_per_hour    = 700    # number of time steps per hour 
-   max_Days          = 35   # maximum number of simulated days
+   steps_per_hour    = 50    # number of time steps per hour 
+   max_Days          = 1   # maximum number of simulated days
    H_min             = 0.e-3 #lasciamolo a zero!!  # threshold under which there is no mass flux [ meters ]
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
@@ -143,6 +145,11 @@
 
    isNonReflectingBC = true
 
+
+   slope_thr = 1.
+   static_subbasin_approx = false
+
+
    [../]
 [../]
 
@@ -151,6 +158,7 @@
 
 
 [debug]
+    spit_out_solutions_each_time_step = true
     spit_out_matrix = false
     matrix_name = matrice_passo_
     vector_name = vettore_passo_
