@@ -84,7 +84,7 @@ main (int argc, char** argv)
   GetPot dataFile ( dataFileName );
 
 
-  const UInt        currentSimNumber       = command_line.follow ( 2, "-sim" );
+  const Int         currentSimNumber       = command_line.follow ( 2, "-sim" );
   const std::string friction_model         = dataFile ( "physics/friction_model", "None" );
   const Real        n_manning              = dataFile ( "physics/n_manning", 0.01 );
 
@@ -546,9 +546,7 @@ main (int argc, char** argv)
   else
     {
       h_sn.assign (h_sn.size (), 0.0);
-
       saveSolution ( output_dir + "hsn_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sn );
-
     }
 
   if ( restart_sediment )
@@ -707,7 +705,7 @@ main (int argc, char** argv)
     }
     
     double cellsize_psf = 0;
-    if (infiltrationModel != "None" && friction_model == "Rickenmann")
+    if (infiltrationModel != "None" || friction_model == "Rickenmann")
     {
       Raster clayPercentage ( str1 ),
              sandPercentage ( str2 );
@@ -729,162 +727,162 @@ main (int argc, char** argv)
           sandPercentage_Vec[ k ] = sandPercentage.Coords.coeff ( i, j );
         }
       }
+      
+      if ( restart_soilMoisture )
+      {
+        saveSolution ( output_dir + "clay",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, clayPercentage_Vec );
+        saveSolution ( output_dir + "sand",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, sandPercentage_Vec );
+      }
     }
     
     
-    
-    if ( cellsize_psf == pixel_size )
+    if (infiltrationModel != "None" || friction_model == "Rickenmann")
     {
-      
-      
-      for ( UInt i = 0; i < N_rows; i++ )
+      if ( cellsize_psf == pixel_size )
       {
-        for ( UInt j = 0; j < N_cols; j++ )
+        
+        for ( UInt i = 0; i < N_rows; i++ )
         {
-          
-          
-          const auto k = j + i * N_cols;
-          
-          const auto & clay = clayPercentage_Vec[ k ],
-                     & sand = sandPercentage_Vec[ k ];
-          
-          
-          if ( sand > .9 && sand <= 1 && clay < .1 && clay >= 0 ) // A
-          {
-            HSG[ k ] = 0;
-          }
-          else if ( sand > .5 && sand < .9 && clay > .1 && clay < .2 ) // B
-          {
-            HSG[ k ] = 1;
-          }
-          else if ( sand < .5 && sand >= 0 && clay > .2 && clay < .4 ) // C
-          {
-            HSG[ k ] = 2;
-          }
-          else if ( sand < .5 && sand >= 0 && clay > .4 && clay <= 1 ) // D
-          {
-            HSG[ k ] = 3;
-          }
-          else if ( sand >= 0 && sand <= 1 && clay >= 0 && clay <= 1 )
+          for ( UInt j = 0; j < N_cols; j++ )
           {
             
-            Vector2D point ( std::array<Real, 2> {{ clay, sand }} );
+            
+            const auto k = j + i * N_cols;
+            
+            const auto & clay = clayPercentage_Vec[ k ],
+                       & sand = sandPercentage_Vec[ k ];
             
             
-            Vector2D point_A ( std::array<Real, 2> {{ 0, 1    }} );
-            Vector2D point_B ( std::array<Real, 2> {{ .1, 1  }} );
-            Vector2D point_C ( std::array<Real, 2> {{ .1, .9 }} );
-            Vector2D point_D ( std::array<Real, 2> {{ 0, .9  }} );
-            
-            Vector2D point_E ( std::array<Real, 2> {{ .1, .5 }} );
-            Vector2D point_F ( std::array<Real, 2> {{ .2, .5 }} );
-            Vector2D point_G ( std::array<Real, 2> {{ .2, .9 }} );
-            
-            Vector2D point_H ( std::array<Real, 2> {{ .2, 0  }} );
-            Vector2D point_I ( std::array<Real, 2> {{ .4, 0  }} );
-            Vector2D point_L ( std::array<Real, 2> {{ .4, .5 }} );
-            
-            Vector2D point_M ( std::array<Real, 2> {{ 1, 0   }} );
-            Vector2D point_N ( std::array<Real, 2> {{ 1, .5  }} );
-            
-            
-            std::vector<Vector2D> vv = { point_A,
-              point_D,
-              point_C,
-              point_B,
-              
-              point_C,
-              point_E,
-              point_F,
-              point_G,
-              
-              point_F,
-              point_H,
-              point_I,
-              point_L,
-              
-              point_L,
-              point_I,
-              point_M,
-              point_N
-            };
-            
-            
-            
-            
-            std::pair<Real, Int> min = std::make_pair ( 1.e4, -1 );
-            
-            for ( auto ii = 0; ii < vv.size(); ii += 4 )
-            {
-              
-              const auto A = vv[ ii ],
-              D = vv[ ii + 1 ],
-              C = vv[ ii + 2 ],
-              B = vv[ ii + 3 ];
-              
-              Real d1 = 1.e4,
-              d2 = 1.e4,
-              d3 = 1.e4,
-              d4 = 1.e4;
-              
-              
-              Vector2D e1 ( std::array<Real, 2> {{ 1, 0 }} ),
-              e2 ( std::array<Real, 2> {{ 0, 1 }} );
-              
-              
-              if ( e1.dot ( point - D ) >= 0 && e1.dot ( point - D ) <= ( C ( 0 ) - D ( 0 ) ) ) d1 = std::abs ( ( point - D ).dot ( e2 ) );
-              if ( e2.dot ( point - D ) >= 0 && e2.dot ( point - D ) <= ( A ( 1 ) - D ( 1 ) ) ) d2 = std::abs ( ( point - D ).dot ( e1 ) );
-              if ( e1.dot ( point - A ) >= 0 && e1.dot ( point - A ) <= ( B ( 0 ) - A ( 0 ) ) ) d3 = std::abs ( ( point - A ).dot ( e2 ) );
-              if ( e2.dot ( point - C ) >= 0 && e2.dot ( point - C ) <= ( B ( 1 ) - C ( 1 ) ) ) d4 = std::abs ( ( point - C ).dot ( e1 ) );
-              
-              if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4. );
-              if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4. );
-              if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4. );
-              if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4. );
-              
-              
-            }
-            
-            const auto & id = min.second;
-            if ( id == 0 ) // A
+            if ( sand > .9 && sand <= 1 && clay < .1 && clay >= 0 ) // A
             {
               HSG[ k ] = 0;
             }
-            else if ( id == 1 ) // B
+            else if ( sand > .5 && sand < .9 && clay > .1 && clay < .2 ) // B
             {
               HSG[ k ] = 1;
             }
-            else if ( id == 2 ) // C
+            else if ( sand < .5 && sand >= 0 && clay > .2 && clay < .4 ) // C
             {
               HSG[ k ] = 2;
             }
-            else if ( id == 3 ) // D
+            else if ( sand < .5 && sand >= 0 && clay > .4 && clay <= 1 ) // D
             {
               HSG[ k ] = 3;
             }
+            else if ( sand >= 0 && sand <= 1 && clay >= 0 && clay <= 1 )
+            {
+              
+              Vector2D point ( std::array<Real, 2> {{ clay, sand }} );
+              
+              
+              Vector2D point_A ( std::array<Real, 2> {{ 0,  1  }} );
+              Vector2D point_B ( std::array<Real, 2> {{ .1, 1  }} );
+              Vector2D point_C ( std::array<Real, 2> {{ .1, .9 }} );
+              Vector2D point_D ( std::array<Real, 2> {{ 0, .9  }} );
+              
+              Vector2D point_E ( std::array<Real, 2> {{ .1, .5 }} );
+              Vector2D point_F ( std::array<Real, 2> {{ .2, .5 }} );
+              Vector2D point_G ( std::array<Real, 2> {{ .2, .9 }} );
+              
+              Vector2D point_H ( std::array<Real, 2> {{ .2, 0  }} );
+              Vector2D point_I ( std::array<Real, 2> {{ .4, 0  }} );
+              Vector2D point_L ( std::array<Real, 2> {{ .4, .5 }} );
+              
+              Vector2D point_M ( std::array<Real, 2> {{ 1, 0   }} );
+              Vector2D point_N ( std::array<Real, 2> {{ 1, .5  }} );
+              
+              
+              std::vector<Vector2D> vv = { point_A,
+                point_D,
+                point_C,
+                point_B,
+                
+                point_C,
+                point_E,
+                point_F,
+                point_G,
+                
+                point_F,
+                point_H,
+                point_I,
+                point_L,
+                
+                point_L,
+                point_I,
+                point_M,
+                point_N
+              };
+              
+              
+              std::pair<Real, Int> min = std::make_pair ( 1.e4, -1 );
+              
+              for ( auto ii = 0; ii < vv.size(); ii += 4 )
+              {
+                
+                const auto A = vv[ ii ],
+                D = vv[ ii + 1 ],
+                C = vv[ ii + 2 ],
+                B = vv[ ii + 3 ];
+                
+                Real d1 = 1.e4,
+                d2 = 1.e4,
+                d3 = 1.e4,
+                d4 = 1.e4;
+                
+                
+                Vector2D e1 ( std::array<Real, 2> {{ 1, 0 }} ),
+                e2 ( std::array<Real, 2> {{ 0, 1 }} );
+                
+                
+                if ( e1.dot ( point - D ) >= 0 && e1.dot ( point - D ) <= ( C ( 0 ) - D ( 0 ) ) ) d1 = std::abs ( ( point - D ).dot ( e2 ) );
+                if ( e2.dot ( point - D ) >= 0 && e2.dot ( point - D ) <= ( A ( 1 ) - D ( 1 ) ) ) d2 = std::abs ( ( point - D ).dot ( e1 ) );
+                if ( e1.dot ( point - A ) >= 0 && e1.dot ( point - A ) <= ( B ( 0 ) - A ( 0 ) ) ) d3 = std::abs ( ( point - A ).dot ( e2 ) );
+                if ( e2.dot ( point - C ) >= 0 && e2.dot ( point - C ) <= ( B ( 1 ) - C ( 1 ) ) ) d4 = std::abs ( ( point - C ).dot ( e1 ) );
+                
+                if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4. );
+                if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4. );
+                if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4. );
+                if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4. );
+                
+              }
+              
+              const auto& id = min.second;
+              if ( id == 0 ) // A
+              {
+                HSG[ k ] = 0;
+              }
+              else if ( id == 1 ) // B
+              {
+                HSG[ k ] = 1;
+              }
+              else if ( id == 2 ) // C
+              {
+                HSG[ k ] = 2;
+              }
+              else if ( id == 3 ) // D
+              {
+                HSG[ k ] = 3;
+              }
+              else
+              {
+                std::cout << "Something wrong in HSG classification" << std::endl;
+                exit ( -1. );
+              }
+              
+            }
             else
             {
-              std::cout << "Something wrong in HSG classification" << std::endl;
-              exit ( -1. );
+              HSG[ k ] = -1;
             }
             
-            
           }
-          else
-          {
-            HSG[ k ] = -1;
-          }
-          
-          
         }
-        
       }
-      
-    }
-    else
-    {
-      std::cout << "Error! resolution of soil texture files are not equal to the simulation resolution i.e. " << pixel_size << std::endl;
-      exit ( -1. );
+      else
+      {
+        std::cout << "Error! resolution of soil texture files are not equal to the simulation resolution i.e. " << pixel_size << std::endl;
+        exit ( -1. );
+      }
     }
     
     
@@ -1095,7 +1093,7 @@ main (int argc, char** argv)
       if ( XX ( 0 ) < 0 || XX ( 1 ) < 0 )
         {
           std::cout << "The gauges in the input file are not good" << std::endl;
-          exit ( 1. ); 
+          exit ( 1. );
         }
 
       kk_gauges = XX ( 1 ) * N_cols + XX ( 0 );
