@@ -2,7 +2,7 @@
 
 
 if [[ $# -ne 2 ]]; then
-	echo 'Provide two and only two input argument!'
+	echo 'Provide two and only two input arguments!'
     exit 1
 fi
 
@@ -16,7 +16,9 @@ res=$2
 #OUTFILE=../Inputs/Geostatistics/outStochastic.txt
 #ERRFILE=../Inputs/Geostatistics/errStochastic.txt
 
-Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020_field.R $nsim $res #>>$OUTFILE 2>$ERRFILE
+if [[ $nsim -ge 0 ]]; then
+  Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020.R $nsim $res
+fi
 
 chmod +x ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/convertToRasterASCII.sh
 ./../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/convertToRasterASCII.sh $nsim
@@ -25,11 +27,10 @@ chmod +x ../Inputs/CorineLandCover/convertShapefileToRasterASCII.sh
 ./../Inputs/CorineLandCover/convertShapefileToRasterASCII.sh $res
 
 
-#docker run --rm -it -v `pwd`:/smartsed smartsed_env make -f Makefile_windows
+
 
 # Deterministic part: 
-
-if [[ $nsim -ne 0 ]]; then
+if [[ $nsim -gt 0 ]]; then
 	for (( i = 1; i <= $nsim; i++ )); do
 		OUTFILE=../Outputs/$i/outdeterministic.txt
 		ERRFILE=../Outputs/$i/errDeterministic.txt
