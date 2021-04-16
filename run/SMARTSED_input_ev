@@ -21,11 +21,11 @@
 
       
 [files]
-    orography_file              = realOrography/DEM_tanks.asc  #DEM_tanks.asc     
-    mask_file                   = realOrography/Mask_bin.asc #mask.asc copre tutto il bacino
+    orography_file              = realOrography/DEMIdeal.asc  #DEM_tanks.asc
+    mask_file                   = realOrography/mask.asc #mask.asc copre tutto il bacino
 
     [./meteo_data]
-    temperature_file            = DatiMeteo_ARPA_LOMBARDIA/lecco/temperature_lecco_ev.txt
+    temperature_file            = temperature/event/temperature.txt #DatiMeteo_ARPA_LOMBARDIA/lecco/temperature_lecco_ev.txt
     height_thermometer          = 272
     time_spacing_temp           = 0.1667 
     format_temp                 = arpa # comune, arpa
@@ -34,7 +34,7 @@
     constant_precipitation      = true  # false: IDW
 
     # comune lecco files
-    rain_file                   = rain/event/pioggia.txt 
+    rain_file                   = rain/event/pioggia_id.txt 
     time_spacing_rain           = 1
 
     # arpa files
@@ -88,23 +88,36 @@
 
     [./initial_conditions]
     
-    restart_H                   = true
+    restart_H                   = false
     H_file                      = ../Outputs/initial_cond/H_35m_river.asc   #realOrography/H.asc
     
-    restart_vel                 = true
+    restart_vel                 = false
     vel_file_u                  = ../Outputs/initial_cond/u_35m_river.asc
     vel_file_v                  = ../Outputs/initial_cond/v_35m_river.asc
+    
+    restart_snow                = false
+    snow_file                   = ../Outputs/restart/hsn_1.asc
+
+    restart_sediment            = false
+    sediment_file               = ../Outputs/restart/hsd_1.asc
+
+    restart_gravitational       = false
+    gravitational_file          = ../Outputs/restart/hG_1.asc
+
+    restart_soilMoisture        = true
+    clay_file                   = ideal/clay_id.asc
+    sand_file                   = ideal/sand_id.asc
 
     [../]
 
     [./infiltration]
     infiltration_model           = SCS-CN # None, SCS-CN
-    isInitialLoss                = true
-    roughness_scale_factor1      = 1.e2
-    roughness_scale_factor2      = 1.e2
-    roughness_scale_factor3      = 1.e2
+    isInitialLoss                = false
+    roughness_scale_factor1      = 1.e0
+    roughness_scale_factor2      = 1.e0
+    roughness_scale_factor3      = 1.e0
     perc_initialLoss             = 0.2  # i.e. c in I_a <= c * S
-    corineCode_file              = CorineLandCover/CaldoneCLC_5.asc  
+    corineCode_file              = ideal/CLC_id.asc #CorineLandCover/CaldoneCLC_5.asc
 
     [../]
 
@@ -120,7 +133,7 @@
                      
 [physics]
     
-    friction_model = Rickenmann  # Manning or Rickenmann or None (no friction model)
+    friction_model = Manning  # Manning or Rickenmann or None (no friction model)
     n_manning      = 1.e-2  #.01       # value used if Manning
     
 [../] 
@@ -128,10 +141,8 @@
 [discretization]
 
 
-   FillSinks         = false
-
    # per ora time_spacing deve essere un numero intero
-   steps_per_hour    = 50    # number of time steps per hour 
+   steps_per_hour    = 10    # number of time steps per hour
    max_Days          = 1   # maximum number of simulated days
    H_min             = 0.e-3 #lasciamolo a zero!!  # threshold under which there is no mass flux [ meters ]
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
@@ -141,7 +152,7 @@
    Y_gauges          = 5077721.741
 
 
-   save_temporal_sequence = true # if true the value of the gauges are considered
+   save_temporal_sequence = false # if true the value of the gauges are considered
 
    isNonReflectingBC = true
 
@@ -158,7 +169,7 @@
 
 
 [debug]
-    spit_out_solutions_each_time_step = true
+    spit_out_solutions_each_time_step = false
     spit_out_matrix = false
     matrix_name = matrice_passo_
     vector_name = vettore_passo_

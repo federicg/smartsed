@@ -19,8 +19,8 @@
     along with SMART-SED.  If not, see <http://www.gnu.org/licenses/>.
 
 *******************************************************************************
-*/
-
+*/ 
+ 
 
 /*!
     @file main.cpp
@@ -76,16 +76,6 @@ int
 main (int argc, char** argv)
 {
 
-  /*
-    #if defined(_OPENMP)
-    std::clock_t start;
-    #else
-    Real start;
-    #endif
-
-    Real duration;
-  */
-
 
   tic();
   // Reading parameters through GetPot
@@ -101,39 +91,27 @@ main (int argc, char** argv)
   const Real        height_thermometer     = dataFile ( "files/meteo_data/height_thermometer", 200. );
 
 
-  const UInt        steps_per_hour         = dataFile ( "discretization/steps_per_hour", 10 ); // senza contare quello n = 0
+  const UInt        steps_per_hour         = dataFile ( "discretization/steps_per_hour", 10 );
   const Real        max_Days               = dataFile ( "discretization/max_Days", 20 );
-  const Real        H_min                  = dataFile ( "discretization/H_min", 0.001 ); // threshold under which there is no mass flux
+  const Real        H_min                  = dataFile ( "discretization/H_min", 0.001 );
   const Real        T_thr                  = dataFile ( "discretization/T_thr", 0 );
 
   const bool        direct_method          = dataFile ( "linear_solver/direct_method", true );
 
   const Real        X_gauges               = dataFile ( "discretization/X_gauges", 530850.173 );
   const Real        Y_gauges               = dataFile ( "discretization/Y_gauges", 5077721.741 );
-  const Real        X_1                    = dataFile ( "discretization/X_1", 530850.173 );
-  const Real        Y_1                    = dataFile ( "discretization/Y_1", 5077721.741 );
-  const Real        X_2                    = dataFile ( "discretization/X_2", 530850.173 );
-  const Real        Y_2                    = dataFile ( "discretization/Y_2", 5077721.741 );
   const bool        save_temporal_sequence = dataFile ( "discretization/save_temporal_sequence", false );
   const bool        isNonReflectingBC      = dataFile ( "discretization/isNonReflectingBC", false );
 
   const bool        spit_out_matrix        = dataFile ( "debug/spit_out_matrix", false );
   const std::string matrix_name            = dataFile ( "debug/matrix_name", "/tmp/matrix_" );
   const std::string vector_name            = dataFile ( "debug/vector_name", "/tmp/vector_" );
-  std::string tmpname = "";
+  std::string       tmpname = "";
 
   const bool        spit_out_solutions_each_time_step = dataFile ( "debug/spit_out_solutions_each_time_step", false );
   
   const Vector2D    XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
-  const Vector2D    XX_1     ( std::array<Real, 2> {{ X_1,      Y_1 }} );
-  const Vector2D    XX_2     ( std::array<Real, 2> {{ X_2,      Y_2 }} );
-
-  // max_Days non e' detto che venga raggiunto --> fa da estremo superiore
-
-  //    const UInt ndata   = std::round( max_Days * 24 / time_spacing ); // if max_Days = 1 e time_spacing = 24 --> ndata = 1
-  //    const UInt nstep   = steps_per_hour * time_spacing * ndata;
-  //    const Real t_final = time_spacing * 3600 * ndata; // [seconds]    // initial condition is set at 0 h in the pluviometer time frame
-  //    const Real dt_DSV      = t_final / nstep; // [seconds]
+  
 
   const UInt nstep   = steps_per_hour * max_Days * 24;
   const Real t_final = max_Days * 24 * 3600;
@@ -161,12 +139,12 @@ main (int argc, char** argv)
   const std::string file_dir       = "../Inputs/";
   const std::string output_dir     = "../Outputs/" + std::to_string ( currentSimNumber ) + "/";
 
-  const std::string orography_file = dataFile ( "files/orography_file", "dt_DSVM1.txt" );
+  const std::string orography_file = dataFile ( "files/orography_file", "DEM.txt" );
   const std::string mask_file      = dataFile ( "files/mask_file", "Mask_bin.txt" );
 
 
   // precipitation files and temperature
-  const std::string temperature_file   = dataFile ( "files/meteo_data/temperature_file", "Temperature.txt" );
+  const std::string temperature_file = dataFile ( "files/meteo_data/temperature_file", "Temperature.txt" );
 
 
 
@@ -177,7 +155,7 @@ main (int argc, char** argv)
   const bool restart_gravitational = dataFile ( "files/initial_conditions/restart_gravitational", false );
   const bool restart_soilMoisture  = dataFile ( "files/initial_conditions/restart_soilMoisture",  false );
 
-  //    std::cout << restart_H << " " << restart_vel << " " << restart_snow << " " << restart_sediment << " " << restart_gravitational << " " << restart_soilMoisture << std::endl;
+  
 
   {
     const std::string cmd_str = "mkdir -p " + output_dir;
@@ -188,7 +166,7 @@ main (int argc, char** argv)
   }
 
   const std::string ET_model = dataFile ( "files/evapotranspiration/ET_model", "None" );
-  const Real phi_rad         = M_PI / 180 * dataFile ( "files/evapotranspiration/latitude_deg", 45. );
+  const Real phi_rad         = M_PI / 180. * dataFile ( "files/evapotranspiration/latitude_deg", 45. );
 
   const std::string infiltrationModel = dataFile ( "files/infiltration/infiltration_model", "None" );
 
@@ -270,14 +248,12 @@ main (int argc, char** argv)
 
 
 
-  std::cout << " -- Reading Input Files ... " << std::endl;
-
-
+  
 
   //
   {
     Raster orographyMat ( file_dir + orography_file );
-    Raster basin_mask  ( file_dir + mask_file      );
+    Raster basin_mask   ( file_dir + mask_file      );
 
     if ( basin_mask.cellsize != orographyMat.cellsize )
       {
@@ -285,7 +261,7 @@ main (int argc, char** argv)
         exit ( -1 );
       }
 
-    pixel_size   = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
+    pixel_size = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
 
     std::cout << "cell resolution for the current simulation = " << pixel_size << " meters" << std::endl;
     std::cout << "-------------------- "                                                    << std::endl;
@@ -304,7 +280,6 @@ main (int argc, char** argv)
                                         "values(basin)[values(basin)>0]=1;" +
                                         "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
                                         "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
-        //std::cout << bashCommand << std::endl;
         std::system ( bashCommand.c_str() );
       }
     else
@@ -313,38 +288,17 @@ main (int argc, char** argv)
         exit ( -1. );
       }
 
-    if ( dataFile ( "discretization/FillSinks", false ) )
-      {
-
-        std::string bashCommand = std::string ( "python3 -c " ) + "\"import os; import sys; import gdal; cwd = os.getcwd();" +
-                                  "sys.path.append( cwd + '/../DeterministicProgram/include/richdem' ); import richdem as rd;" +
-                                  "dem = rd.LoadGDAL( '" + output_dir + "DEM.asc' );" +
-                                  "rd.FillDepressions( dem, in_place=True, epsilon=True,topology='D4' );" +
-                                  "rd.SaveGDAL( '" + output_dir + "DEM.tif', dem )\"";
-
-        std::system ( bashCommand.c_str() );
-
-        bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                      "dem=raster('" + output_dir + "DEM.tif');" +
-                      "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE )\"";
-
-        std::system ( bashCommand.c_str() );
-
-      }
 
   }
 
   {
 
     Raster orographyMat ( output_dir + "DEM.asc" );
-    Raster basin_mask  ( output_dir + "basin_mask.asc" );
+    Raster basin_mask   ( output_dir + "basin_mask.asc" );
 
 
     N_rows = basin_mask.Coords.rows();
     N_cols = basin_mask.Coords.cols();
-
-    //std::cout << orographyMat.Coords.rows() << " " << orographyMat.Coords.cols() << std::endl;
-
     N      = N_rows * N_cols;
 
 
@@ -364,10 +318,10 @@ main (int argc, char** argv)
     d_90                  .resize ( N );
     soilMoistureRetention .resize ( N );
     hydraulic_conductivity.resize ( N );
-    roughness_vect        .resize( N );
-    excluded_ids          .resize( N );
-    additional_source_term.resize( N );
-    slope_cell            .resize( N );
+    roughness_vect        .resize ( N );
+    excluded_ids          .resize ( N );
+    additional_source_term.resize ( N );
+    slope_cell            .resize ( N );
 
     u             .resize ( ( N_cols + 1 ) * N_rows );
     v             .resize ( ( N_rows + 1 ) * N_cols );
@@ -440,14 +394,10 @@ main (int argc, char** argv)
   else
     {
       for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              H ( k )   = 0.;
-              eta ( k ) = orography[ k ];
-            }
-        }
+      {
+        H   ( i ) = 0.;
+        eta ( i ) = 0.;
+      }
 
       saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
     }
@@ -473,7 +423,6 @@ main (int argc, char** argv)
                                             "u=resample(u,dem_u,method='bilinear');" +
                                             "values(u)[is.na(values(u))]=0;" +
                                             "writeRaster( u, file=paste0('" + output_dir + "u_0.asc'), overwrite=TRUE )\"";
-            //std::cout << bashCommand << std::endl;
             std::system ( bashCommand.c_str() );
 
           }
@@ -484,7 +433,6 @@ main (int argc, char** argv)
           }
       }
       Raster vel_u_Mat ( output_dir + "u_0.asc" );
-      //std::cout << vel_u_Mat.Coords.rows() << " " << vel_u_Mat.Coords.cols() << std::endl;
       for ( UInt i = 0; i < N_rows; i++ )
         {
           for ( UInt j = 0; j <= N_cols; j++ )
@@ -516,7 +464,6 @@ main (int argc, char** argv)
                                             "v=resample(v,dem_v,method='bilinear');" +
                                             "values(v)[is.na(values(v))]=0;" +
                                             "writeRaster( v, file=paste0('" + output_dir + "v_0.asc'), overwrite=TRUE )\"";
-            //std::cout << bashCommand << std::endl;
             std::system ( bashCommand.c_str() );
 
           }
@@ -545,15 +492,8 @@ main (int argc, char** argv)
     {
       xllcorner_staggered_u = xllcorner - pixel_size / 2.;
       yllcorner_staggered_u = yllcorner;
-
-      for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j <= N_cols; j++ )
-            {
-              const auto Id = j + ( N_cols + 1 ) * i; // u
-              u[ Id ] = 0.;
-            }
-        }
+      
+      u.assign (u.size (), 0.0);
 
       saveSolution ( output_dir + "u_0", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, u );
 
@@ -561,14 +501,7 @@ main (int argc, char** argv)
       xllcorner_staggered_v = xllcorner;
       yllcorner_staggered_v = yllcorner - pixel_size / 2.;
 
-      for ( UInt i = 0; i <= N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto Id = j + i * N_cols;
-              v[ Id ] = 0.;
-            }
-        }
+      v.assign (v.size (), 0.0);
 
       saveSolution ( output_dir + "v_0", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, v );
     }
@@ -612,14 +545,7 @@ main (int argc, char** argv)
     }
   else
     {
-      for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              h_sn[ k ] = 0.;
-            }
-        }
+      h_sn.assign (h_sn.size (), 0.0);
 
       saveSolution ( output_dir + "hsn_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sn );
 
@@ -662,15 +588,7 @@ main (int argc, char** argv)
     }
   else
     {
-      for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              h_sd[ k ] = 0.;
-            }
-        }
-
+      h_sd.assign (h_sd.size (), 0.0);
       saveSolution ( output_dir + "hsd_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sd );
 
     }
@@ -713,15 +631,7 @@ main (int argc, char** argv)
     }
   else
     {
-      for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              h_G[ k ] = 0.;
-            }
-        }
-
+      h_G.assign (h_G.size (), 0.0);
       saveSolution ( output_dir + "hG_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_G );
     }
   toc ("read input files");
@@ -731,472 +641,329 @@ main (int argc, char** argv)
   // +-----------------------------------------------+
 
   tic();
-  if ( !restart_soilMoisture )
+  
+  std::vector<Int> corineCode_Vec ( N );
+  std::vector<Real> X_Gav ( N ), Y_Gav ( N );
+  
+  {
+    const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
+    
+    // interpolate CLC to make sure to match correct dimensions
     {
-
-
-      std::vector<Int> corineCode_Vec ( N ),
-          HSG ( N );
-
-      std::vector<Real> clayPercentage_Vec ( N ),
-          sandPercentage_Vec ( N ),
-          X_Gav ( N ),
-          Y_Gav ( N );
-
-
-      if ( infiltrationModel != "None" || friction_model == "Rickenmann" )
-        {
-
-          const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
-
-
-          // interpolate CLC to make sure to match correct dimensions
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "clc=raster('" + file_dir + corineCode_file + "');" +
-                                            "clc=resample(clc,dem,method='ngb');" +
-                                            "values(clc)[is.na(values(clc))]=0;" +
-                                            "writeRaster( clc, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
-
-          }
-
-          Raster corineCode    ( output_dir + "CLC.asc" ),
-                 clayPercentage ( output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc" ),
-                 sandPercentage ( output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc" );
-
-          
-          
-          
-          if ( corineCode.cellsize != pixel_size )
-            {
-              std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with "
-                        << mask_file << " and "     << orography_file  << " ones" << std::endl;
-              exit ( -1. );
-            }
-
-
-
-          for ( UInt i = 0; i < N_rows; i++ )
-            {
-              for ( UInt j = 0; j < N_cols; j++ )
-                {
-                  const auto k = j + i * N_cols;
-                  corineCode_Vec[ k ] = corineCode.Coords.coeff ( i, j );
-                }
-            }
-
-
-
-
-
-          if ( clayPercentage.cellsize != sandPercentage.cellsize )
-            {
-              std::cout << "Please check that the soil texture files have the same resolution" << std::endl;
-              exit ( -1. );
-            }
-
-
-
-          if ( clayPercentage.cellsize == pixel_size )
-            {
-
-
-              for ( UInt i = 0; i < N_rows; i++ )
-                {
-                  for ( UInt j = 0; j < N_cols; j++ )
-                    {
-
-
-                      const auto k = j + i * N_cols;
-
-                      clayPercentage_Vec[ k ] = clayPercentage.Coords.coeff ( i, j );
-                      sandPercentage_Vec[ k ] = sandPercentage.Coords.coeff ( i, j );
-
-                      const auto& clay = clayPercentage_Vec[ k ],
-                                  & sand = sandPercentage_Vec[ k ];
-
-
-                      if ( sand > .9 && sand <= 1 && clay < .1 && clay >= 0 ) // A
-                        {
-                          HSG[ k ] = 0;
-                        }
-                      else if ( sand > .5 && sand < .9 && clay > .1 && clay < .2 ) // B
-                        {
-                          HSG[ k ] = 1;
-                        }
-                      else if ( sand < .5 && sand >= 0 && clay > .2 && clay < .4 ) // C
-                        {
-                          HSG[ k ] = 2;
-                        }
-                      else if ( sand < .5 && sand >= 0 && clay > .4 && clay <= 1 ) // D
-                        {
-                          HSG[ k ] = 3;
-                        }
-                      else if ( sand >= 0 && sand <= 1 && clay >= 0 && clay <= 1 )
-                        {
-
-                          Vector2D point ( std::array<Real, 2> {{ clay, sand }} );
-
-
-                          Vector2D point_A ( std::array<Real, 2> {{ 0, 1    }} );
-                          Vector2D point_B ( std::array<Real, 2> {{ .1, 1  }} );
-                          Vector2D point_C ( std::array<Real, 2> {{ .1, .9 }} );
-                          Vector2D point_D ( std::array<Real, 2> {{ 0, .9  }} );
-
-                          Vector2D point_E ( std::array<Real, 2> {{ .1, .5 }} );
-                          Vector2D point_F ( std::array<Real, 2> {{ .2, .5 }} );
-                          Vector2D point_G ( std::array<Real, 2> {{ .2, .9 }} );
-
-                          Vector2D point_H ( std::array<Real, 2> {{ .2, 0  }} );
-                          Vector2D point_I ( std::array<Real, 2> {{ .4, 0  }} );
-                          Vector2D point_L ( std::array<Real, 2> {{ .4, .5 }} );
-
-                          Vector2D point_M ( std::array<Real, 2> {{ 1, 0   }} );
-                          Vector2D point_N ( std::array<Real, 2> {{ 1, .5  }} );
-
-
-                          std::vector<Vector2D> vv = { point_A,
-                                                       point_D,
-                                                       point_C,
-                                                       point_B,
-
-                                                       point_C,
-                                                       point_E,
-                                                       point_F,
-                                                       point_G,
-
-                                                       point_F,
-                                                       point_H,
-                                                       point_I,
-                                                       point_L,
-
-                                                       point_L,
-                                                       point_I,
-                                                       point_M,
-                                                       point_N
-                                                     };
-
-
-
-
-                          std::pair<Real, Int> min = std::make_pair ( 1.e4, -1 );
-
-                          for ( auto ii = 0; ii < vv.size(); ii += 4 )
-                            {
-
-                              const auto A = vv[ ii ],
-                                         D = vv[ ii + 1 ],
-                                         C = vv[ ii + 2 ],
-                                         B = vv[ ii + 3 ];
-
-                              Real d1 = 1.e4,
-                                   d2 = 1.e4,
-                                   d3 = 1.e4,
-                                   d4 = 1.e4;
-
-
-                              Vector2D e1 ( std::array<Real, 2> {{ 1, 0 }} ),
-                              e2 ( std::array<Real, 2> {{ 0, 1 }} );
-
-
-                              if ( e1.dot ( point - D ) >= 0 && e1.dot ( point - D ) <= ( C ( 0 ) - D ( 0 ) ) ) d1 = std::abs ( ( point - D ).dot ( e2 ) );
-                              if ( e2.dot ( point - D ) >= 0 && e2.dot ( point - D ) <= ( A ( 1 ) - D ( 1 ) ) ) d2 = std::abs ( ( point - D ).dot ( e1 ) );
-                              if ( e1.dot ( point - A ) >= 0 && e1.dot ( point - A ) <= ( B ( 0 ) - A ( 0 ) ) ) d3 = std::abs ( ( point - A ).dot ( e2 ) );
-                              if ( e2.dot ( point - C ) >= 0 && e2.dot ( point - C ) <= ( B ( 1 ) - C ( 1 ) ) ) d4 = std::abs ( ( point - C ).dot ( e1 ) );
-
-                              if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4. );
-                              if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4. );
-                              if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4. );
-                              if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4. );
-
-
-                            }
-
-                          const auto& id = min.second;
-                          if ( id == 0 ) // A
-                            {
-                              HSG[ k ] = 0;
-                            }
-                          else if ( id == 1 ) // B
-                            {
-                              HSG[ k ] = 1;
-                            }
-                          else if ( id == 2 ) // C
-                            {
-                              HSG[ k ] = 2;
-                            }
-                          else if ( id == 3 ) // D
-                            {
-                              HSG[ k ] = 3;
-                            }
-                          else
-                            {
-                              std::cout << "Something wrong in HSG classification" << std::endl;
-                              exit ( -1. );
-                            }
-
-
-
-
-
-                        }
-                      else
-                        {
-                          HSG[ k ] = -1;
-                        }
-
-
-                    }
-
-                }
-
-            }
-          else
-            {
-              std::cout << "Error! resolution of soil texture files are not equal to the simulation resolution i.e. " << pixel_size << std::endl;
-              exit ( -1. );
-            }
-
-        }
-      else
-        {
-          saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
-        }
-
+      const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+      "dem=raster('" + output_dir + "DEM.asc" + "');" +
+      "clc=raster('" + file_dir + corineCode_file + "');" +
+      "clc=resample(clc,dem,method='ngb');" +
+      "values(clc)[is.na(values(clc))]=0;" +
+      "writeRaster( clc, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
+      std::system ( bashCommand.c_str() );
       
-      
-      const Real S_0 = .254;  // 254 mm
-
-      const auto CN_map = createCN_map( );
-
-      for ( UInt k = 0; k < N; k++ )
-        {
-          const auto key = std::array<Int, 2> {{ corineCode_Vec[ k ], HSG[ k ] }};
-
-          const auto it = CN_map.find ( key );
-
-
-          if ( it != CN_map.end( ) )
-            {
-              soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
-            }
-          else
-            {
-              soilMoistureRetention[ k ] = 0.;
-            }
-        }
-
-      saveSolution ( output_dir + "soilMoistureRetention", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, soilMoistureRetention );
-
-
-      // build X_Gav and Y_Gav
-      const auto CN_Gav_map = createCN_map_Gav( );
-
-      for ( UInt k = 0; k < N; k++ )
-        {
-          const auto key = corineCode_Vec[ k ];
-
-          const auto it = CN_Gav_map.find ( key );
-
-
-          if ( it != CN_Gav_map.end( ) ) // remains zero else
-            {
-              X_Gav[ k ] = it->second[ 0 ];
-              Y_Gav[ k ] = it->second[ 1 ];
-            }
-
-          Z_Gav[ k ] = X_Gav[ k ] * Y_Gav[ k ];
-
-        }
-      
-      
-      if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
-      {
-        std::cout << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
-        exit( 1. );
-      }
-
-      // build d_10 (for k_c) and d_90 (frictionClass)
-      auto d_10 = d_90;
-      if (infiltrationModel != "None")
-      {
-        d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
-        
-        for ( UInt i = 0; i < N; i++ )
-        {
-            // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
-            // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
-          const Real C_H = 6.54e-4;
-          const Real gravity = 9.81;
-          const Real kin_visc = 0.89e-6;
-          
-          hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
-        }
-      }
-
-
-      if (infiltrationModel != "None" || friction_model == "Rickenmann") d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
-
-      saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
-      saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
-      saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
-      
-
     }
-  else
+    
+    Raster corineCode ( output_dir + "CLC.asc" );
+    
+    
+    if ( corineCode.cellsize != pixel_size )
     {
-
+      std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with " << mask_file << " and "     << orography_file  << " ones" << std::endl;
+      exit ( -1. );
+    }
+    
+    
+    
+    for ( UInt i = 0; i < N_rows; i++ )
+    {
+      for ( UInt j = 0; j < N_cols; j++ )
       {
-        const std::string restart_soilMoistureRetention_file = dataFile ( "files/initial_conditions/soilMoistureFile", "soilMoisture.asc" ),
-                          restart_CLC_file                   = dataFile ( "files/initial_conditions/corineCode_file", "CLC.asc" ),
-                          restart_clay_file                  = dataFile ( "files/initial_conditions/clay_file", "clay.asc" ),
-                          restart_sand_file                  = dataFile ( "files/initial_conditions/sand_file", "sand.asc" );
-
-        Raster soilMoistureRetention_Mat ( file_dir + restart_soilMoistureRetention_file ),
-               CLC_Mat                  ( file_dir + restart_CLC_file ),
-               clayPercentage_Mat       ( file_dir + restart_clay_file ),
-               sandPercentage_Mat       ( file_dir + restart_sand_file );
-
-        if ( soilMoistureRetention_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "soilMoistureRetention=raster('" + file_dir + restart_soilMoistureRetention_file + "');" +
-                                            "soilMoistureRetention=resample(soilMoistureRetention,dem,method='bilinear');" +
-                                            "values(soilMoistureRetention)[is.na(values(soilMoistureRetention))]=0;" +
-                                            "writeRaster( soilMoistureRetention, file=paste0('" + output_dir + "soilMoistureRetention.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
-
-          }
-        else
-          {
-            std::cout << "Error! resolution of soilMoistureRetention file is greater than simulation resolution i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
-
-        if ( CLC_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "CLC=raster('" + file_dir + restart_CLC_file + "');" +
-                                            "CLC=resample(CLC,dem,method='bilinear');" +
-                                            "values(CLC)[is.na(values(CLC))]=0;" +
-                                            "writeRaster( CLC, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
-
-          }
-        else
-          {
-            std::cout << "Error! resolution of corineCode_file file is greater than simulation resolution i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
-
-        if ( clayPercentage_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "clay=raster('" + file_dir + restart_clay_file + "');" +
-                                            "clay=resample(clay,dem,method='bilinear');" +
-                                            "values(clay)[is.na(values(clay))]=0;" +
-                                            "writeRaster( clay, file=paste0('" + output_dir + "clay.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
-
-          }
-        else
-          {
-            std::cout << "Error! resolution of clay file is greater than simulation resolution i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
-
-        if ( sandPercentage_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "sand=raster('" + file_dir + restart_clay_file + "');" +
-                                            "sand=resample(sand,dem,method='bilinear');" +
-                                            "values(sand)[is.na(values(sand))]=0;" +
-                                            "writeRaster( sand, file=paste0('" + output_dir + "sand.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
-
-          }
-        else
-          {
-            std::cout << "Error! resolution of sand file is greater than simulation resolution i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
-
+        const auto k = j + i * N_cols;
+        corineCode_Vec[ k ] = corineCode.Coords.coeff ( i, j );
       }
-
-      Raster soilMoistureRetention_Mat ( output_dir + "soilMoistureRetention.asc" ),
-             CLC_Mat                  ( output_dir + "CLC.asc" ),
-             clay_Mat                 ( output_dir + "clay.asc" ),
-             sand_Mat                 ( output_dir + "sand.asc" );
-
-
-      std::vector<Int> corineCode_Vec ( N );
-
-      std::vector<Real> clayPercentage_Vec ( N ),
-          sandPercentage_Vec ( N ),
-          X_Gav ( N ),
-          Y_Gav ( N );
-
-
-      const auto CN_Gav_map = createCN_map_Gav( );
+    }
+    
+    saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
+  }
+  
+  
+  
+  {
+    
+    std::vector<Int>  HSG ( N );
+    std::vector<Real> clayPercentage_Vec ( N ), sandPercentage_Vec ( N );
+    
+    
+    std::string str1, str2;
+    if ( restart_soilMoisture )
+    {
+      const std::string restart_clay_file = dataFile ( "files/initial_conditions/clay_file", "clay.asc" ),
+                        restart_sand_file = dataFile ( "files/initial_conditions/sand_file", "sand.asc" );
+      
+      str1 = file_dir + restart_clay_file;
+      str2 = file_dir + restart_sand_file;
+    }
+    else
+    {
+      str1 = output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc";
+      str2 = output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc";
+    }
+    
+    double cellsize_psf = 0;
+    if (infiltrationModel != "None" && friction_model == "Rickenmann")
+    {
+      Raster clayPercentage ( str1 ),
+             sandPercentage ( str2 );
+      
+      cellsize_psf = clayPercentage.cellsize;
+      if ( cellsize_psf != sandPercentage.cellsize )
+      {
+        std::cout << "Please check that the soil texture files have the same resolution" << std::endl;
+        exit ( -1. );
+      }
+      
       for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
         {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              soilMoistureRetention[ k ] = soilMoistureRetention_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-              corineCode_Vec       [ k ] = CLC_Mat.Coords.coeff ( i, j );
-              clayPercentage_Vec[ k ]    = clay_Mat.Coords.coeff ( i, j );
-              sandPercentage_Vec[ k ]    = sand_Mat.Coords.coeff ( i, j );
-
-              const auto key = corineCode_Vec[ k ];
-
-              const auto it = CN_Gav_map.find ( key );
-
-              if ( it != CN_Gav_map.end( ) )
-                {
-                  X_Gav[ k ] = it->second[ 0 ];
-                  Y_Gav[ k ] = it->second[ 1 ];
-                }
-
-              Z_Gav[ k ] = X_Gav[ k ] * Y_Gav[ k ];
-
-            }
+          const auto k = j + i * N_cols;
+          
+          clayPercentage_Vec[ k ] = clayPercentage.Coords.coeff ( i, j );
+          sandPercentage_Vec[ k ] = sandPercentage.Coords.coeff ( i, j );
         }
-
-
-
-      // build d_10 (for k_c) and d_90 (frictionClass)
-      const auto d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
-
-
-
-      for ( UInt i = 0; i < d_10.size(); i++ )
-        {
-          // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
-          // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
-          const Real C_H = 6.54e-4;
-          const Real gravity = 9.81;
-          const Real kin_visc = 0.89e-6;
-
-          hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
-        }
-
-      d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
-
-
-      saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
-      saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
-      saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
-
+      }
     }
+    
+    
+    
+    if ( cellsize_psf == pixel_size )
+    {
+      
+      
+      for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
+        {
+          
+          
+          const auto k = j + i * N_cols;
+          
+          const auto & clay = clayPercentage_Vec[ k ],
+                     & sand = sandPercentage_Vec[ k ];
+          
+          
+          if ( sand > .9 && sand <= 1 && clay < .1 && clay >= 0 ) // A
+          {
+            HSG[ k ] = 0;
+          }
+          else if ( sand > .5 && sand < .9 && clay > .1 && clay < .2 ) // B
+          {
+            HSG[ k ] = 1;
+          }
+          else if ( sand < .5 && sand >= 0 && clay > .2 && clay < .4 ) // C
+          {
+            HSG[ k ] = 2;
+          }
+          else if ( sand < .5 && sand >= 0 && clay > .4 && clay <= 1 ) // D
+          {
+            HSG[ k ] = 3;
+          }
+          else if ( sand >= 0 && sand <= 1 && clay >= 0 && clay <= 1 )
+          {
+            
+            Vector2D point ( std::array<Real, 2> {{ clay, sand }} );
+            
+            
+            Vector2D point_A ( std::array<Real, 2> {{ 0, 1    }} );
+            Vector2D point_B ( std::array<Real, 2> {{ .1, 1  }} );
+            Vector2D point_C ( std::array<Real, 2> {{ .1, .9 }} );
+            Vector2D point_D ( std::array<Real, 2> {{ 0, .9  }} );
+            
+            Vector2D point_E ( std::array<Real, 2> {{ .1, .5 }} );
+            Vector2D point_F ( std::array<Real, 2> {{ .2, .5 }} );
+            Vector2D point_G ( std::array<Real, 2> {{ .2, .9 }} );
+            
+            Vector2D point_H ( std::array<Real, 2> {{ .2, 0  }} );
+            Vector2D point_I ( std::array<Real, 2> {{ .4, 0  }} );
+            Vector2D point_L ( std::array<Real, 2> {{ .4, .5 }} );
+            
+            Vector2D point_M ( std::array<Real, 2> {{ 1, 0   }} );
+            Vector2D point_N ( std::array<Real, 2> {{ 1, .5  }} );
+            
+            
+            std::vector<Vector2D> vv = { point_A,
+              point_D,
+              point_C,
+              point_B,
+              
+              point_C,
+              point_E,
+              point_F,
+              point_G,
+              
+              point_F,
+              point_H,
+              point_I,
+              point_L,
+              
+              point_L,
+              point_I,
+              point_M,
+              point_N
+            };
+            
+            
+            
+            
+            std::pair<Real, Int> min = std::make_pair ( 1.e4, -1 );
+            
+            for ( auto ii = 0; ii < vv.size(); ii += 4 )
+            {
+              
+              const auto A = vv[ ii ],
+              D = vv[ ii + 1 ],
+              C = vv[ ii + 2 ],
+              B = vv[ ii + 3 ];
+              
+              Real d1 = 1.e4,
+              d2 = 1.e4,
+              d3 = 1.e4,
+              d4 = 1.e4;
+              
+              
+              Vector2D e1 ( std::array<Real, 2> {{ 1, 0 }} ),
+              e2 ( std::array<Real, 2> {{ 0, 1 }} );
+              
+              
+              if ( e1.dot ( point - D ) >= 0 && e1.dot ( point - D ) <= ( C ( 0 ) - D ( 0 ) ) ) d1 = std::abs ( ( point - D ).dot ( e2 ) );
+              if ( e2.dot ( point - D ) >= 0 && e2.dot ( point - D ) <= ( A ( 1 ) - D ( 1 ) ) ) d2 = std::abs ( ( point - D ).dot ( e1 ) );
+              if ( e1.dot ( point - A ) >= 0 && e1.dot ( point - A ) <= ( B ( 0 ) - A ( 0 ) ) ) d3 = std::abs ( ( point - A ).dot ( e2 ) );
+              if ( e2.dot ( point - C ) >= 0 && e2.dot ( point - C ) <= ( B ( 1 ) - C ( 1 ) ) ) d4 = std::abs ( ( point - C ).dot ( e1 ) );
+              
+              if ( d1 < min.first ) min = std::pair<Real, Int> ( d1, ii / 4. );
+              if ( d2 < min.first ) min = std::pair<Real, Int> ( d2, ii / 4. );
+              if ( d3 < min.first ) min = std::pair<Real, Int> ( d3, ii / 4. );
+              if ( d4 < min.first ) min = std::pair<Real, Int> ( d4, ii / 4. );
+              
+              
+            }
+            
+            const auto & id = min.second;
+            if ( id == 0 ) // A
+            {
+              HSG[ k ] = 0;
+            }
+            else if ( id == 1 ) // B
+            {
+              HSG[ k ] = 1;
+            }
+            else if ( id == 2 ) // C
+            {
+              HSG[ k ] = 2;
+            }
+            else if ( id == 3 ) // D
+            {
+              HSG[ k ] = 3;
+            }
+            else
+            {
+              std::cout << "Something wrong in HSG classification" << std::endl;
+              exit ( -1. );
+            }
+            
+            
+          }
+          else
+          {
+            HSG[ k ] = -1;
+          }
+          
+          
+        }
+        
+      }
+      
+    }
+    else
+    {
+      std::cout << "Error! resolution of soil texture files are not equal to the simulation resolution i.e. " << pixel_size << std::endl;
+      exit ( -1. );
+    }
+    
+    
+    const Real S_0 = .254;  // 254 mm
+    
+    const auto CN_map = createCN_map( );
+    
+    for ( UInt k = 0; k < N; k++ )
+    {
+      const auto key = std::array<Int, 2> {{ corineCode_Vec[ k ], HSG[ k ] }};
+      
+      const auto it = CN_map.find ( key );
+      
+      
+      if ( it != CN_map.end( ) && infiltrationModel != "None" )
+      {
+        soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
+      }
+      else
+      {
+        soilMoistureRetention[ k ] = 0.;
+      }
+    }
+    
+    
+    // build X_Gav and Y_Gav
+    const auto CN_Gav_map = createCN_map_Gav( );
+    
+    for ( UInt k = 0; k < N; k++ )
+    {
+      const auto key = corineCode_Vec[ k ];
+      
+      const auto it = CN_Gav_map.find ( key );
+      
+      
+      if ( it != CN_Gav_map.end( ) ) // remains zero else
+      {
+        X_Gav[ k ] = it->second[ 0 ];
+        Y_Gav[ k ] = it->second[ 1 ];
+      }
+      
+      Z_Gav[ k ] = X_Gav[ k ] * Y_Gav[ k ];
+      
+    }
+    
+    
+    if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
+    {
+      std::cout << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
+      exit ( 1. );
+    }
+    
+    // build d_10 (for k_c) and d_90 (frictionClass)
+    auto d_10 = d_90;
+    if (infiltrationModel != "None")
+    {
+      d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
+      
+      // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
+      // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
+      const Real C_H = 6.54e-4;
+      const Real gravity = 9.81;
+      const Real kin_visc = 0.89e-6;
+      for ( UInt i = 0; i < N; i++ )
+      {
+        hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
+      }
+    }
+    
+    if (infiltrationModel != "None" || friction_model == "Rickenmann") d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
+    
+    saveSolution ( output_dir + "soilMoistureRetention",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, soilMoistureRetention );
+    saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
+    saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
+    saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
+    
+  }
 
-
+  
   std::cout << "maximum and minimum hydraulic_conductivity  " << *std::max_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << " " << *std::min_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << std::endl;
   toc ("build soil moisture vector");
 
@@ -1224,7 +991,7 @@ main (int argc, char** argv)
       const auto Id = j + i * ( N_cols + 1 );
 
       slope_x[ Id ] = slope_x[ Id + 1 ];
-      n_x    [ Id ] = n_x    [ Id + 1 ]; //0;
+      n_x    [ Id ] = n_x    [ Id + 1 ];
     }
 
   for ( UInt i = 0, j = N_cols; i < N_rows; i++ )
@@ -1232,7 +999,7 @@ main (int argc, char** argv)
       const auto Id = j + i * ( N_cols + 1 );
 
       slope_x[ Id ] = slope_x[ Id - 1 ];
-      n_x    [ Id ] = n_x    [ Id - 1 ]; //0;
+      n_x    [ Id ] = n_x    [ Id - 1 ];
     }
 
 
@@ -1256,7 +1023,7 @@ main (int argc, char** argv)
       const auto Id = j + i * N_cols;
 
       slope_y[ Id ] = slope_y[ Id + N_cols ];
-      n_y    [ Id ] = n_y    [ Id + N_cols ]; //0;
+      n_y    [ Id ] = n_y    [ Id + N_cols ];
     }
 
   for ( UInt j = 0, i = N_rows; j < N_cols; j++ )
@@ -1264,7 +1031,7 @@ main (int argc, char** argv)
       const auto Id = j + i * N_cols;
 
       slope_y[ Id ] = slope_y[ Id - N_cols ];
-      n_y    [ Id ] = n_y    [ Id - N_cols ]; //0;
+      n_y    [ Id ] = n_y    [ Id - N_cols ];
     }
 
 
@@ -1318,7 +1085,7 @@ main (int argc, char** argv)
   if ( save_temporal_sequence )
     {
 
-      const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }}; //
+      const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
 
       auto XX = ( XX_gauges - XX_O ) / pixel_size; // coordinate in the matrix
 
@@ -1328,7 +1095,7 @@ main (int argc, char** argv)
       if ( XX ( 0 ) < 0 || XX ( 1 ) < 0 )
         {
           std::cout << "The gauges in the input file are not good" << std::endl;
-          exit ( 1. );
+          exit ( 1. ); 
         }
 
       kk_gauges = XX ( 1 ) * N_cols + XX ( 0 );
@@ -1621,7 +1388,7 @@ main (int argc, char** argv)
     // cycle over interfaces, internal vertical and horizontal
     for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
-      const UInt i       = Id / ( N_cols + 1 ),
+      const UInt i = Id / ( N_cols + 1 ),
       
       IDleft  = Id - i - 1, // H
       IDright = Id - i;
@@ -1753,7 +1520,6 @@ main (int argc, char** argv)
   
   dt_DSV = maxdt(u, v, g, H, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
-//  dt_DSV = iter < 100 ? dt_DSV/10. : dt_DSV;
   
   double c1_DSV_ = c1_DSV(dt_DSV, pixel_size), c2_DSV_ = c2_DSV(g, c1_DSV_), c3_DSV_ = c3_DSV(g, c1_DSV_);
    
@@ -1958,34 +1724,6 @@ main (int argc, char** argv)
       
       
       
-      
-//      buildMatrix ( H_interface.horizontal,
-//                    H_interface.vertical,
-//                    orography,
-//                    u_star,
-//                    v_star,
-//                    H,
-//                    N_cols,
-//                    N_rows,
-//                    c1_DSV,
-//                    c3_DSV,
-//                    0,  // 0
-//                    precipitation.DP_cumulative,
-//                    dt_DSV,
-//                    alfa.alfa_x,
-//                    alfa.alfa_y,
-//                    idStaggeredInternalVectHorizontal,
-//                    idStaggeredInternalVectVertical,
-//                    idStaggeredBoundaryVectWest,
-//                    idStaggeredBoundaryVectEast,
-//                    idStaggeredBoundaryVectNorth,
-//                    idStaggeredBoundaryVectSouth,
-//                    idBasinVect,
-//                    idBasinVectReIndex,
-//                    isNonReflectingBC,
-//                    true,
-//                    coefficients,
-//                    rhs );
 
 
 
@@ -2057,23 +1795,7 @@ main (int argc, char** argv)
 
         }
     
-      // put this correction in another side to make sure to have no discontinuities at the excluded-included interface
-//      for ( const auto & Id : idBasinVect )
-//      {
-//        const auto & current_tuple = excluded_ids[ Id ];
-//        if ( std::get<0>( current_tuple ) )
-//        {
-//          const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
-//          H_basin( IDreIndex ) = 0.;
-//
-//            //          const auto & k_pour = std::get<1>( current_tuple );
-//            //          if (k_pour>=0)
-//            //          {
-//            //            H_basin( k_pour ) += H( IDreIndex );
-//            //            H_basin( IDreIndex ) = 0.;
-//            //          }
-//        }
-//      }
+      
       
       const double minH = H_basin.minCoeff();
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
@@ -2081,6 +1803,12 @@ main (int argc, char** argv)
       if (minH < 0.)
       {
         dt_DSV = dt_DSV/10.;
+        
+        if (dt_DSV == 0)
+        {
+          std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
+          exit( -1. );
+        }
 
         c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
         c2_DSV_ = c2_DSV (g, c1_DSV_);
@@ -2102,28 +1830,6 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
       // |                  Update u, v                  |
       // +-----------------------------------------------+
-
-//      updateVel ( u,
-//                 v,
-//                 u_star,
-//                 v_star,
-//                 alfa.alfa_x,
-//                 alfa.alfa_y,
-//                 N_rows,
-//                 N_cols,
-//                 c2_DSV,
-//                 H_min,
-//                 eta,
-//                 H,
-//                 orography,
-//                 excluded_ids,
-//                 idStaggeredInternalVectHorizontal,
-//                 idStaggeredInternalVectVertical,
-//                 idStaggeredBoundaryVectWest,
-//                 idStaggeredBoundaryVectEast,
-//                 idStaggeredBoundaryVectNorth,
-//                 idStaggeredBoundaryVectSouth,
-//                 isNonReflectingBC );
       
       
       updateVel ( u,
@@ -2147,29 +1853,6 @@ main (int argc, char** argv)
                   idStaggeredBoundaryVectSouth_excluded,
                   isNonReflectingBC );
       
-//      updateVel ( u,
-//                 v,
-//                 u_star,
-//                 v_star,
-//                 H_interface.horizontal,
-//                 H_interface.vertical,
-//                 alfa.alfa_x,
-//                 alfa.alfa_y,
-//                 N_rows,
-//                 N_cols,
-//                 c2_DSV,
-//                 H_min,
-//                 eta,
-//                 orography,
-//                 idStaggeredInternalVectHorizontal_excluded,
-//                 idStaggeredInternalVectVertical_excluded,
-//                 idStaggeredBoundaryVectWest_excluded,
-//                 idStaggeredBoundaryVectEast_excluded,
-//                 idStaggeredBoundaryVectNorth_excluded,
-//                 idStaggeredBoundaryVectSouth_excluded,
-//                 isNonReflectingBC );
-      
-
       
       
       
@@ -2251,8 +1934,8 @@ main (int argc, char** argv)
           for ( const UInt& Id : idStaggeredInternalVectHorizontal_excluded )
             {
               const UInt i       = Id / ( N_cols + 1 ),
-                         IDeast  = Id - i,                  // H
-                         IDwest  = Id - i - 1;              // H
+                         IDeast  = Id - i,
+                         IDwest  = Id - i - 1;
 
               const Real& h_left  = h_sd[ IDwest ],
                           & h_right = h_sd[ IDeast ];
@@ -2287,7 +1970,7 @@ main (int argc, char** argv)
 
 
               const Real h_left  = h_sd[ Id - i - 1 ],
-                         h_right = 0; //0;
+                         h_right = 0;
 
 
               h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
@@ -2310,8 +1993,8 @@ main (int argc, char** argv)
 
           for ( const UInt& Id : idStaggeredInternalVectVertical_excluded )
             {
-              const UInt IDsouth = Id,              // H
-                         IDnorth = Id - N_cols;     // H
+              const UInt IDsouth = Id,
+                         IDnorth = Id - N_cols;
 
               const Real& h_left  = h_sd[ IDnorth ],
                           & h_right = h_sd[ IDsouth ];
@@ -2341,7 +2024,7 @@ main (int argc, char** argv)
             {
 
               const Real h_left  = h_sd[ Id - N_cols ],
-                         h_right = 0; //0;
+                         h_right = 0;
 
 
               h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
@@ -2351,7 +2034,7 @@ main (int argc, char** argv)
 
           for ( const UInt& Id : idBasinVect_excluded )
             {
-              Res_y[ Id ] = h_interface_y[ Id + N_cols ] - h_interface_y[ Id ]; // controllare questo anche in h_G
+              Res_y[ Id ] = h_interface_y[ Id + N_cols ] - h_interface_y[ Id ];
             }
 
           
@@ -2361,8 +2044,8 @@ main (int argc, char** argv)
             
             const UInt i       = Id / ( N_cols + 1 ),
             
-            IDleft  = Id - i - 1, // H
-            IDright = Id - i; // H
+            IDleft  = Id - i - 1,
+            IDright = Id - i;
             
 
             
@@ -2392,8 +2075,8 @@ main (int argc, char** argv)
           for ( const auto & Id : idStaggeredInternalVectVertical )
           {
             
-            const UInt IDleft  = Id - N_cols, // H
-            IDright = Id; // H
+            const UInt IDleft  = Id - N_cols,
+            IDright = Id;
             
   
             if ( std::get<0> ( excluded_ids[ IDleft ] ) )
@@ -2442,7 +2125,6 @@ main (int argc, char** argv)
       
       dt_DSV = maxdt(u, v, g, H, pixel_size);
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
-//      dt_DSV = iter < 100 ? dt_DSV/10. : dt_DSV;
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
@@ -2530,15 +2212,7 @@ main (int argc, char** argv)
     } // End Time Loop
 
 
-  /*
-         #if defined(_OPENMP)
-         duration = ( omp_get_wtime() - start );
-         #else
-         duration = ( std::clock() - start ) / ( Real ) CLOCKS_PER_SEC;
-         #endif
-  */
 
-  //std::cout << "Operation took " << duration << " seconds" << std::endl;
   print_timing_report();
 
   return ( EXIT_SUCCESS );
