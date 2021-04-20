@@ -1798,8 +1798,9 @@ main (int argc, char** argv)
       const double minH = H_basin.minCoeff();
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
       
-      if (minH < 0.)
+      if (minH < -1e-7)
       {
+        
         dt_DSV = dt_DSV/10.;
         
         if (dt_DSV == 0)
@@ -1813,6 +1814,20 @@ main (int argc, char** argv)
         c3_DSV_ = c3_DSV (g, c1_DSV_);
 
         continue;
+      }
+      else
+      {
+        if (minH < 0.)
+        {
+          for ( const auto& k : idBasinVect )
+          {
+            auto& h_current = H_basin ( k );
+            if (h_current < 0)
+            {
+              h_current = std::abs (h_current);
+            }
+          }
+        }
       }
       
 
