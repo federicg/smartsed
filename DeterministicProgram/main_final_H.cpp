@@ -19,7 +19,7 @@
     along with SMART-SED.  If not, see <http://www.gnu.org/licenses/>.
 
 *******************************************************************************
-*/ 
+*/  
  
 
 /*!
@@ -393,7 +393,7 @@ main (int argc, char** argv)
     }
   else
     {
-      for ( UInt i = 0; i < N_rows; i++ )
+      for ( UInt i = 0; i < N; i++ )
       {
         H   ( i ) = 0.;
         eta ( i ) = 0.;
@@ -1680,7 +1680,7 @@ main (int argc, char** argv)
 
 
       tic();
-
+      
 
       additional_source_term.assign(N, 0.);
       
@@ -1798,6 +1798,9 @@ main (int argc, char** argv)
       const double minH = H_basin.minCoeff();
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
       
+      
+      
+      
       if (minH < -1e-6)
       {
         
@@ -1840,6 +1843,10 @@ main (int argc, char** argv)
       toc ("solve");
 
       tic();
+      
+      
+      
+      
       // +-----------------------------------------------+
       // |                  Update u, v                  |
       // +-----------------------------------------------+
