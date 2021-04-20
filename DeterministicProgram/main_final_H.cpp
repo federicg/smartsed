@@ -1798,7 +1798,7 @@ main (int argc, char** argv)
       const double minH = H_basin.minCoeff();
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
       
-      if (minH < -1e-7)
+      if (minH < -1e-6)
       {
         
         dt_DSV = dt_DSV/10.;
