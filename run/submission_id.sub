@@ -11,7 +11,7 @@
 
 
 # Set the job name (dai un nome al lavoro che visualizzerai quando run)
-#PBS -N Simulation20
+#PBS -N Simulation50
 
 # Set the output file and merge it to the sterr
 # file di output and input se desideri nominarli in un modo specifico, altrimenti li salva in un unico file che definisci dopo.
@@ -48,7 +48,7 @@ cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBI
 cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp ${PBS_O_WORKDIR}/runAll.sh ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/runAll.sh
-cp ${PBS_O_WORKDIR}/SMARTSED_input_ev ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
+cp ${PBS_O_WORKDIR}/SMARTSED_input_id ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
 cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram/main.exe
 
 
@@ -103,7 +103,7 @@ export PYTHONPATH=
 # completo di redirezione di input e/o output se necessario
 #  YOUR LAUNCH COMMAND BELOW completed with I/O redirection if needed
 
-nsim=0
+nsim=-1
 res=20
 
 
