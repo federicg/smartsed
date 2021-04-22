@@ -144,7 +144,7 @@
    # per ora time_spacing deve essere un numero intero
    steps_per_hour    = 50    # number of time steps per hour
    max_Days          = 35   # maximum number of simulated days
-   H_min             = 0.e-3 #lasciamolo a zero!!  # threshold under which there is no mass flux [ meters ]
+   H_min             = 1.e-5 # threshold for max mass loss
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
    # for H

@@ -1297,7 +1297,7 @@ main (int argc, char** argv)
     }
   }
 
-  frictionClass alfa ( friction_model, n_manning, dt_DSV, d_90, roughness_vect, H_min, N_rows, N_cols, slope_x, slope_y );
+  frictionClass alfa ( friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
 
 
 
@@ -1697,7 +1697,7 @@ main (int argc, char** argv)
                    N,
                    c1_DSV_,
                    c3_DSV_,
-                   0,  // 0
+                   0,  
                    precipitation.DP_cumulative,
                    dt_DSV,
                    alfa.alfa_x,
@@ -1801,7 +1801,7 @@ main (int argc, char** argv)
       
       
       
-      if (minH < -1e-6)
+      if (minH < -H_min) //-1e-5
       {
         
         dt_DSV = dt_DSV/10.;
@@ -1861,7 +1861,7 @@ main (int argc, char** argv)
                   N_rows,
                   N_cols,
                   c2_DSV_,
-                  H_min,
+                  0,
                   eta,
                   H,
                   orography,
