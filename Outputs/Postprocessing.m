@@ -823,7 +823,7 @@ H = waterSurfaceHeight(:,1);
 time = waterSurfaceHeight(:,2);
 
 figure()
-plot(time,H,'o--')
+plot(time,H,'o--') 
 
 
 
