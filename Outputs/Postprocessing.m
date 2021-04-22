@@ -314,6 +314,15 @@ for n = 1:numberSimDays
 end
 close(video);
 
+figure()
+colormap( copper )
+mesh(XX/1000,YY/1000,b.*basin_mask)
+hold on
+surf(XX/1000,YY/1000,(b+H(:,:,end)).*basin_mask)
+xlabel('$x\;(km)$','fontsize',10,'interpreter','latex')
+ylabel('$y\;(km)$','fontsize',10,'interpreter','latex')
+colorbar
+
 
 %%
 
@@ -651,14 +660,14 @@ plot(times, waterHeight)
 
 
 % open simulation results
-folder=["35m/Outputs/0", "35m_/Outputs/0", "35m_r/Outputs/0"];%, "45216.hpc.mate.polimi.it/Outputs/0", "45217.hpc.mate.polimi.it/Outputs/0"]; %["44765.hpc.mate.polimi.it/Outputs/0", "44771.hpc.mate.polimi.it/Outputs/0"];
+folder=["0"];%, "45216.hpc.mate.polimi.it/Outputs/0", "45217.hpc.mate.polimi.it/Outputs/0"]; %["44765.hpc.mate.polimi.it/Outputs/0", "44771.hpc.mate.polimi.it/Outputs/0"];
 % waterHeight_num=zeros(1,length(folder));
 
 figure()
 plot(times, waterHeight, '-ob')
 hold on
 for i = 1:length(folder)
-    waterHeight_num  = readmatrix("../"+folder(i)+"/waterSurfaceHeight.txt");
+    waterHeight_num  = readmatrix(folder(i)+"/waterSurfaceHeight.txt");
     i
     dt_numm=waterHeight_num(1);
     waterHeight_num=waterHeight_num(2:end);
