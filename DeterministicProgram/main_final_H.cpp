@@ -276,16 +276,37 @@ main (int argc, char** argv)
                                         "dem=raster('" + file_dir + orography_file + "');" +
                                         "basin=raster('" + file_dir + mask_file + "');" +
                                         "basin=aggregate(basin," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
-                                        "dem=aggregate(dem," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
                                         "values(basin)[values(basin)>0]=1;" +
+                                        "dem=resample(dem,basin,method='bilinear');" +
+                                        //"values(dem)[is.na(values(dem))]=0;" +
                                         "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
                                         "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
         std::system ( bashCommand.c_str() );
       }
     else
       {
-        std::cout << "Basin mask greater than simulation resolution i.e. " << pixel_size << std::endl;
+        std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
         exit ( -1. );
+      }
+
+
+    if ( dataFile( "discretization/FillSinks", false ) )
+      {
+            
+          std::string bashCommand = std::string( "python3 -c " ) + "\"import os; import sys; import gdal; cwd = os.getcwd();" +
+          "sys.path.append( cwd + '/../DeterministicProgram/include/py' ); import richdem as rd;" +
+          "dem = rd.LoadGDAL( '" + output_dir + "DEM.asc' );" +
+          "rd.FillDepressions( dem, in_place=True, epsilon=True,topology='D4' );" +
+          "rd.SaveGDAL( '" + output_dir + "DEM.tif', dem )\"";
+            
+          std::system( bashCommand.c_str() );
+            
+          bashCommand = std::string( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.tif');" +
+          "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE )\"";
+            
+          std::system( bashCommand.c_str() );
+
       }
 
 
@@ -373,7 +394,7 @@ main (int argc, char** argv)
           }
         else
           {
-            std::cout << "Error! resolution of surface water is greater than simulation resolution i.e. " << pixel_size << std::endl;
+            std::cout << "Error! resolution of surface water is greater than simulation resolution, i.e. " << pixel_size << std::endl;
             exit ( -1. );
           }
       }
@@ -469,7 +490,7 @@ main (int argc, char** argv)
           }
         else
           {
-            std::cout << "Error! resolution of vertical velocity is greater than simulation resolution i.e. " << pixel_size << std::endl;
+            std::cout << "Error! resolution of vertical velocity is greater than simulation resolution, i.e. " << pixel_size << std::endl;
             exit ( -1. );
           }
       }
@@ -526,7 +547,7 @@ main (int argc, char** argv)
           }
         else
           {
-            std::cout << "Error! resolution of snow file is greater than simulation resolution i.e. " << pixel_size << std::endl;
+            std::cout << "Error! resolution of snow file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
             exit ( -1. );
           }
       }
@@ -568,7 +589,7 @@ main (int argc, char** argv)
           }
         else
           {
-            std::cout << "Error! resolution of sediment file is greater than simulation resolution i.e. " << pixel_size << std::endl;
+            std::cout << "Error! resolution of sediment file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
             exit ( -1. );
           }
       }
@@ -611,7 +632,7 @@ main (int argc, char** argv)
           }
         else
           {
-            std::cout << "Error! resolution of gravitational file is greater than simulation resolution i.e. " << pixel_size << std::endl;
+            std::cout << "Error! resolution of gravitational file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
             exit ( -1. );
           }
       }
@@ -1799,7 +1820,7 @@ main (int argc, char** argv)
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
       
       
-      
+      std::cout << "here!!" << std::endl;
       
       if (minH < -H_min) //-1e-5
       {
@@ -1817,27 +1838,17 @@ main (int argc, char** argv)
         c3_DSV_ = c3_DSV (g, c1_DSV_);
 
         continue;
-      }
-      else
-      {
-        if (minH < 0.)
-        {
-          for ( const auto& k : idBasinVect )
-          {
-            auto& h_current = H_basin ( k );
-            if (h_current < 0)
-            {
-              h_current = std::abs (h_current);
-            }
-          }
-        }
+
       }
       
 
       for ( const UInt& Id : idBasinVect_excluded )
         {
           const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
-          H ( Id ) = H_basin ( IDreIndex );
+
+          const auto h_current = H_basin ( IDreIndex );
+
+          H ( Id ) = h_current>0 ? h_current : std::abs(h_current);
           eta ( Id ) = H ( Id ) + orography[ Id ];
         }
       toc ("solve");
