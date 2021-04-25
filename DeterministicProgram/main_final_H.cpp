@@ -302,7 +302,7 @@ main (int argc, char** argv)
           std::system( bashCommand.c_str() );
             
           bashCommand = std::string( "Rscript -e " ) + "\"library(raster);" +
-          "dem=raster('" + output_dir + "DEM.tif');" +
+          "dem=raster('" + output_dir + "DEM.tif');" + 
           "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE )\"";
             
           std::system( bashCommand.c_str() );
@@ -1820,7 +1820,6 @@ main (int argc, char** argv)
       std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
       
       
-      std::cout << "here!!" << std::endl;
       
       if (minH < -H_min) //-1e-5
       {
