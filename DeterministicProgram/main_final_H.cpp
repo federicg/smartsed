@@ -1147,7 +1147,7 @@ main (int argc, char** argv)
       {
         for (int j = j_1; j <= j_2; j++)
         {
-          std::cout << i * N_cols + j << std::endl;
+          //std::cout << i * N_cols + j << std::endl;
           kk_gauges.push_back(i * N_cols + j);
         }
       }
