@@ -34,8 +34,8 @@
     constant_precipitation      = false  # false: IDW
 
     # comune lecco files
-    rain_file                   = rain/event/pioggia_id.txt 
-    time_spacing_rain           = 1
+    rain_file                   = pioggia_test.txt 
+    time_spacing_rain           = 0.1667
 
     # arpa files
     # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
@@ -135,11 +135,14 @@
     
     friction_model = Rickenmann  # Manning or Rickenmann or None (no friction model)
     n_manning      = 1.e-2  #.01       # value used if Manning
+
+    is_sediment_transport = true
     
 [../] 
 
 [discretization]
 
+   FillSinks = false
 
    # per ora time_spacing deve essere un numero intero
    steps_per_hour    = 50    # number of time steps per hour
@@ -147,7 +150,8 @@
    H_min             = 1.e-5 # threshold for max mass loss
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
-   # for H
+
+   # for H, 530884.2, 5077668,
    X_gauges          = 530850.173
    Y_gauges          = 5077721.741
 

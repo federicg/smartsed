@@ -425,28 +425,20 @@ signum (const Real& x)
 
 
 Rain::Rain (const std::string& infiltrationModel,
-            const UInt&         N,
-            const bool&         isInitialLoss,
-            const Real&         perc_initialLoss)
+            const UInt&        N,
+            const bool&        isInitialLoss,
+            const Real&        perc_initialLoss)
 {
   M_isInitialLoss = isInitialLoss;
   c = perc_initialLoss;
     
     
-
-  if ( infiltrationModel == "None" )
-    {
-      M_infiltrationModel = false;
-    }
-  else if ( infiltrationModel  == "SCS-CN" )
-    {
-      M_infiltrationModel = true;
-    }
-  else
-    {
-      std::cout << "Insert a valid infiltration model!" << std::endl;
-      exit( 1. );
-    }
+  if ( infiltrationModel != "None" && infiltrationModel  != "SCS-CN" )
+  {
+    std::cout << "Insert a valid infiltration model, STOP!" << std::endl;
+    exit( 1. );
+  }
+  
 
   DP_total.resize( N );
   DP_cumulative.resize( N );
@@ -503,26 +495,27 @@ Rain::constant_precipitation (const std::string&       file,
               Real value;
               ff >> value;
 
-
               const int rr = int(std::round(24./time_spacing));
-              if ( std::abs( ((i%rr)+1)*time_spacing - hour_full ) > .1 * ((i%rr)+1)*time_spacing )
+              if ( std::abs( (i%rr)*time_spacing - hour_full ) > .1 * (i%rr)*time_spacing ) //( std::abs( ((i%rr)+1)*time_spacing - hour_full ) > .1 * ((i%rr)+1)*time_spacing )
                 {
-                  std::cout << hour << std::endl;
+                  std::cout << str1 << " " << hour << " " << value << std::endl;
                   std::cout << "Invalid rain file" << std::endl;
                   exit( 1. );
                 }
-
-
-              //value=1;
-              //                    std::cout << str1 << " " << hour << " " << value << " " << i+1 << std::endl;
+              
 
               // mm/h  --> m/sec.
               Hyetograph[ 0 ].push_back( value * 1.e-3 / ( time_spacing * 3600 ) );
               //ff >> value; // second pluviometer data --> not used yet
 
+              //std::cout << str1 << " " << hour << " " << value << std::endl;
+
             }
 
           ff.close();
+
+
+
 
 
         }
@@ -596,8 +589,8 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
 
 
               const Int hour_number   = std::stoi( hour_string   ),
-                minute_number = std::stoi( minute_string );
-
+                        minute_number = std::stoi( minute_string );
+              
               const Real hour_full    = Real(hour_number) + Real(minute_number)/60;
 
 
@@ -612,9 +605,7 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
                   exit( 1. );
                 }
 
-
-              //                    std::cout << Id_sensor << " " << day << " " << i+1 << " " << hour << " " << value << std::endl;
-
+              
 
               // mm/h  --> m/sec.
               Hyetograph[ k ].push_back( value * 1.e-3 / ( time_spacing * 3600 ) );
@@ -651,7 +642,6 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
                 {
 
                   const Int ii = std::floor( i * ( time_spacing_vect[ k ] / time_spacing_vect[ kk ] ) );
-                  //                        std::cout << ii << std::endl;
                   if ( itt[ ii ] >= 0. )
                     {
                       otherStationsRain.push_back( itt[ ii ] );
@@ -732,10 +722,7 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
 
       for ( UInt ii = 0; ii < IDW_weights[ IDcenter ].size(); ii++ )
         {
-          //std::cout << IDW_weights[ IDcenter ][ ii ] << " " << *IDW_weights[ IDcenter ].begin() << " " << *IDW_weights[ IDcenter ].end();
           IDW_weights[ IDcenter ][ ii ] /= sum;
-          //std::cout << " " << IDW_weights[ IDcenter ][ ii ] << std::endl;
-          //IDW_weights[ IDcenter ][ ii ] = 1.;
         }
 
 
@@ -758,14 +745,11 @@ Rain::computePrecipitation (const Real&              time,
 {
 
   // SCS-CN method and Initial and Constant Loss Model
-  //        std::cout << Hyetograph.size() << " " << IDW_weights.size() << std::endl;
   for ( UInt Id = 0; Id < Hyetograph.size(); Id++ )
     {
             
-      //            std::cout << ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) << " ietogramma" << std::endl;
             
-            
-      const UInt i_index = std::floor( time / (M_time_spacing_vect[ Id ]*3600) ); //std::floor( ( n - 1 ) / ( steps_per_hour * M_time_spacing_vect[ Id ] ) );
+      const UInt i_index = std::floor( time / (M_time_spacing_vect[ Id ]*3600) );
             
 
       for ( const auto & IDcenter : idBasinVect )
@@ -808,20 +792,15 @@ Rain::computePrecipitation (const Real&              time,
                 
           if ( ( ( H( IDcenter ) + h_G[ IDcenter ] ) < ( c * S[ IDcenter ] ) ) && M_isInitialLoss ) // initial loss
             {
-              //                    std::cout << H[ IDcenter ] << " " << h_G[ IDcenter ] << " " << c << " " << S[IDcenter ] << std::endl;
-              //                    std::cout << ( H[ IDcenter ] + h_G[ IDcenter ] ) << " " << ( c * S[ IDcenter ] ) << std::endl;
               potential_runoff = 0.;
               infiltrationRate = rainfall_intensity * melt_mask[ IDcenter ];
             }
                 
-                
+          //std::cout << potential_runoff << std::endl;
                 
           DP_total      [ IDcenter ] += rainfall_intensity;
           DP_cumulative [ IDcenter ] += potential_runoff;
           DP_infiltrated[ IDcenter ] += infiltrationRate;
-                
-          //std::cout << DP_total[ IDcenter ] << " " << DP_cumulative[ IDcenter ] << " " << DP_infiltrated[ IDcenter ] << " " << potential_runoff << " " << infiltrationRate << std::endl;
-                
                 
                 
         }
@@ -880,17 +859,18 @@ Temperature::Temperature (const std::string&       file,
               ff >> str1;
 
               std::vector<UInt> nn;
-
-              //std::cout << str1 << std::endl;
+              
               if ( str1.length() != 10 )
                 {
+                  std::cout << str1 << std::endl;
                   std::cout << "Wrong Temperature file format" << std::endl;
                   exit( 1. );
                 }
 
+
               std::string day_string  ( str1.begin(),   str1.begin()+2 ),
-                month_string( str1.begin()+3, str1.begin()+5 ),
-                year_string ( str1.begin()+6, str1.end()     );
+                          month_string( str1.begin()+3, str1.begin()+5 ),
+                          year_string ( str1.begin()+6, str1.end()     );
 
 
               //std::cout << day_string << " " << month_string << " " << year_string << std::endl;
@@ -898,8 +878,8 @@ Temperature::Temperature (const std::string&       file,
 
 
               const Int day   = std::stoi( day_string   ),
-                month = std::stoi( month_string ),
-                year  = std::stoi( year_string  );
+                        month = std::stoi( month_string ),
+                        year  = std::stoi( year_string  );
 
 
               //std::cout << day << " " << month << " " << year << std::endl;
@@ -941,27 +921,28 @@ Temperature::Temperature (const std::string&       file,
               std::string hour;
               ff >> hour;
 
-              std::string hour_string  ( hour.begin(),   hour.begin()+2 ),
+              std::string hour_string( hour.begin(),   hour.begin()+2 ),
                 minute_string( hour.begin()+3, hour.begin()+5 ),
                 second_string( hour.begin()+6, hour.begin()+8 );
 
 
               const Int hour_number   = std::stoi( hour_string   ),
-                minute_number = std::stoi( minute_string ),
-                second_number = std::stoi( second_string );
+                        minute_number = std::stoi( minute_string ),
+                        second_number = std::stoi( second_string );
 
               const Real hour_full    = Real(hour_number) + Real(minute_number)/60 + Real(second_number)/3600;
 
 
               Real value;  // temperature data
               ff >> value;
-
-
+              
+              
+              
               const int rr = int(std::round(24./time_spacing));
-              if ( std::abs( ((i%rr)+1)*time_spacing - hour_full ) > .1 * ((i%rr)+1)*time_spacing )
+              if ( std::abs( (i%rr)*time_spacing - hour_full ) > .1 * (i%rr)*time_spacing ) //( std::abs( ((i%rr)+1)*time_spacing - hour_full ) > .1 * ((i%rr)+1)*time_spacing )
                 {
-                  std::cout << hour << std::endl;
-                  std::cout << "Invalid temperature file" << std::endl;
+                  std::cout << str1 << " " << hour << " " << value << " " << i+1 << std::endl;
+                  std::cout << "Invalid temperature file, maybe check time spacing in SMARTSED_input file" << std::endl;
                   exit( 1. );
                 }
 
@@ -976,9 +957,6 @@ Temperature::Temperature (const std::string&       file,
                   value = Temperature_Graph[ i - 1 ];
                 }
 
-
-
-              std::cout << str1 << " " << hour << " " << value << " " << i+1 << std::endl;
 
 
               Temperature_Graph.push_back( value );
@@ -1006,25 +984,25 @@ Temperature::Temperature (const std::string&       file,
 
               std::vector<UInt> nn;
 
-              //std::cout << str1 << std::endl;
+
               if ( str1.length() != 10 )
                 {
+                  std::cout << str1 << std::endl;
                   std::cout << "Wrong Temperature file format" << std::endl;
                   exit( 1. );
                 }
+
 
               std::string year_string ( str1.begin(),   str1.begin()+4 ),
                 month_string( str1.begin()+5, str1.begin()+7 ),
                 day_string  ( str1.begin()+8, str1.end()     );
 
 
-              //std::cout << day_string << " " << month_string << " " << year_string << std::endl;
-
 
 
               const Int day   = std::stoi( day_string   ),
-                month = std::stoi( month_string ),
-                year  = std::stoi( year_string  );
+                        month = std::stoi( month_string ),
+                        year  = std::stoi( year_string  );
 
 
               //std::cout << day << " " << month << " " << year << std::endl;
@@ -1066,6 +1044,8 @@ Temperature::Temperature (const std::string&       file,
               std::string hour;
               ff >> hour;
 
+
+
               std::string hour_string  ( hour.begin(),   hour.begin()+2 ),
                 minute_string( hour.begin()+3, hour.begin()+5 );
 
@@ -1079,10 +1059,12 @@ Temperature::Temperature (const std::string&       file,
               Real value;  // temperature data
               ff >> value;
 
+              //std::cout << str1 << " " << hour << " " << value << std::endl;
+
               const int rr = int(std::round(24./time_spacing));
               if ( std::abs( (i%rr)*time_spacing - hour_full ) > .1 * (i%rr)*time_spacing )
                 {
-                  std::cout << std::stoi( hour ) << std::endl;
+                  std::cout << str1 << " " << hour << " " << value << std::endl;
                   std::cout << "Invalid temperature file" << std::endl;
                   exit( 1. );
                 }
@@ -1097,10 +1079,6 @@ Temperature::Temperature (const std::string&       file,
                 {
                   value = Temperature_Graph[ i - 1 ];
                 }
-
-
-
-              //                    std::cout << str1 << " " << hour << " " << value << " " << i+1 << std::endl;
 
 
               Temperature_Graph.push_back( value );
@@ -1138,7 +1116,6 @@ Temperature::Temperature (const std::string&       file,
         {
 
           T_dailyMean[ n - 1 ] += Temperature_Graph[ h ];
-          //std::cout << Temperature_Graph[ h ] << " " << h << std::endl;
 
 
           if ( k != 0 )
@@ -1172,7 +1149,6 @@ Temperature::Temperature (const std::string&       file,
 
       T_dailyMean[ n - 1 ] /= k;
 
-      //std::cout << T_dailyMean[ n-1 ] << " " << T_dailyMin[n-1] << " " << T_dailyMax[n-1] << std::endl;
     }
   // --------------------------------------------- //
 
@@ -1244,7 +1220,6 @@ evapoTranspiration::evapoTranspiration (const std::string&       ET_model,
         ws    = std::acos( - std::tan( phi_rad ) * std::tan( delta ) );
 
       Ra[ n - 1 ] = (24*60/M_PI) * M_Gsc * dr * ( ws * std::sin( phi_rad ) * std::sin( delta ) + std::cos( phi_rad ) * std::cos( delta ) * std::sin( ws ) );
-      //            std::cout << Ra[ n - 1 ] << std::endl;
     }
 
 
@@ -1267,9 +1242,6 @@ evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore
 
     case 1:
 
-//        const Int i = std::floor( time / ( 24 * 3600 ) ); //std::floor( ( n - 1 ) / ( steps_per_hour * 24 ) );
-      //                std::cout << "Evvv" << i << std::endl;
-      //                exit(1);
       for ( const auto & k : idBasinVect )
         {
 
@@ -1278,17 +1250,9 @@ evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore
             t_min  = T_min [ i ] + Temp_diff * ( orography[ k ] - height_th );
 
           // unity: mm/day --> m/sec.
-          ET_vec[ k ] = .0023 * Ra[ i ] * ( t_mean + 17.8 ) * std::pow( ( t_max - t_min ), .5 ) * ( 1.e-3/(24*3600) ); // pi√π che altro mettere la T del giorno media per poter calcolare T_min e T_max
-
-          //                    if ( std::isnan(ET_vec[k]) )
-          //                    {
-          //                        std::cout << "nan in evapotranspiration" << std::endl;
-          //                        exit( -1 );
-          //                    }
+          ET_vec[ k ] = .0023 * Ra[ i ] * ( t_mean + 17.8 ) * std::pow( ( t_max - t_min ), .5 ) * ( 1.e-3/(24*3600) ); // pi˘ che altro mettere la T del giorno media per poter calcolare T_min e T_max
 
         }
-
-      //exit(1);
 
       break;
     }
@@ -1332,13 +1296,13 @@ frictionClass::frictionClass (const std::string& friction_model,
 
           M_fc0_greater_x[ IDleft ] = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
           M_fc0_lower_x  [ IDleft ] = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
-          M_fc0_greater_y[ IDup ] = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
-          M_fc0_lower_y  [ IDup ] = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
+          M_fc0_greater_y[ IDup ]   = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
+          M_fc0_lower_y  [ IDup ]   = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
 
           M_fc0_greater_x[ IDright ] = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
           M_fc0_lower_x  [ IDright ] = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
-          M_fc0_greater_y[ IDdown ] = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
-          M_fc0_lower_y  [ IDdown ] = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
+          M_fc0_greater_y[ IDdown ]  = std::pow( d_90_cell, .45 ) / ( .56  * std::pow( M_g, .44 ) );
+          M_fc0_lower_y  [ IDdown ]  = std::pow( d_90_cell, .24 ) / ( 2.73 * std::pow( M_g, .49 ) );
         }
     }
 
@@ -1470,193 +1434,6 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
           alfa_x[ Id ] = alfa;
 
       }
-    
-//
-//  switch ( M_frictionModel )
-//    {
-//    case 0:
-//
-//
-//
-//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-//        {
-//          alfa_x[ Id ] = 1;
-//        }
-//
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectWest )
-//        {
-//          alfa_x[ Id ] = 1;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectEast )
-//        {
-//          alfa_x[ Id ] = 1;
-//        }
-//
-//
-//
-//      break;
-//
-//    case 1:
-//
-//
-//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-//        {
-//
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_x[ Id ] = alfa;
-//        }
-//
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectWest )
-//        {
-//
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_x[ Id ] = alfa;
-//
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectEast )
-//        {
-//
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//          alfa_x[ Id ] = alfa;
-//
-//
-//        }
-//
-//
-//      break;
-//
-//    case 2:
-//
-//      for ( const auto & Id : idStaggeredInternalVectHorizontal )
-//        {
-//
-//          Real alfa = 1.;
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_x[ Id ] = alfa;
-//        }
-//
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectWest )
-//        {
-//
-//
-//          Real alfa = 1.;
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_x[ Id ] = alfa;
-//
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectEast )
-//        {
-//
-//          Real alfa = 1.;
-//
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_x_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1. + M_gamma_dt_DSV_x_[ Id ] * std::pow( std::abs( u[ Id ] ), 1. - M_expo_r_x_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_x * std::abs( u[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( u[ Id ] ) << " " << M_gamma_dt_DSV_x << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//
-//          alfa_x[ Id ] = alfa;
-//
-//        }
-//
-//      break;
-//
-//    default:
-//      std::cout << "Error in frictionClass" << std::endl;
-//      exit( -1. );
-//    }
 
 }
 
@@ -4140,7 +3917,6 @@ buildMatrix (const std::vector<Real>& H_int_x,
   }
   
   
-  
   for ( const auto & Id : idStaggeredInternalVectHorizontal )
   {
      
@@ -5188,7 +4964,7 @@ compute_dt_sediment (const Real&              alpha,
 
   Real dt_sed = std::min( dt_y, dt_x );
 
-  //std::cout << dt_sed << " " << std::floor( dt_DSV / dt_sed ) << " " << dt_DSV / dt_sed << " " << dt_DSV / std::floor( dt_DSV / dt_sed ) << std::endl;
+  //std::cout << S_x << " " << std::pow( S_x, beta ) << " " << dt_y << " " << dt_x << " " << dt_DSV << std::endl;
 
   dt_sed = std::min( dt_DSV / std::floor( dt_DSV / dt_sed ), dt_DSV );
 
@@ -6312,18 +6088,6 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
       Gamma_x[ Id ][ 1 ] = coeff_left;
     }
 
-  /*
-    for ( const auto & Id : idStaggeredBoundaryVectEast )
-    {
-    const Real coeff_right = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-    * ( .5 - .5 * signum( u[ Id ] ) ),
-
-    coeff_left = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-    * ( .5 + .5 * signum( u[ Id ] ) );
-
-
-    Gamma_x[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
-    }*/
 
 
   for ( const auto & Id : idStaggeredInternalVectVertical )
@@ -6363,33 +6127,6 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
     }
 
 
-  /*
-    for ( UInt Id = 0; Id < N_rows * ( N_cols + 1 ); Id++ )
-    {
-    const Real coeff_right = c1 * alpha * std::pow( S_x[ Id ], beta ) * u[ Id ]
-    * ( .5 - .5 * signum( u[ Id ] ) ),
-
-    coeff_left = c1 * alpha * std::pow( S_x[ Id ], beta ) * u[ Id ]
-    * ( .5 + .5 * signum( u[ Id ] ) );
-
-
-    Gamma_x[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
-    }
-
-
-
-    for ( UInt Id = 0; Id < N_cols * ( N_rows + 1 ); Id++ )
-    {
-    const Real coeff_right = c1 * alpha * std::pow( S_y[ Id ], beta ) * v[ Id ]
-    * ( .5 - .5 * signum( v[ Id ] ) ),
-
-    coeff_left = c1 * alpha * std::pow( S_y[ Id ], beta ) * v[ Id ]
-    * ( .5 + .5 * signum( v[ Id ] ) );
-
-
-    Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
-    }*/
-
 }
 
 
@@ -6408,7 +6145,7 @@ compute_d_perc( const std::vector<Real>& clay, const std::vector<Real>& sand, co
       const auto & clay_cell = clay[ i ];
 
       const auto Y_0 = ( 1 - sand_cell ) * 100;
-      const auto Y_1 = clay_cell * 100;
+      const auto Y_1 = clay_cell * 100; // ( 1 - sand_cell - silt_cell ) * 100
       const auto Y_2 = 100;
 
       if ( perc <= Y_0 )

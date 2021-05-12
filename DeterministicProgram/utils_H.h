@@ -257,7 +257,7 @@ private:
     IDW_weights;
 
   std::vector<Real> M_time_spacing_vect;
-  bool M_infiltrationModel, M_isInitialLoss;
+  bool M_isInitialLoss;
   Real rainfall_intensity = 0;
   Real c;
 
