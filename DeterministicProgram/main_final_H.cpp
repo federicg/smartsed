@@ -1142,8 +1142,9 @@ main (int argc, char** argv)
       i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
       j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
 
+      //std::cout << i_1 << " " << i_2 << " " << j_1 << " " << j_2 << std::endl;
 
-      for (int i = i_1; i <= i_2; i++)
+      for (int i = i_2; i <= i_1; i++)
       {
         for (int j = j_1; j <= j_2; j++)
         {
@@ -1155,6 +1156,7 @@ main (int argc, char** argv)
     }
 
   toc ("gauges i,j ");
+  
 
   // +-----------------------------------------------+
   // |                    Rain                       |
