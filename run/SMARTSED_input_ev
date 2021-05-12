@@ -154,7 +154,7 @@
    # for H, 530884.2, 5077668,
    X_gauges          = 530850.173
    Y_gauges          = 5077721.741
-
+   delta_gauges      = 50
 
    save_temporal_sequence = true # if true the value of the gauges are considered
 
