@@ -1104,10 +1104,10 @@ main (int argc, char** argv)
   // +-----------------------------------------------+
 
   tic();
-  UInt kk_gauges = 0;
 
-  // std::vector<UInt> kk_gauges;
+  std::vector<UInt> kk_gauges;
 
+  const double delta_gauges = dataFile ( "discretization/delta_gauges", 0 );
   if ( save_temporal_sequence )
     {
 
@@ -1115,17 +1115,42 @@ main (int argc, char** argv)
 
       auto XX = ( XX_gauges - XX_O ) / pixel_size; // coordinate in the matrix
 
-      XX ( 0 ) =   std::round ( XX ( 0 ) );
-      XX ( 1 ) = - std::round ( XX ( 1 ) );
+      auto XX_east = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+      auto XX_west = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
 
-      if ( XX ( 0 ) < 0 || XX ( 1 ) < 0 )
+      auto XX_south  = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+      auto XX_north  = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+
+      XX(1) = -std::round(XX(1));
+      XX(0) =  std::round(XX(0));
+      if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
+      {
+        std::cout << "The gauges in the input file are not good" << std::endl;
+        exit ( 1. );
+      }
+
+
+      int i_1 = -std::round(XX_north(1));
+      int i_2 = -std::round(XX_south(1));
+
+      int j_1 = std::round(XX_west(0));
+      int j_2 = std::round(XX_east(0));
+
+      i_1 = std::min(std::max(i_1, 0), int(N_rows-1));
+      j_1 = std::min(std::max(j_1, 0), int(N_cols-1));
+
+      i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
+      j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
+
+
+      for (int i = i_1; i <= i_2; i++)
+      {
+        for (int j = j_1; j <= j_2; j++)
         {
-          std::cout << "The gauges in the input file are not good" << std::endl;
-          exit ( 1. );
+          std::cout << i * N_cols + j << std::endl;
+          kk_gauges.push_back(i * N_cols + j);
         }
-
-      kk_gauges = XX ( 1 ) * N_cols + XX ( 0 );
-      //kk_gauges.push_back();
+      }
 
     }
 
@@ -2198,12 +2223,24 @@ main (int argc, char** argv)
       
       if ( save_temporal_sequence )
       {
-        const UInt i = kk_gauges / N_cols;
+
+        double H_current = 0.;
+        UInt kk_gauges_max = 0;
+        for (const auto candidate : kk_gauges)
+        {
+          const auto & cc = H[ candidate ];
+          if (cc > H_current)
+          {
+            kk_gauges_max = candidate;
+            H_current = cc;
+          }
+        }
+        const UInt i = kk_gauges_max / N_cols;
         
-        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight", H[ kk_gauges ] );
+        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight", H[ kk_gauges_max ] );
         saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux",
-                              H[ kk_gauges ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges ] + v[ kk_gauges + N_cols ] ) / 2. ), 2. ) +
-                                                           std::pow ( ( ( u[ kk_gauges - i ] + u[ kk_gauges - i + 1 ]  ) / 2. ), 2. ) ) );
+                              H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+                                                               std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
       }
       
       
