@@ -115,6 +115,7 @@ main (int argc, char** argv)
   
   const Vector2D    XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
   
+  const Real        frequency_save         = dataFile( "debug/frequency_save", 24. );
 
   const UInt nstep   = steps_per_hour * max_Days * 24;
   const Real t_final = max_Days * 24 * 3600;
@@ -1115,11 +1116,11 @@ main (int argc, char** argv)
 
       auto XX = ( XX_gauges - XX_O ) / pixel_size; // coordinate in the matrix
 
-      auto XX_east = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
-      auto XX_west = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+      auto XX_east  = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+      auto XX_west  = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
 
-      auto XX_south  = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
-      auto XX_north  = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+      auto XX_south = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+      auto XX_north = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
 
       XX(1) = -std::round(XX(1));
       XX(0) =  std::round(XX(0));
@@ -1142,13 +1143,11 @@ main (int argc, char** argv)
       i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
       j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
 
-      //std::cout << i_1 << " " << i_2 << " " << j_1 << " " << j_2 << std::endl;
 
       for (int i = i_2; i <= i_1; i++)
       {
         for (int j = j_1; j <= j_2; j++)
         {
-          //std::cout << i * N_cols + j << std::endl;
           kk_gauges.push_back(i * N_cols + j);
         }
       }
@@ -1185,109 +1184,30 @@ main (int argc, char** argv)
     }
   else // IDW
     {
+      std::vector<std::string> precipitation_file;
+      std::vector<Real>        time_spacing_rain, X, Y;
+      std::vector<UInt>        ndata_rain;
 
-      const std::string precipitation_file_1 = dataFile ( "files/meteo_data/rain_file_1", " " );
-      const std::string precipitation_file_2 = dataFile ( "files/meteo_data/rain_file_2", " " );
-      const std::string precipitation_file_3 = dataFile ( "files/meteo_data/rain_file_3", " " );
-      const std::string precipitation_file_4 = dataFile ( "files/meteo_data/rain_file_4", " " );
-      const std::string precipitation_file_5 = dataFile ( "files/meteo_data/rain_file_5", " " );
-      const std::string precipitation_file_6 = dataFile ( "files/meteo_data/rain_file_6", " " );
-      const std::string precipitation_file_7 = dataFile ( "files/meteo_data/rain_file_7", " " );
-      const std::string precipitation_file_8 = dataFile ( "files/meteo_data/rain_file_8", " " );
-      const std::string precipitation_file_9 = dataFile ( "files/meteo_data/rain_file_9", " " );
-      const std::vector<std::string> precipitation_file = { file_dir + precipitation_file_1,
-                                                            file_dir + precipitation_file_2,
-                                                            file_dir + precipitation_file_3,
-                                                            file_dir + precipitation_file_4,
-                                                            file_dir + precipitation_file_5,
-                                                            file_dir + precipitation_file_6,
-                                                            file_dir + precipitation_file_7,
-                                                            file_dir + precipitation_file_8,
-                                                            file_dir + precipitation_file_9
-                                                          };
+      const UInt number_stations = dataFile ( "files/meteo_data/number_stations", " " );
+      for (UInt number=1; number<=number_stations; number++)
+      {
+        const std::string precipitation_file_current = dataFile ( "files/meteo_data/rain_file_"        +std::to_string(number), " " );
+        const Real        time_spacing_rain_current  = dataFile ( "files/meteo_data/time_spacing_rain_"+std::to_string(number),  1. );
 
-      const Real time_spacing_rain_1 = dataFile ( "files/meteo_data/time_spacing_rain_1", 1. );
-      const Real time_spacing_rain_2 = dataFile ( "files/meteo_data/time_spacing_rain_2", 1. );
-      const Real time_spacing_rain_3 = dataFile ( "files/meteo_data/time_spacing_rain_3", 1. );
-      const Real time_spacing_rain_4 = dataFile ( "files/meteo_data/time_spacing_rain_4", 1. );
-      const Real time_spacing_rain_5 = dataFile ( "files/meteo_data/time_spacing_rain_5", 1. );
-      const Real time_spacing_rain_6 = dataFile ( "files/meteo_data/time_spacing_rain_6", 1. );
-      const Real time_spacing_rain_7 = dataFile ( "files/meteo_data/time_spacing_rain_7", 1. );
-      const Real time_spacing_rain_8 = dataFile ( "files/meteo_data/time_spacing_rain_8", 1. );
-      const Real time_spacing_rain_9 = dataFile ( "files/meteo_data/time_spacing_rain_9", 1. );
-      const std::vector<Real> time_spacing_rain = { time_spacing_rain_1,
-                                                    time_spacing_rain_2,
-                                                    time_spacing_rain_3,
-                                                    time_spacing_rain_4,
-                                                    time_spacing_rain_5,
-                                                    time_spacing_rain_6,
-                                                    time_spacing_rain_7,
-                                                    time_spacing_rain_8,
-                                                    time_spacing_rain_9
-                                                  };
+        const Real X_current = dataFile ( "files/meteo_data/X_"+std::to_string(number), 1. );
+        const Real Y_current = dataFile ( "files/meteo_data/Y_"+std::to_string(number), 1. );
+
+        const UInt ndata_rain_current = std::round ( max_Days * 24 / time_spacing_rain_current );
+
+        precipitation_file.push_back(file_dir + precipitation_file_current);
+        time_spacing_rain .push_back(time_spacing_rain_current);
+        X                 .push_back(X_current);
+        Y                 .push_back(Y_current);
+        ndata_rain        .push_back(ndata_rain_current);
+      }
+
 
       dt_rain = *std::min_element ( time_spacing_rain.begin(), time_spacing_rain.end() ) * 3600;
-
-      const Real X_1 = dataFile ( "files/meteo_data/X_1", 1. );
-      const Real Y_1 = dataFile ( "files/meteo_data/Y_1", 1. );
-      const Real X_2 = dataFile ( "files/meteo_data/X_2", 1. );
-      const Real Y_2 = dataFile ( "files/meteo_data/Y_2", 1. );
-      const Real X_3 = dataFile ( "files/meteo_data/X_3", 1. );
-      const Real Y_3 = dataFile ( "files/meteo_data/Y_3", 1. );
-      const Real X_4 = dataFile ( "files/meteo_data/X_4", 1. );
-      const Real Y_4 = dataFile ( "files/meteo_data/Y_4", 1. );
-      const Real X_5 = dataFile ( "files/meteo_data/X_5", 1. );
-      const Real Y_5 = dataFile ( "files/meteo_data/Y_5", 1. );
-      const Real X_6 = dataFile ( "files/meteo_data/X_6", 1. );
-      const Real Y_6 = dataFile ( "files/meteo_data/Y_6", 1. );
-      const Real X_7 = dataFile ( "files/meteo_data/X_7", 1. );
-      const Real Y_7 = dataFile ( "files/meteo_data/Y_7", 1. );
-      const Real X_8 = dataFile ( "files/meteo_data/X_8", 1. );
-      const Real Y_8 = dataFile ( "files/meteo_data/Y_8", 1. );
-      const Real X_9 = dataFile ( "files/meteo_data/X_9", 1. );
-      const Real Y_9 = dataFile ( "files/meteo_data/Y_9", 1. );
-      const std::vector<Real> X = { X_1,
-                                    X_2,
-                                    X_3,
-                                    X_4,
-                                    X_5,
-                                    X_6,
-                                    X_7,
-                                    X_8,
-                                    X_9
-                                  };
-      const std::vector<Real> Y = { Y_1,
-                                    Y_2,
-                                    Y_3,
-                                    Y_4,
-                                    Y_5,
-                                    Y_6,
-                                    Y_7,
-                                    Y_8,
-                                    Y_9
-                                  };
-
-      const UInt ndata_rain_1 = std::round ( max_Days * 24 / time_spacing_rain_1 );
-      const UInt ndata_rain_2 = std::round ( max_Days * 24 / time_spacing_rain_2 );
-      const UInt ndata_rain_3 = std::round ( max_Days * 24 / time_spacing_rain_3 );
-      const UInt ndata_rain_4 = std::round ( max_Days * 24 / time_spacing_rain_4 );
-      const UInt ndata_rain_5 = std::round ( max_Days * 24 / time_spacing_rain_5 );
-      const UInt ndata_rain_6 = std::round ( max_Days * 24 / time_spacing_rain_6 );
-      const UInt ndata_rain_7 = std::round ( max_Days * 24 / time_spacing_rain_7 );
-      const UInt ndata_rain_8 = std::round ( max_Days * 24 / time_spacing_rain_8 );
-      const UInt ndata_rain_9 = std::round ( max_Days * 24 / time_spacing_rain_9 );
-      const std::vector<UInt> ndata_rain = { ndata_rain_1,
-                                             ndata_rain_2,
-                                             ndata_rain_3,
-                                             ndata_rain_4,
-                                             ndata_rain_5,
-                                             ndata_rain_6,
-                                             ndata_rain_7,
-                                             ndata_rain_8,
-                                             ndata_rain_9
-                                           };
-
-
 
       precipitation.IDW_precipitation ( precipitation_file, ndata_rain, time_spacing_rain, X, Y, xllcorner, yllcorner, pixel_size, N_rows, N_cols, idBasinVect );
     }
@@ -1374,8 +1294,8 @@ main (int argc, char** argv)
 
   const Real g = 9.81;
   std::function<Real(Real const&, Real const&)> c1_DSV = [](Real const& dt_DSV, Real const& pixel_size){return dt_DSV / pixel_size;};
-  std::function<Real(Real const&, Real const&)> c2_DSV = [](Real const& g, Real const& c1){return g * c1;};
-  std::function<Real(Real const&, Real const&)> c3_DSV = [](Real const& g, Real const& c1){return g * c1 * c1;};
+  std::function<Real(Real const&, Real const&)> c2_DSV = [](Real const& g,      Real const& c1        ){return g * c1;             };
+  std::function<Real(Real const&, Real const&)> c3_DSV = [](Real const& g,      Real const& c1        ){return g * c1 * c1;        };
   
 
   const Real area = std::pow ( pixel_size, 2 ) * 1.e-6; // km^2
@@ -1427,11 +1347,11 @@ main (int argc, char** argv)
   
     tic();
     
-    const std::set<UInt> idBasinVect_set(idBasinVect.begin(), idBasinVect.end()),
-    idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(), idStaggeredBoundaryVectSouth.end()),
-    idStaggeredBoundaryVectNorth_set(idStaggeredBoundaryVectNorth.begin(), idStaggeredBoundaryVectNorth.end()),
-    idStaggeredBoundaryVectWest_set(idStaggeredBoundaryVectWest.begin(),   idStaggeredBoundaryVectWest.end()),
-    idStaggeredBoundaryVectEast_set(idStaggeredBoundaryVectEast.begin(),   idStaggeredBoundaryVectEast.end());
+    const std::set<UInt> idBasinVect_set                 (idBasinVect.begin(),                  idBasinVect.end()),
+                         idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(), idStaggeredBoundaryVectSouth.end()),
+                         idStaggeredBoundaryVectNorth_set(idStaggeredBoundaryVectNorth.begin(), idStaggeredBoundaryVectNorth.end()),
+                         idStaggeredBoundaryVectWest_set (idStaggeredBoundaryVectWest.begin(),  idStaggeredBoundaryVectWest.end()),
+                         idStaggeredBoundaryVectEast_set (idStaggeredBoundaryVectEast.begin(),  idStaggeredBoundaryVectEast.end());
     
     const Real slope_thr = dataFile("discretization/slope_thr", 1.);
     
@@ -2257,46 +2177,48 @@ main (int argc, char** argv)
       {
         const auto currentDay = iter;
         
-        saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
-        saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
-        saveSolution ( output_dir + "H_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, H );
-        saveSolution ( output_dir + "hsd_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sd );
-        saveSolution ( output_dir + "w_cum_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum );
-        saveSolution ( output_dir + "ET_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec );
-        saveSolution ( output_dir + "q_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative );
-        saveSolution ( output_dir + "p_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total );
-        saveSolution ( output_dir + "f_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-        saveSolution ( output_dir + "hG_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_G );
-        saveSolution ( output_dir + "hsn_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sn );
-        
-        
+
+        saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
+        saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
+        saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
+        saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
+        saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
+        saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
+        saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
+        saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
+        saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+        saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
+        saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );  
+
+        iter++;
       }
       else
       {
         
-        if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) )
+        if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
         {
-          const auto currentDay = std::floor ( time / (24. * 3600) ) + starting_day;
+          const auto currentDay = iter;
           
-          saveSolution ( output_dir + "u_",   "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H );
-          saveSolution ( output_dir + "v_",   "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H );
-          saveSolution ( output_dir + "H_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, H );
-          saveSolution ( output_dir + "hsd_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sd );
-          saveSolution ( output_dir + "w_cum_",   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum );
-          saveSolution ( output_dir + "ET_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec );
-          saveSolution ( output_dir + "q_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative );
-          saveSolution ( output_dir + "p_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total );
-          saveSolution ( output_dir + "f_",  " ",  N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-          saveSolution ( output_dir + "hG_",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_G );
-          saveSolution ( output_dir + "hsn_", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, currentDay, u, v, h_sn );
+
+          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
+          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
+          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
+          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
+          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
+          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
+          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
+          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
+          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
+          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
+
+          iter++;
         }
       }
       
       
       
       toc ("file output");
-      
-      iter++;
       
       
       

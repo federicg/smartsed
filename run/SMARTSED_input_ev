@@ -38,6 +38,7 @@
     time_spacing_rain           = 0.1667
 
     # arpa files
+    number_stations             = 9 
     # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
     rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_ev0.txt
     X_1                         = 539709.2
@@ -88,12 +89,12 @@
 
     [./initial_conditions]
     
-    restart_H                   = false
-    H_file                      = ../Outputs/initial_cond/H_20m.asc   #realOrography/H.asc
+    restart_H                   = true
+    H_file                      = ../Outputs/initial_cond/H_ev.asc   #realOrography/H.asc
     
-    restart_vel                 = false
-    vel_file_u                  = ../Outputs/initial_cond/u_20m.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_20m.asc
+    restart_vel                 = true
+    vel_file_u                  = ../Outputs/initial_cond/u_ev.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_ev.asc
     
     restart_snow                = false
     snow_file                   = ../Outputs/restart/hsn_1.asc
@@ -173,6 +174,7 @@
 
 
 [debug]
+    frequency_save = 24.
     spit_out_solutions_each_time_step = false
     spit_out_matrix = false
     matrix_name = matrice_passo_
