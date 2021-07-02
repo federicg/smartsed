@@ -1188,14 +1188,24 @@ main (int argc, char** argv)
       std::vector<Real>        time_spacing_rain, X, Y;
       std::vector<UInt>        ndata_rain;
 
-      const UInt number_stations = dataFile ( "files/meteo_data/number_stations", " " );
-      for (UInt number=1; number<=number_stations; number++)
+      const Int number_stations = dataFile ( "files/meteo_data/number_stations", 1 );
+      for (Int number=1; number<=number_stations; number++)
       {
-        const std::string precipitation_file_current = dataFile ( "files/meteo_data/rain_file_"        +std::to_string(number), " " );
-        const Real        time_spacing_rain_current  = dataFile ( "files/meteo_data/time_spacing_rain_"+std::to_string(number),  1. );
+        std::string filename = "files/meteo_data/rain_file_";
+        filename += std::to_string(number);
+        const std::string precipitation_file_current = dataFile ( filename.c_str(), " " );
+        
+        filename = "files/meteo_data/time_spacing_rain_";
+        filename += std::to_string(number);
+        const Real time_spacing_rain_current  = dataFile ( filename.c_str(),  1. );
 
-        const Real X_current = dataFile ( "files/meteo_data/X_"+std::to_string(number), 1. );
-        const Real Y_current = dataFile ( "files/meteo_data/Y_"+std::to_string(number), 1. );
+        filename = "files/meteo_data/X_";
+        filename += std::to_string(number); 
+        const Real X_current = dataFile ( filename.c_str(), 1. );
+        
+        filename = "files/meteo_data/Y_";
+        filename += std::to_string(number);
+        const Real Y_current = dataFile ( filename.c_str(), 1. );
 
         const UInt ndata_rain_current = std::round ( max_Days * 24 / time_spacing_rain_current );
 
