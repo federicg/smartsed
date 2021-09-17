@@ -481,13 +481,13 @@ Rain::constant_precipitation (const std::string&       file,
               ff >> hour;
 
               std::string hour_string  ( hour.begin(),   hour.begin()+2 ),
-                minute_string( hour.begin()+3, hour.begin()+5 ),
-                second_string( hour.begin()+6, hour.begin()+8 );
+                          minute_string( hour.begin()+3, hour.begin()+5 ),
+                          second_string( hour.begin()+6, hour.begin()+8 );
 
 
               const Int hour_number   = std::stoi( hour_string   ),
-                minute_number = std::stoi( minute_string ),
-                second_number = std::stoi( second_string );
+                        minute_number = std::stoi( minute_string ),
+                        second_number = std::stoi( second_string );
 
               const Real hour_full    = Real(hour_number) + Real(minute_number)/60 + Real(second_number)/3600;
 
@@ -587,6 +587,7 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
               std::string hour_string  ( hour.begin(),   hour.begin()+2 ),
                 minute_string( hour.begin()+3, hour.begin()+5 );
 
+              //std::cout << Id_sensor << " " << day << " " << hour << " " << hour_string << " " << minute_string << std::endl;
 
               const Int hour_number   = std::stoi( hour_string   ),
                         minute_number = std::stoi( minute_string );
@@ -686,10 +687,10 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
   for ( const auto & IDcenter : idBasinVect )
     {
       const Int i = IDcenter / N_cols,
-        j = IDcenter % N_cols;
+                j = IDcenter % N_cols;
 
       const Real X_cell =   j * pixel_size + xllcorner,
-        Y_cell = - i * pixel_size + yllcorner + N_rows * pixel_size;
+                 Y_cell = - i * pixel_size + yllcorner + N_rows * pixel_size;
 
 
       for ( UInt ii = 0; ii < X.size(); ii++ )
@@ -698,7 +699,7 @@ Rain::IDW_precipitation (const std::vector<std::string>& file_vect,
 
           // divide by 1000 to obtain better number, the result does not change
           const auto delta_x = ( X_cell - X[ ii ] )/1000,
-            delta_y = ( Y_cell - Y[ ii ] )/1000;
+                     delta_y = ( Y_cell - Y[ ii ] )/1000;
 
           const auto dist = std::pow( std::sqrt( std::pow( delta_x, 2 ) + std::pow( delta_y, 2 ) ), p );
 
