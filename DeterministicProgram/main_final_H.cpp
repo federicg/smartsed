@@ -2173,6 +2173,9 @@ main (int argc, char** argv)
         saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux",
                               H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
                                                                std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+        saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux",
+                              h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+                                                                  std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
       }
       
       
