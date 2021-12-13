@@ -1259,8 +1259,6 @@ main (int argc, char** argv)
 
 
   tic();
-  upwind H_interface ( u, v, N_rows, N_cols );
-  
   
   for (int ii = 0; ii < N; ii++)
   {
@@ -1282,8 +1280,6 @@ main (int argc, char** argv)
       roughness_vect[ ii ] = r3;
     }
   }
-
-  frictionClass alfa ( friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
 
 
 
@@ -1493,6 +1489,21 @@ main (int argc, char** argv)
                       idBasinVectReIndex_excluded,
                       N_rows,
                       N_cols );
+
+  upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_excluded,
+                                idStaggeredBoundaryVectWest_excluded,
+                                idStaggeredBoundaryVectEast_excluded,
+                                idStaggeredInternalVectVertical_excluded,
+                                idStaggeredBoundaryVectNorth_excluded,
+                                idStaggeredBoundaryVectSouth_excluded, N_rows, N_cols );
+
+  frictionClass alfa ( H_interface.horizontal, H_interface.vertical, u, v, 
+                       idStaggeredInternalVectHorizontal_excluded,
+                       idStaggeredBoundaryVectWest_excluded,
+                       idStaggeredBoundaryVectEast_excluded,
+                       idStaggeredInternalVectVertical_excluded,
+                       idStaggeredBoundaryVectNorth_excluded,
+                       idStaggeredBoundaryVectSouth_excluded, friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
   
   
   H_basin.resize ( idBasinVect_excluded.size() );
@@ -1509,56 +1520,49 @@ main (int argc, char** argv)
   // row, column and value in the Triplet
   std::vector<Eigen::Triplet<Real> > coefficients;
   
+  /*
   coefficients.reserve ( idBasinVect_excluded.size() +
                         4 * idStaggeredInternalVectHorizontal_excluded.size() +
-                        4 * idStaggeredInternalVectVertical_excluded.size() );
+                        4 * idStaggeredInternalVectVertical_excluded.size() );*/
   
   
   int iter = 0;
   
   
-  dt_DSV = maxdt(u, v, g, H, pixel_size);
-  dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
-  
-  double c1_DSV_ = c1_DSV(dt_DSV, pixel_size), c2_DSV_ = c2_DSV(g, c1_DSV_), c3_DSV_ = c3_DSV(g, c1_DSV_);
+  double c1_DSV_, c2_DSV_, c3_DSV_;
    
+  dt_DSV = maxdt(u, v, g, H, pixel_size);
+  dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
+      
+  c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
+  c2_DSV_ = c2_DSV (g, c1_DSV_);
+  c3_DSV_ = c3_DSV (g, c1_DSV_);
   
   double time = 0.;
-  bool is_last_step = false;
-  while ( !is_last_step )
+  while ((t_final-time)>std::numeric_limits<double>::epsilon()*t_final) 
     {
       
-      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runoff vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runoff cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << " H has been negative: " << isHNegative << std::endl;
+      time += dt_DSV;
+
+      if ((time-t_final)>-std::numeric_limits<double>::epsilon()*t_final) 
+      {
+        dt_DSV -= (time - t_final);
+        time = t_final;
+      }
+
+      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runout vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runout cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << " H has been negative: " << isHNegative << std::endl;
       std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
 
       tic();
       // Compute interface fluxes via upwind method
-      H_interface.computeHorizontal ( H,
-                                      u,
-                                      idStaggeredInternalVectHorizontal_excluded,
-                                      idStaggeredBoundaryVectWest_excluded,
-                                      idStaggeredBoundaryVectEast_excluded );
-
-      H_interface.computeVertical  ( H,
-                                     v,
-                                     idStaggeredInternalVectVertical_excluded,
-                                     idStaggeredBoundaryVectNorth_excluded,
-                                     idStaggeredBoundaryVectSouth_excluded );
+      H_interface.computeHorizontal ( );
+      H_interface.computeVertical   ( );
       toc ("H_interface");
 
       tic();
       // Compute alfa coefficients
-      alfa.f_x ( H_interface.horizontal,
-                 u,
-                 idStaggeredInternalVectHorizontal_excluded,
-                 idStaggeredBoundaryVectWest_excluded,
-                 idStaggeredBoundaryVectEast_excluded );
-
-      alfa.f_y ( H_interface.vertical,
-                 v,
-                 idStaggeredInternalVectVertical_excluded,
-                 idStaggeredBoundaryVectNorth_excluded,
-                 idStaggeredBoundaryVectSouth_excluded );
+      alfa.f_x ( );
+      alfa.f_y ( );
       toc ("alfa");
 
       tic();
@@ -1681,7 +1685,10 @@ main (int argc, char** argv)
 
 
       tic();
-      
+
+      coefficients.reserve ( idBasinVect_excluded.size() +
+                        4 * idStaggeredInternalVectHorizontal_excluded.size() +
+                        4 * idStaggeredInternalVectVertical_excluded.size() );
 
       additional_source_term.assign(N, 0.);
       
@@ -1698,9 +1705,9 @@ main (int argc, char** argv)
                    N,
                    c1_DSV_,
                    c3_DSV_,
-                   0,  
+                   0, // 0 
                    precipitation.DP_cumulative,
-                   dt_DSV,
+                   dt_DSV,  
                    alfa.alfa_x,
                    alfa.alfa_y,
                    idStaggeredInternalVectHorizontal_excluded,
@@ -1804,6 +1811,7 @@ main (int argc, char** argv)
       if (minH < -H_min) 
       {
         
+        time -= dt_DSV;
         dt_DSV = dt_DSV/10.;
         
         if (dt_DSV == 0)
@@ -1849,7 +1857,7 @@ main (int argc, char** argv)
                   N_rows,
                   N_cols,
                   c2_DSV_,
-                  0,
+                  0, // 0
                   eta,
                   H,
                   orography,
@@ -1947,7 +1955,7 @@ main (int argc, char** argv)
                            IDwest  = Id - i - 1;
 
                 const Real& h_left  = h_sd[ IDwest ],
-                            & h_right = h_sd[ IDeast ];
+                          & h_right = h_sd[ IDeast ];
 
 
                 h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
@@ -2006,7 +2014,7 @@ main (int argc, char** argv)
                            IDnorth = Id - N_cols;
 
                 const Real& h_left  = h_sd[ IDnorth ],
-                            & h_right = h_sd[ IDsouth ];
+                          & h_right = h_sd[ IDsouth ];
 
 
                 h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
@@ -2126,27 +2134,18 @@ main (int argc, char** argv)
       
 
       tic();
-      
 
       // +-----------------------------------------------+
       // |               Update time step                |
       // +-----------------------------------------------+
-      
-      
+
       dt_DSV = maxdt(u, v, g, H, pixel_size);
-      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV*.5 : dt_DSV_given;
+      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
       c3_DSV_ = c3_DSV (g, c1_DSV_);
-      
-      time += dt_DSV;
-      if (time > t_final)
-      {
-        dt_DSV -= (time - t_final);
-        time = t_final;
-        is_last_step = true;
-      }
+
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
@@ -2173,6 +2172,9 @@ main (int argc, char** argv)
         saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux",
                               H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
                                                                std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+        saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux",
+                              h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+                                                                  std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
       }
       
       

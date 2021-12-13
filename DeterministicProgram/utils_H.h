@@ -216,6 +216,7 @@ public:
         const bool&        isInitialLoss,
         const Real&        perc_initialLoss );
 
+  Rain() = delete;
   ~Rain() = default;
 
   void
@@ -281,6 +282,7 @@ public:
                const Real&              height_thermometer,
                const std::string        format_temp );
 
+  Temperature() = delete;
   ~Temperature() = default;
 
 
@@ -320,11 +322,12 @@ public:
                       const Real&              phi_rad,
                       const Real&              height_thermometer);
 
+  evapoTranspiration() = delete;
   ~evapoTranspiration() = default;
 
-  void ET (const std::vector<Real>& T_mean, // lungo nstep: vettore delle temperature in °C
-           const std::vector<Real>& T_min,  // lungo nstep
-           const std::vector<Real>& T_max,  // lungo nstep
+  void ET (const std::vector<Real>& T_mean, // length nstep: vector of temperature in °C
+           const std::vector<Real>& T_min,  // length nstep
+           const std::vector<Real>& T_max,  // length nstep
            const Int&               i,       
            const std::vector<UInt>& idBasinVect,
            const std::vector<Real>& orography);
@@ -348,7 +351,16 @@ class frictionClass
 
 public:
 
-  frictionClass (const std::string& friction_model,
+  frictionClass (const std::vector<Real>& H_interface_horizontal, 
+                 const std::vector<Real>& H_interface_vertical, 
+                 const std::vector<Real>& u, const std::vector<Real>& v, 
+                 const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                 const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                 const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                 const std::vector<UInt>& idStaggeredInternalVectVertical,
+                 const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                 const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+                 const std::string& friction_model,
                  const Real& n_manning,
                  const Real& dt_DSV,
                  const std::vector<Real>& d_90,
@@ -359,21 +371,14 @@ public:
                  const std::vector<Real>& S_x,
                  const std::vector<Real>& S_y);
 
+  frictionClass() = delete;
   ~frictionClass() = default;
 
   void
-  f_x (const std::vector<Real>& H_interface,
-       const std::vector<Real>& u,
-       const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-       const std::vector<UInt>& idStaggeredBoundaryVectWest,
-       const std::vector<UInt>& idStaggeredBoundaryVectEast);
+  f_x ();
 
   void
-  f_y (const std::vector<Real>& H_interface,
-       const std::vector<Real>& v,
-       const std::vector<UInt>& idStaggeredInternalVectVertical,
-       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-       const std::vector<UInt>& idStaggeredBoundaryVectSouth);
+  f_y ();
 
   std::vector<Real> alfa_x,
     alfa_y;
@@ -391,6 +396,18 @@ private:
   
 
   Real M_H_min;
+
+  const std::vector<Real>& u; 
+  const std::vector<Real>& v;
+  const std::vector<Real>& H_interface_horizontal;
+  const std::vector<Real>& H_interface_vertical;
+
+  const std::vector<UInt>& idStaggeredInternalVectHorizontal;
+  const std::vector<UInt>& idStaggeredBoundaryVectWest;
+  const std::vector<UInt>& idStaggeredBoundaryVectEast;
+  const std::vector<UInt>& idStaggeredInternalVectVertical;
+  const std::vector<UInt>& idStaggeredBoundaryVectNorth;
+  const std::vector<UInt>& idStaggeredBoundaryVectSouth;
 
   const UInt& N_rows;
   const UInt& N_cols;
@@ -414,38 +431,56 @@ upwind
 
 public:
 
-  upwind (const std::vector<Real>& u,
+  upwind (const Eigen::VectorXd&   H,
+          const std::vector<Real>& u,
           const std::vector<Real>& v,
-          const Real& N_rows, const Real& N_cols)
-    : N_cols( N_cols ), N_rows( N_rows )
+
+          const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+          const std::vector<UInt>& idStaggeredBoundaryVectWest,
+          const std::vector<UInt>& idStaggeredBoundaryVectEast,
+          const std::vector<UInt>& idStaggeredInternalVectVertical,
+          const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+          const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+
+          const UInt& N_rows, const UInt& N_cols)
+    : H(H), u(u), v(v), idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal),
+                        idStaggeredBoundaryVectWest(idStaggeredBoundaryVectWest),
+                        idStaggeredBoundaryVectEast(idStaggeredBoundaryVectEast),
+                        idStaggeredInternalVectVertical(idStaggeredInternalVectVertical),
+                        idStaggeredBoundaryVectNorth(idStaggeredBoundaryVectNorth),
+                        idStaggeredBoundaryVectSouth(idStaggeredBoundaryVectSouth), N_cols( N_cols ), N_rows( N_rows )
   {
     horizontal.resize( u.size() );
     vertical.  resize( v.size() );
   }
 
+  upwind() = delete;
   ~upwind() = default;
 
   void
-  computeHorizontal (const Eigen::VectorXd&   H,
-                     const std::vector<Real>& u,
-                     const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                     const std::vector<UInt>& idStaggeredBoundaryVectEast);
+  computeHorizontal ();
 
   void
-  computeVertical (const Eigen::VectorXd&   H,
-                   const std::vector<Real>& v,
-                   const std::vector<UInt>& idStaggeredInternalVectVertical,
-                   const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                   const std::vector<UInt>& idStaggeredBoundaryVectSouth);
+  computeVertical ();
 
   std::vector<Real> horizontal,
     vertical;
 
 private:
 
-  UInt N_cols;
-  UInt N_rows;
+  const Eigen::VectorXd&   H;
+  const std::vector<Real>& u;
+  const std::vector<Real>& v;
+
+  const std::vector<UInt>& idStaggeredInternalVectHorizontal;
+  const std::vector<UInt>& idStaggeredBoundaryVectWest;
+  const std::vector<UInt>& idStaggeredBoundaryVectEast;
+  const std::vector<UInt>& idStaggeredInternalVectVertical;
+  const std::vector<UInt>& idStaggeredBoundaryVectNorth;
+  const std::vector<UInt>& idStaggeredBoundaryVectSouth;
+
+  const UInt& N_cols;
+  const UInt& N_rows;
 
 };
 
@@ -544,36 +579,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
                     const UInt&              N_cols);
 
 
-void
-buildMatrix (const std::vector<Real>& H_int_x,
-             const std::vector<Real>& H_int_y,
-             const std::vector<Real>& orography,
-             const std::vector<Real>& u_star,
-             const std::vector<Real>& v_star,
-             const Eigen::VectorXd&   H,
-             const UInt&              N_cols,
-             const UInt&              N_rows,
-             const Real&              c1,
-             const Real&              c3,
-             const Real&              H_min,
-             const std::vector<Real>& precipitation,
-             const Real&              dt_DSV,
-             const std::vector<Real>& alfa_x,
-             const std::vector<Real>& alfa_y,
-             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-             const std::vector<UInt>& idStaggeredInternalVectVertical,
-             const std::vector<UInt>& idStaggeredBoundaryVectWest,
-             const std::vector<UInt>& idStaggeredBoundaryVectEast,
-             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-             const std::vector<UInt>& idBasinVect,
-             const std::vector<UInt>& idBasinVectReIndex,
-             const bool&              isNonReflectingBC,
-             const bool&              isH,
-
-             std::vector<Eigen::Triplet<Real> >& coefficients,
-             Eigen::VectorXd&                    rhs);
-
 
 
 
@@ -619,28 +624,6 @@ buildMatrix (const std::vector<Real>& H_int_x,
 
 
 
-void
-updateVel (std::vector<Real>& u,
-           std::vector<Real>& v,
-           const std::vector<Real>& u_star,
-           const std::vector<Real>& v_star,
-           const std::vector<Real>& H_int_x,
-           const std::vector<Real>& H_int_y,
-           const std::vector<Real>& alfa_x,
-           const std::vector<Real>& alfa_y,
-           const Real&              N_rows,
-           const Real&              N_cols,
-           const Real&              c2,
-           const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const std::vector<Real>& orography,
-           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-           const std::vector<UInt>& idStaggeredInternalVectVertical,
-           const std::vector<UInt>& idStaggeredBoundaryVectWest,
-           const std::vector<UInt>& idStaggeredBoundaryVectEast,
-           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-           const bool&              isNonReflectingBC);
 
 void
 updateVel (std::vector<Real>& u,
@@ -665,28 +648,6 @@ updateVel (std::vector<Real>& u,
            const bool&              isNonReflectingBC);
 
 
-void
-updateVel (std::vector<Real>& u,
-           std::vector<Real>& v,
-           const std::vector<Real>& u_star,
-           const std::vector<Real>& v_star,
-           const std::vector<Real>& alfa_x,
-           const std::vector<Real>& alfa_y,
-           const Real&              N_rows,
-           const Real&              N_cols,
-           const Real&              c2,
-           const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const Eigen::VectorXd&   H,
-           const std::vector<Real>& orography,
-           const std::vector<std::tuple<bool, int> >& excluded_ids,
-           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-           const std::vector<UInt>& idStaggeredInternalVectVertical,
-           const std::vector<UInt>& idStaggeredBoundaryVectWest,
-           const std::vector<UInt>& idStaggeredBoundaryVectEast,
-           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-           const bool&              isNonReflectingBC);
 
 
 void

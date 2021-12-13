@@ -1260,7 +1260,16 @@ evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore
 }
 
 
-frictionClass::frictionClass (const std::string& friction_model,
+frictionClass::frictionClass (const std::vector<Real>& H_interface_horizontal, 
+                              const std::vector<Real>& H_interface_vertical, 
+                              const std::vector<Real>& u, const std::vector<Real>& v, 
+                              const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                              const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                              const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                              const std::vector<UInt>& idStaggeredInternalVectVertical,
+                              const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                              const std::vector<UInt>& idStaggeredBoundaryVectSouth,
+                              const std::string& friction_model,
                               const Real& n_manning,
                               const Real& dt_DSV,
                               const std::vector<Real>& d_90,
@@ -1270,7 +1279,10 @@ frictionClass::frictionClass (const std::string& friction_model,
                               const UInt& N_cols,
                               const std::vector<Real>& S_x,
                               const std::vector<Real>& S_y)
-: M_n_manning( n_manning ),
+: H_interface_horizontal(H_interface_horizontal), H_interface_vertical(H_interface_vertical), u(u), v(v),
+  idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal), idStaggeredBoundaryVectWest(idStaggeredBoundaryVectWest), idStaggeredBoundaryVectEast(idStaggeredBoundaryVectEast),
+  idStaggeredInternalVectVertical(idStaggeredInternalVectVertical), idStaggeredBoundaryVectNorth(idStaggeredBoundaryVectNorth), idStaggeredBoundaryVectSouth(idStaggeredBoundaryVectSouth),
+  M_n_manning( n_manning ),
   M_dt_DSV( dt_DSV ),
   N_rows( N_rows ),
   N_cols( N_cols )
@@ -1362,11 +1374,7 @@ frictionClass::frictionClass (const std::string& friction_model,
 }
 
 void
-frictionClass::f_x (const std::vector<Real>& H_interface,
-                    const std::vector<Real>& u,
-                    const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                    const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                    const std::vector<UInt>& idStaggeredBoundaryVectEast )
+frictionClass::f_x ()
 {
 
   
@@ -1374,7 +1382,7 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
     {
         Real alfa = 1.;
 
-        const auto & H_int = H_interface[ Id ];
+        const auto & H_int = H_interface_horizontal[ Id ];
         const auto & exponent = M_expo_r_x_vect[ Id ];
         const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1396,7 +1404,7 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
       {
           Real alfa = 1.;
 
-          const auto & H_int = H_interface[ Id ];
+          const auto & H_int = H_interface_horizontal[ Id ];
           const auto & exponent = M_expo_r_x_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1418,7 +1426,7 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
       {
           Real alfa = 1.;
 
-          const auto & H_int = H_interface[ Id ];
+          const auto & H_int = H_interface_horizontal[ Id ];
           const auto & exponent = M_expo_r_x_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1440,18 +1448,14 @@ frictionClass::f_x (const std::vector<Real>& H_interface,
 
 
 void
-frictionClass::f_y (const std::vector<Real>& H_interface,
-                    const std::vector<Real>& v,
-                    const std::vector<UInt>& idStaggeredInternalVectVertical,
-                    const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                    const std::vector<UInt>& idStaggeredBoundaryVectSouth)
+frictionClass::f_y ()
 {
 
     for ( const auto & Id : idStaggeredInternalVectVertical )
       {
           Real alfa = 1.;
 
-          const auto & H_int = H_interface[ Id ];
+          const auto & H_int = H_interface_vertical[ Id ];
           const auto & exponent = M_expo_r_y_vect[ Id ];
           const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1474,7 +1478,7 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
         {
             Real alfa = 1.;
 
-            const auto & H_int = H_interface[ Id ];
+            const auto & H_int = H_interface_vertical[ Id ];
             const auto & exponent = M_expo_r_y_vect[ Id ];
             const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1497,7 +1501,7 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
         {
             Real alfa = 1.;
 
-            const auto & H_int = H_interface[ Id ];
+            const auto & H_int = H_interface_vertical[ Id ];
             const auto & exponent = M_expo_r_y_vect[ Id ];
             const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
@@ -1515,196 +1519,11 @@ frictionClass::f_y (const std::vector<Real>& H_interface,
             alfa_y[ Id ] = alfa;
 
         }
-//    
-//  switch ( M_frictionModel )
-//    {
-//    case 0:
-//
-//
-//      for ( const auto & Id : idStaggeredInternalVectVertical )
-//        {
-//          alfa_y[ Id ] = 1.;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-//        {
-//          alfa_y[ Id ] = 1.;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-//        {
-//          alfa_y[ Id ] = 1.;
-//        }
-//
-//
-//
-//      break;
-//
-//    case 1:
-//
-//      for ( const auto & Id : idStaggeredInternalVectVertical )
-//        {
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-//        {
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-//        {
-//          Real alfa = 1.;
-//          const Real den = std::pow( H_interface[ Id ], M_expo );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / den );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << std::pow( H_interface[ Id ], M_expo ) << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//
-//
-//
-//      break;
-//
-//    case 2:
-//
-//      for ( const auto & Id : idStaggeredInternalVectVertical )
-//        {
-//
-//          Real alfa = 1.;
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-//        {
-//
-//          Real alfa = 1.;
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-//        {
-//
-//          Real alfa = 1.;
-//
-//          const Real den = std::pow( H_interface[ Id ], M_expo + M_expo_r_y_vect[ Id ] );
-//          if ( den > M_H_min )
-//            {
-//              alfa = 1. / ( 1 + M_gamma_dt_DSV_y_[ Id ] * std::pow( std::abs( v[ Id ] ), 1. - M_expo_r_y_vect[ Id ] ) / den );
-//              alfa = std::min( alfa, 1. / ( 1. + M_gamma_dt_DSV_y * std::abs( v[ Id ] ) / std::pow( H_interface[ Id ], M_expo ) ) );
-//            }
-//
-//          if ( std::isnan( alfa ) )
-//            {
-//              std::cout << std::abs( v[ Id ] ) << " " << M_gamma_dt_DSV_y << std::endl;
-//              std::cout << "nan in frictionClass" << std::endl;
-//              exit( -1. );
-//            }
-//
-//          alfa_y[ Id ] = alfa;
-//        }
-//
-//
-//
-//
-//
-//      break;
-//
-//    default:
-//
-//      std::cout << "Error in frictionClass" << std::endl;
-//      exit( -1. );
-//
-//    }
 
 }
 
 void
-upwind::computeHorizontal (const Eigen::VectorXd&   H,
-                           const std::vector<Real>& u,
-                           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                           const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                           const std::vector<UInt>& idStaggeredBoundaryVectEast)
+upwind::computeHorizontal ()
 {
 
   
@@ -1762,11 +1581,7 @@ upwind::computeHorizontal (const Eigen::VectorXd&   H,
 }
 
 void
-upwind::computeVertical (const Eigen::VectorXd&   H,
-                         const std::vector<Real>& v,
-                         const std::vector<UInt>& idStaggeredInternalVectVertical,
-                         const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                         const std::vector<UInt>& idStaggeredBoundaryVectSouth)
+upwind::computeVertical ()
 {
 
 
@@ -3232,624 +3047,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
 
 
 
-void
-buildMatrix (const std::vector<Real>& H_int_x,
-             const std::vector<Real>& H_int_y,
-             const std::vector<Real>& orography,
-             const std::vector<Real>& u_star,
-             const std::vector<Real>& v_star,
-             const Eigen::VectorXd&   H,
-             const UInt&              N_cols,
-             const UInt&              N_rows,
-             const Real&              c1,
-             const Real&              c3,
-             const Real&              H_min,
-             const std::vector<Real>& precipitation,
-             const Real&              dt_DSV,
-             const std::vector<Real>& alfa_x,
-             const std::vector<Real>& alfa_y,
-             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-             const std::vector<UInt>& idStaggeredInternalVectVertical,
-             const std::vector<UInt>& idStaggeredBoundaryVectWest,
-             const std::vector<UInt>& idStaggeredBoundaryVectEast,
-             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-             const std::vector<UInt>& idBasinVect,
-             const std::vector<UInt>& idBasinVectReIndex,
-             const bool&              isNonReflectingBC,
-             const bool&              isH,
-
-             std::vector<Eigen::Triplet<Real> >& coefficients,
-             Eigen::VectorXd&                    rhs)
-{
-
-
-
-  for ( const auto & Id : idBasinVect )
-    {
-      const auto IDreIndex = idBasinVectReIndex[ Id ];
-      coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
-      rhs( IDreIndex ) = H( Id ) + precipitation[ Id ] * dt_DSV;
-//      std::cout << rhs( IDreIndex ) << " " << precipitation[ Id ] * dt_DSV << std::endl;
-      //        if (precipitation[ Id ] != 0) std::cout << precipitation[ Id ] << std::endl;
-    }
-  
-
-
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
-    {
-
-      const UInt i       = Id / ( N_cols + 1 ),
-
-        IDleft  = Id - i - 1, // H
-        IDright = Id - i, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-
-      if ( H_interface > H_min )
-        {
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-
-
-
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-
-        }
-
-    }
-
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
-    {
-
-      const UInt i            = Id / ( N_cols + 1 ),
-
-        IDright      = Id - i,
-        IDrightright = IDright + 1, // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-        }
-
-
-
-    }
-
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectEast )
-    {
-
-      const UInt i          = Id / ( N_cols + 1 ),
-
-        IDleft     = Id - i - 1,
-        IDleftleft = IDleft - 1, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_x[ Id ];
-
-
-
-      const Real coeff_m = H_interface * alfa_x[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDleftReIndex ) += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-        }
-
-    }
-
-  for ( const auto & Id : idStaggeredInternalVectVertical )
-    {
-
-      const UInt IDleft  = Id - N_cols, // H
-        IDright = Id, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-
-
-          coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-          coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-
-
-          rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-
-          rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-
-        }
-
-    }
-
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-    {
-
-      const UInt IDright      = Id,
-        IDrightright = Id + N_cols, //
-        IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDrightReIndex ) += isNonReflectingBC *
-            ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-        }
-
-    }
-
-
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-    {
-
-      const UInt IDleft     = Id - N_cols, // H
-        IDleftleft = IDleft - N_cols, // H
-        IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-
-
-      // define H at interfaces
-      const auto H_interface = H_int_y[ Id ];
-
-
-      const Real coeff_m = H_interface * alfa_y[ Id ];
-
-      if ( H_interface > H_min )
-        {
-
-          rhs( IDleftReIndex )  += isNonReflectingBC *
-            ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-        }
-
-    }
-
-}
-
-
-//
-//void
-//buildMatrix (const std::vector<Real>& H_int_x,
-//             const std::vector<Real>& H_int_y,
-//             const std::vector<Real>& orography,
-//             const std::vector<Real>& u_star,
-//             const std::vector<Real>& v_star,
-//             const Eigen::VectorXd&   H,
-//             const UInt&              N_cols,
-//             const UInt&              N_rows,
-//             const UInt&              N,
-//             const Real&              c1,
-//             const Real&              c3,
-//             const Real&              H_min,
-//             const std::vector<Real>& precipitation,
-//             const Real&              dt_DSV,
-//             const std::vector<Real>& alfa_x,
-//             const std::vector<Real>& alfa_y,
-//             const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-//             const std::vector<UInt>& idStaggeredInternalVectVertical,
-//             const std::vector<UInt>& idStaggeredBoundaryVectWest,
-//             const std::vector<UInt>& idStaggeredBoundaryVectEast,
-//             const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-//             const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-//             const std::vector<UInt>& idBasinVect,
-//             const std::vector<UInt>& idBasinVectReIndex,
-//             const bool&              isNonReflectingBC,
-//             const bool&              isH,
-//
-//             const std::vector<std::tuple<bool, int> >& excluded_ids, // bool, value 1 in excluded ids  UInt, Id del pour point
-//                   std::vector<Real>&                   additional_source_term,
-//                   std::vector<bool>&                   is_dry_inbasin,
-//
-//             std::vector<Eigen::Triplet<Real> >& coefficients,
-//             Eigen::VectorXd&                    rhs)
-//{
-//
-//
-//  // Be careful to maintain the conservativity!
-//
-////  for ( UInt k_ex = 0; k_ex < N; k_ex++ )
-////  {
-////    const auto& current_tuple = excluded_ids[ k_ex ];
-////    if ( std::get<0> ( current_tuple ) )
-////    {
-////      const auto& k_pour = std::get<1> ( current_tuple );
-////      if (k_pour >= 0)
-////      {
-////        additional_source_term[ k_pour ] = H ( k_ex ) + precipitation[ k_ex ] * dt_DSV;
-////        H ( k_ex ) = 0.;
-////      }
-////
-////    }
-////  }
-//
-//  for ( const auto & k_ex : idBasinVect )
-//  {
-//    const auto & current_tuple = excluded_ids[ k_ex ];
-//    if ( std::get<0>( current_tuple ) )
-//    {
-//      const auto & k_pour = std::get<1>( current_tuple );
-//      if ( k_pour >= 0 )
-//      {
-////        additional_source_term[ k_pour ] = H( k_ex ) + precipitation[ k_ex ] * dt_DSV;
-//        additional_source_term[ k_pour ] = precipitation[ k_ex ] * dt_DSV;
-////        H( k_ex ) = 0.;
-////        eta( k_ex ) = orography[ k_ex ];
-//      }
-//      else
-//      {
-////        H( k_ex ) = 0.;
-////        eta( k_ex ) = orography[ k_ex ];
-//      }
-//    }
-//  }
-//
-//
-//  for ( const auto & Id : idBasinVect )
-//  {
-//    const auto IDreIndex = idBasinVectReIndex[ Id ];
-//
-//    if (!std::get<0>(excluded_ids[Id]))
-//    {
-//      coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
-//      rhs( IDreIndex ) = H( Id ) + precipitation[ Id ] * dt_DSV + additional_source_term[ Id ];
-//    }
-//    else
-//    {
-//      rhs( IDreIndex ) = 0.;
-//    }
-//  }
-//
-//
-//
-//  for ( const auto & Id : idStaggeredInternalVectHorizontal )
-//  {
-//
-//    const UInt i       = Id / ( N_cols + 1 ),
-//
-//    IDleft  = Id - i - 1, // H
-//    IDright = Id - i, // H
-//    IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-//    IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-//
-//
-//
-//    // define H at interfaces
-//    const auto H_interface = H_int_x[ Id ];
-//
-//    const Real coeff_m = H_interface * alfa_x[ Id ];
-//
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDleft  ] = false;
-//      is_dry_inbasin[ IDright ] = false;
-//
-//      coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-//      coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-//
-//      rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-//
-//      coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-//      coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-//
-//      rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-//
-//
-////      if (!std::get<0>(excluded_ids[IDleft]) || !std::get<0>(excluded_ids[IDright]))
-////      {
-////        is_dry_inbasin[ IDleft  ] = false;
-////        is_dry_inbasin[ IDright ] = false;
-////
-////        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-////        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-////
-////        rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-////
-////        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-////        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-////
-////        rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-////      }
-//
-//
-//      /*
-//      if (!std::get<0>(excluded_ids[IDleft]))
-//      {
-//        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-//        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-//
-//        rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-//      }
-//
-//      if (!std::get<0>(excluded_ids[IDright]))
-//      {
-//        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-//        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-//
-//        rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-//      }*/
-//
-//    }
-//
-//  }
-//
-//
-//
-//  for ( const auto & Id : idStaggeredBoundaryVectWest )
-//  {
-//
-//    const UInt i            = Id / ( N_cols + 1 ),
-//
-//    IDright      = Id - i,
-//    IDrightright = IDright + 1, // H
-//    IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-//
-//
-//
-//      // define H at interfaces
-//    const auto H_interface = H_int_x[ Id ];
-//
-//
-//
-//    const Real coeff_m = H_interface * alfa_x[ Id ];
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDright ] = false;
-//
-//      rhs ( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-//
-////      if (!std::get<0> (excluded_ids[IDright]) )
-////      {
-////        is_dry_inbasin[ IDright ] = false;
-////
-////        rhs ( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-////      }
-////      if (!std::get<0>(excluded_ids[IDright])) rhs( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * u_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-//    }
-//
-//
-//
-//  }
-//
-//
-//
-//  for ( const auto & Id : idStaggeredBoundaryVectEast )
-//  {
-//
-//    const UInt i          = Id / ( N_cols + 1 ),
-//
-//    IDleft     = Id - i - 1,
-//    IDleftleft = IDleft - 1, // H
-//    IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-//
-//
-//
-//    // define H at interfaces
-//    const auto H_interface = H_int_x[ Id ];
-//
-//
-//
-//    const Real coeff_m = H_interface * alfa_x[ Id ];
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDleft  ] = false;
-//
-//      rhs ( IDleftReIndex ) += isNonReflectingBC * ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-//
-////      if (!std::get<0> (excluded_ids[IDleft]) )
-////      {
-////        is_dry_inbasin[ IDleft  ] = false;
-////
-////        rhs ( IDleftReIndex ) += isNonReflectingBC * ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-////      }
-////      if (!std::get<0>(excluded_ids[IDleft])) rhs( IDleftReIndex ) += isNonReflectingBC * ( - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-//    }
-//
-//  }
-//
-//  for ( const auto & Id : idStaggeredInternalVectVertical )
-//  {
-//
-//    const UInt IDleft  = Id - N_cols, // H
-//    IDright = Id, // H
-//    IDleftReIndex = idBasinVectReIndex[ IDleft ], // H
-//    IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-//
-//
-//
-//      // define H at interfaces
-//    const auto H_interface = H_int_y[ Id ];
-//
-//
-//    const Real coeff_m = H_interface * alfa_y[ Id ];
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDleft  ] = false;
-//      is_dry_inbasin[ IDright ] = false;
-//
-//      coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-//      coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-//
-//      rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-//
-//      coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-//      coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-//
-//      rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-//
-//
-////      if (!std::get<0>(excluded_ids[IDleft]) || !std::get<0>(excluded_ids[IDright]))
-////      {
-////        is_dry_inbasin[ IDleft  ] = false;
-////        is_dry_inbasin[ IDright ] = false;
-////
-////        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-////        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-////
-////        rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-////
-////        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-////        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-////
-////        rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-////      }
-//
-//
-//      /*
-//      if (!std::get<0>(excluded_ids[IDleft]))
-//      {
-//        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex, IDrightReIndex, - c3 * coeff_m ) );
-//        coefficients.push_back( Eigen::Triplet<Real>( IDleftReIndex,  IDleftReIndex,   c3 * coeff_m ) );
-//
-//        rhs( IDleftReIndex )  += - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH;
-//      }
-//
-//      if (!std::get<0>(excluded_ids[IDright]))
-//      {
-//        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDleftReIndex, - c3 * coeff_m ) );
-//        coefficients.push_back( Eigen::Triplet<Real>( IDrightReIndex, IDrightReIndex,  c3 * coeff_m ) );
-//
-//        rhs( IDrightReIndex ) += - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDright ] - orography[ IDleft ] ) * c3 * coeff_m * isH;
-//      }*/
-//
-//    }
-//
-//  }
-//
-//  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-//  {
-//
-//    const UInt IDright      = Id,
-//    IDrightright = Id + N_cols, //
-//    IDrightReIndex = idBasinVectReIndex[ IDright ]; // H
-//
-//
-//
-//      // define H at interfaces
-//    const auto H_interface = H_int_y[ Id ];
-//
-//
-//    const Real coeff_m = H_interface * alfa_y[ Id ];
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDright ] = false;
-//
-//      rhs ( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-//
-////      if (!std::get<0> (excluded_ids[IDright]) )
-////      {
-////        is_dry_inbasin[ IDright ] = false;
-////
-////        rhs ( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-////      }
-////      if (!std::get<0>(excluded_ids[IDright])) rhs( IDrightReIndex ) += isNonReflectingBC * ( - c1 * ( - coeff_m  * v_star[ Id ] ) - ( orography[ IDrightright ] - orography[ IDright ] ) * c3 * coeff_m );
-//    }
-//
-//  }
-//
-//
-//  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-//  {
-//
-//    const UInt IDleft     = Id - N_cols, // H
-//    IDleftleft = IDleft - N_cols, // H
-//    IDleftReIndex = idBasinVectReIndex[ IDleft ]; // H
-//
-//
-//      // define H at interfaces
-//    const auto H_interface = H_int_y[ Id ];
-//
-//
-//    const Real coeff_m = H_interface * alfa_y[ Id ];
-//
-//    if ( H_interface > H_min )
-//    {
-//      is_dry_inbasin[ IDleft  ] = false;
-//
-//      rhs ( IDleftReIndex )  += isNonReflectingBC * ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-//
-////      if (!std::get<0> (excluded_ids[IDleft]) )
-////      {
-////        is_dry_inbasin[ IDleft  ] = false;
-////
-////        rhs ( IDleftReIndex )  += isNonReflectingBC * ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-////      }
-////      if (!std::get<0>(excluded_ids[IDleft])) rhs( IDleftReIndex )  += isNonReflectingBC * ( - c1 * ( + coeff_m  * v_star[ Id ] ) - ( orography[ IDleftleft ] - orography[ IDleft ] ) * c3 * coeff_m );
-//    }
-//
-//  }
-//
-//
-//  for ( const auto & Id : idBasinVect )
-//  {
-//    if ( is_dry_inbasin[ Id ] )
-//    {
-//      const auto IDreIndex = idBasinVectReIndex[ Id ];
-//      coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
-//      is_dry_inbasin[ Id ] = true;
-//    }
-//  }
-//
-//
-//}
-
-
 
 void
 buildMatrix (const std::vector<Real>& H_int_x,
@@ -4204,165 +3401,6 @@ buildMatrix (const std::vector<Real>& H_int_x,
 
 
 
-
-
-
-void
-updateVel (std::vector<Real>& u,
-           std::vector<Real>& v,
-           const std::vector<Real>& u_star,
-           const std::vector<Real>& v_star,
-           const std::vector<Real>& H_int_x,
-           const std::vector<Real>& H_int_y,
-           const std::vector<Real>& alfa_x,
-           const std::vector<Real>& alfa_y,
-           const Real&              N_rows,
-           const Real&              N_cols,
-           const Real&              c2,
-           const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const std::vector<Real>& orography,
-           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-           const std::vector<UInt>& idStaggeredInternalVectVertical,
-           const std::vector<UInt>& idStaggeredBoundaryVectWest,
-           const std::vector<UInt>& idStaggeredBoundaryVectEast,
-           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-           const bool&              isNonReflectingBC)
-{
-  
-  
-    // +-----------------------------------------------+
-    // |              Update Vertical Velocity         |
-    // +-----------------------------------------------+
-  
-  for ( const auto & Id : idStaggeredInternalVectVertical )
-  {
-    
-    const UInt IDsouth = Id,
-    IDnorth = Id - N_cols;
-    
-    
-    const auto & H_interface = H_int_y[ Id ];
-    if ( H_interface > H_min )
-    {
-      v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta( IDsouth ) - eta( IDnorth ) ) );
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-    
-  }
-  
-  
-  
-    // first row
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-  {
-    
-    const auto & H_interface = H_int_y[ Id ];
-    if ( H_interface > H_min )
-    {
-        //            std::cout << H_interface << std::endl;
-      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ Id + N_cols ] - orography[ Id ] ) );
-      
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-  }
-  
-  
-    // last row
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-  {
-    
-    
-    const auto & H_interface = H_int_y[ Id ];
-    if ( H_interface > H_min )
-    {
-      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ Id - N_cols ] - orography[ Id - 2*N_cols ] ) );
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-  }
-  
-  
-    // +-----------------------------------------------+
-    // |              Update Horizontal Velocity       |
-    // +-----------------------------------------------+
-  
-  
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
-  {
-    
-    const UInt i       = Id / ( N_cols + 1 ),
-    IDeast  = Id - i,
-    IDwest  = Id - i - 1;
-    
-    
-    const auto & H_interface = H_int_x[ Id ];
-    if ( H_interface > H_min )
-    {
-      u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta( IDeast ) - eta( IDwest ) ) );
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-    
-  }
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
-  {
-    
-    const UInt i = Id / ( N_cols + 1 );
-    
-    const auto & H_interface = H_int_x[ Id ];
-    if ( H_interface > H_min )
-    {
-      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ Id - i + 1 ] - orography[ Id - i ] ) );
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-    
-    
-  }
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectEast )
-  {
-    
-    const UInt i = Id / ( N_cols + 1 );
-    
-    
-    const auto & H_interface = H_int_x[ Id ];
-    if ( H_interface > H_min )
-    {
-      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ Id - i - 1 ] - orography[ Id - i - 2 ] ) );
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-  }
-  
-}
-
-
 void
 putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal,
                       const std::vector<UInt>& idStaggeredInternalVectVertical,
@@ -4672,197 +3710,6 @@ updateVel (std::vector<Real>& u,
 
 
 
-void
-updateVel (std::vector<Real>& u,
-           std::vector<Real>& v,
-           const std::vector<Real>& u_star,
-           const std::vector<Real>& v_star,
-           const std::vector<Real>& alfa_x,
-           const std::vector<Real>& alfa_y,
-           const Real&              N_rows,
-           const Real&              N_cols,
-           const Real&              c2,
-           const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const Eigen::VectorXd&   H,
-           const std::vector<Real>& orography,
-           const std::vector<std::tuple<bool, int> >& excluded_ids,
-           const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-           const std::vector<UInt>& idStaggeredInternalVectVertical,
-           const std::vector<UInt>& idStaggeredBoundaryVectWest,
-           const std::vector<UInt>& idStaggeredBoundaryVectEast,
-           const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-           const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-           const bool&              isNonReflectingBC)
-{
-  
-  
-    // +-----------------------------------------------+
-    // |              Update Vertical Velocity         |
-    // +-----------------------------------------------+
-  
-  for ( const auto & Id : idStaggeredInternalVectVertical )
-  {
-    
-    const UInt IDsouth = Id,
-    IDnorth = Id - N_cols;
-    
-    
-    
-    const auto & H_interface = (H( IDsouth ) + H( IDnorth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (-H( IDsouth ) + H( IDnorth ))*.5;
-    if ( H_interface > H_min )
-    {
-      if ( ( int(std::get<0>(excluded_ids[IDsouth])) + int(std::get<0>(excluded_ids[IDnorth])) ) == 1 )
-      {
-        const auto v_ = std::abs(v[ Id-N_cols ]) > std::abs(v[ Id+N_cols ]) ? v[ Id-N_cols ] : v[ Id+N_cols ];
-        v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] );//0;//v_; //alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta( IDsouth ) - eta( IDnorth ) ) );
-      }
-      else if ( ( int(std::get<0>(excluded_ids[IDsouth])) + int(std::get<0>(excluded_ids[IDnorth])) ) == 0 )
-      {
-        v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta( IDsouth ) - eta( IDnorth ) ) );
-      }
-      else
-      {
-        v[ Id ] = 0.;
-      }
-        
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-    
-  }
-  
-  
-  
-    // first row
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-  {
-    
-    const UInt IDsouth = Id + N_cols,
-    IDnorth = Id;
-    
-    const auto & H_interface = (H( IDnorth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (-H( IDnorth ))*.5;
-    if ( H_interface > H_min )
-    {
-//      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
-      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * v_star[ Id ];
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-  }
-  
-  
-    // last row
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-  {
-    
-    const UInt IDsouth = Id - N_cols,
-    IDnorth = Id - 2*N_cols;
-    
-    const auto & H_interface = (H( IDsouth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (H( IDsouth ))*.5;
-    if ( H_interface > H_min )
-    {
-//      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
-      v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] );
-    }
-    else
-    {
-      v[ Id ] = 0.;
-    }
-    
-  }
-  
-  
-    // +-----------------------------------------------+
-    // |              Update Horizontal Velocity       |
-    // +-----------------------------------------------+
-  
-  
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
-  {
-    
-    const UInt i       = Id / ( N_cols + 1 ),
-    IDeast  = Id - i,
-    IDwest  = Id - i - 1;
-    
-    
-    const auto & H_interface = (H( IDeast ) + H( IDwest ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (-H( IDeast ) + H( IDwest ))*.5;
-    if ( H_interface > H_min )
-    {
-      if ( ( int(std::get<0>(excluded_ids[IDeast])) + int(std::get<0>(excluded_ids[IDwest])) ) == 1 )
-      {
-        const auto u_ = std::abs(u[ Id-1 ]) > std::abs(u[ Id+1 ]) ? u[ Id-1 ] : u[ Id+1 ];
-        u[ Id ] = 0.;//0;//u_;//alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta( IDeast ) - eta( IDwest ) ) );
-      }
-      else if ( ( int(std::get<0>(excluded_ids[IDeast])) + int(std::get<0>(excluded_ids[IDwest])) ) == 0 )
-      {
-        u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta( IDeast ) - eta( IDwest ) ) ); 
-      }
-      else
-      {
-        u[ Id ] = 0.;
-      }
-      
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-    
-  }
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
-  {
-    
-    const UInt i = Id / ( N_cols + 1 ),
-    IDeast = Id - i + 1,
-    IDwest = Id - i;
-    
-    const auto & H_interface = (H( IDwest ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (-H( IDwest ))*.5;
-    if ( H_interface > H_min )
-    {
-//      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
-      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] );
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-    
-    
-  }
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectEast )
-  {
-    
-    const UInt i = Id / ( N_cols + 1 ),
-    IDeast = Id - i - 1,
-    IDwest = Id - i - 2;
-    
-    const auto & H_interface = (H( IDeast ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (H( IDeast ))*.5;
-    if ( H_interface > H_min )
-    {
-//      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
-      u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] );
-    }
-    else
-    {
-      u[ Id ] = 0.;
-    }
-    
-  }
-  
-}
 
 
 
@@ -4886,8 +3733,8 @@ maxdt (const std::vector<Real>& u,
   
   const Real vel_max_x = std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
   
-  const Real Co = 0.3;
-  const Real Co_cel = 10;
+  const Real Co = 0.9; // 0.3
+  const Real Co_cel = 1e4; // 10
   
   const Real cel = std::sqrt( H.maxCoeff() * gravity );
   
