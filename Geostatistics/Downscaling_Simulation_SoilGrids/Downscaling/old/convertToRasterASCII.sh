@@ -1,6 +1,7 @@
 #!/bin/bash
 
 nsim=$1
+
 if [[ $nsim -ne 0 ]]; then
     for (( sim = 1; sim <= nsim; sim++ )); do
         gdal_translate -of AAIGrid ../Outputs/$sim/clay_sim_$sim.tif ../Outputs/$sim/clay_sim_$sim.asc

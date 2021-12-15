@@ -180,6 +180,14 @@ variogram_deconvolution = function(coarse_raster, vg_type = "Sph", nblocks = 4, 
   
   ##########################################################################################################
   
+  coarse_raster=RES1
+  vg_type="Sph"
+  nblocks = 4
+  maxiter = 100
+  cutoff = "default"
+  tol1 = 1e-2
+  tol2 = 1e-6
+  
   # Borders and extent of the raster map.
   xmin = coarse_raster@extent@xmin
   xmax = coarse_raster@extent@xmax
@@ -547,9 +555,9 @@ if ( as.numeric(args[1]) == 0) {
   aux_sand = sand_sim_stack[[1]]
   aux_silt = silt_sim_stack[[1]]
   dir.create(paste0('../Outputs/',0))
-  writeRaster( aux_clay, file=paste0('../Outputs/',0,'/clay_sim_',0,'.asc'), overwrite=TRUE )
-  writeRaster( aux_sand, file=paste0('../Outputs/',0,'/sand_sim_',0,'.asc'), overwrite=TRUE )
-  writeRaster( aux_silt, file=paste0('../Outputs/',0,'/silt_sim_',0,'.asc'), overwrite=TRUE )
+  writeRaster( aux_clay, file=paste0('../Outputs/',0,'/clay_sim_',0,'.tif'), overwrite=TRUE )
+  writeRaster( aux_sand, file=paste0('../Outputs/',0,'/sand_sim_',0,'.tif'), overwrite=TRUE )
+  writeRaster( aux_silt, file=paste0('../Outputs/',0,'/silt_sim_',0,'.tif'), overwrite=TRUE )
   
 } else {
   sim1 = ATPK(RES1, mask, variogram = vd1, nmax = 8, beta = 0, nsim = as.numeric(args[1]), frac = .5, noise_sd = 0.1)
@@ -590,9 +598,9 @@ if ( as.numeric(args[1]) == 0) {
     aux_sand = sand_sim_stack[[i]]
     aux_silt = silt_sim_stack[[i]]
     dir.create(paste0('../Outputs/',i))
-    writeRaster( aux_clay, file=paste0('../Outputs/',i,'/clay_sim_',i,'.asc'), overwrite=TRUE )
-    writeRaster( aux_sand, file=paste0('../Outputs/',i,'/sand_sim_',i,'.asc'), overwrite=TRUE )
-    writeRaster( aux_silt, file=paste0('../Outputs/',i,'/silt_sim_',i,'.asc'), overwrite=TRUE )
+    writeRaster( aux_clay, file=paste0('../Outputs/',i,'/clay_sim_',i,'.tif'), overwrite=TRUE )
+    writeRaster( aux_sand, file=paste0('../Outputs/',i,'/sand_sim_',i,'.tif'), overwrite=TRUE )
+    writeRaster( aux_silt, file=paste0('../Outputs/',i,'/silt_sim_',i,'.tif'), overwrite=TRUE )
   }
   
 }
