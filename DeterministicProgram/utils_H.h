@@ -485,6 +485,8 @@ private:
 };
 
 
+bool is_file_exist(const char *fileName);
+
 void
 bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<Real>& v,

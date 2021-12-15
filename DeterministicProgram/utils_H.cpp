@@ -1982,7 +1982,12 @@ bilinearInterpolation (const std::vector<Real>& u,
 
 }
 
-
+bool 
+is_file_exist(const char *fileName)
+{
+    std::ifstream infile(fileName);
+    return infile.good();
+}
 
 void
 bilinearInterpolation (const std::vector<Real>& u,

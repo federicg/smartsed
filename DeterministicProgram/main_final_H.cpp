@@ -672,6 +672,12 @@ main (int argc, char** argv)
   {
     const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
     
+    if (!is_file_exist(corineCode_file.c_str()))
+    {
+      std::cout << corineCode_file << " is not present!" << std::endl;
+      exit ( -1. );
+    }
+
     // interpolate CLC to make sure to match correct dimensions
     {
       const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
@@ -728,6 +734,18 @@ main (int argc, char** argv)
     {
       str1 = output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc";
       str2 = output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc";
+
+      if (!is_file_exist(str1.c_str()))
+      {
+        std::cout << str1 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+        exit ( -1. );
+      }
+
+      if (!is_file_exist(str2.c_str()))
+      {
+        std::cout << str2 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+        exit ( -1. );
+      }      
     }
     
     double cellsize_psf = 0;
