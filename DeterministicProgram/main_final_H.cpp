@@ -666,7 +666,7 @@ main (int argc, char** argv)
 
   tic();
   
-  std::vector<Int> corineCode_Vec ( N );
+  std::vector<Int> corineCode_Vec ( N ); 
   std::vector<Real> X_Gav ( N ), Y_Gav ( N );
   
   {

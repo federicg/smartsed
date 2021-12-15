@@ -17,6 +17,9 @@
 //! IML++ CG template
 #include "cg.hpp"
 
+//! LIS
+//#include <lis.h>
+
 //! Generic real data
 typedef double Real;
 
