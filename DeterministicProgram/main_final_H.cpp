@@ -672,9 +672,11 @@ main (int argc, char** argv)
   {
     const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
     
-    if (!is_file_exist(corineCode_file.c_str()))
+    const std::string check_presence_string = file_dir + corineCode_file; 
+
+    if (!is_file_exist(check_presence_string.c_str()))
     {
-      std::cout << corineCode_file << " is not present!" << std::endl;
+      std::cout << check_presence_string << " is not present!" << std::endl;
       exit ( -1. );
     }
 
