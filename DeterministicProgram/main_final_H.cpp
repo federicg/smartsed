@@ -1826,7 +1826,6 @@ main (int argc, char** argv)
       if (minH < -H_min) 
       {
         
-        time -= dt_DSV;
         dt_DSV = dt_DSV/10.;
         
         if (dt_DSV == 0)
@@ -2214,7 +2213,8 @@ main (int argc, char** argv)
       
       if ( spit_out_solutions_each_time_step )
       {
-      
+        iter++;
+
         saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
         saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
         saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
@@ -2227,13 +2227,13 @@ main (int argc, char** argv)
         saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
         saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
 
-        iter++;
       }
       else
       {
         
         if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
         {
+          iter++;
 
           saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
           saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
@@ -2247,7 +2247,6 @@ main (int argc, char** argv)
           saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
           saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );
 
-          iter++;
         }
       }
       
