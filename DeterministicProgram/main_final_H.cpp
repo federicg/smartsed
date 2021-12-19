@@ -1551,7 +1551,7 @@ main (int argc, char** argv)
   
   double c1_DSV_, c2_DSV_, c3_DSV_;
    
-  dt_DSV = maxdt(u, v, g, H, pixel_size);
+  dt_DSV = maxdt(u, v, g, H.maxCoeff(), pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
   dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
       
