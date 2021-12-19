@@ -3771,7 +3771,7 @@ Real
 maxdt (const std::vector<Real>& u,
        const std::vector<Real>& v,
        const Real&              gravity,
-       const Eigen::VectorXd&   H,
+       const Real&              Hmax,
        const Real&              pixel_size)
 {
   
@@ -3790,7 +3790,7 @@ maxdt (const std::vector<Real>& u,
   const Real Co = 0.9; // 0.3
   const Real Co_cel = 1e4; // 10
   
-  const Real cel = std::sqrt( H.maxCoeff() * gravity );
+  const Real cel = std::sqrt( Hmax * gravity );
   
   Real dt_candidate = Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon());
   dt_candidate = std::min(dt_candidate, Co_cel * pixel_size / (cel+std::numeric_limits<double>::epsilon()));

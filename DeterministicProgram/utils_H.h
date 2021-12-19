@@ -676,7 +676,7 @@ Real
 maxdt (const std::vector<Real>& u,
        const std::vector<Real>& v,
        const Real&              gravity,
-       const Eigen::VectorXd&   H,
+       const Real&              Hmax,
        const Real&              pixel_size);
 
 Real
