@@ -1818,7 +1818,8 @@ main (int argc, char** argv)
       
       
       const double minH = H_basin.minCoeff();
-      std::cout << "min H: " << minH << " max H: " << H_basin.maxCoeff() << std::endl;
+      const double maxH = H_basin.maxCoeff();
+      std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
       
       
       
