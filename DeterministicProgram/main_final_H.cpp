@@ -1553,22 +1553,16 @@ main (int argc, char** argv)
    
   dt_DSV = maxdt(u, v, g, H, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
+  dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
       
   c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
   c2_DSV_ = c2_DSV (g, c1_DSV_);
   c3_DSV_ = c3_DSV (g, c1_DSV_);
   
   double time = 0.;
-  while ((t_final-time)>std::numeric_limits<double>::epsilon()*t_final) 
+  bool is_last_step = false;
+  while ( !is_last_step )
     {
-      
-      time += dt_DSV;
-
-      if ((time-t_final)>-std::numeric_limits<double>::epsilon()*t_final) 
-      {
-        dt_DSV -= (time - t_final);
-        time = t_final;
-      }
 
       std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runout vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runout cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << " H has been negative: " << isHNegative << std::endl;
       std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
@@ -2158,14 +2152,26 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
       // |               Update time step                |
       // +-----------------------------------------------+
+      
+      time += dt_DSV;
 
-      dt_DSV = maxdt(u, v, g, H, pixel_size);
+      if (time >= t_final)
+      {
+        is_last_step = true;
+      }
+      
+      dt_DSV = maxdt(u, v, g, maxH, pixel_size);
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
       c3_DSV_ = c3_DSV (g, c1_DSV_);
-
+      
+      
+      if ((time+dt_DSV) > t_final)
+      {
+        dt_DSV = t_final - time;
+      }
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
@@ -2207,20 +2213,18 @@ main (int argc, char** argv)
       
       if ( spit_out_solutions_each_time_step )
       {
-        const auto currentDay = iter;
-        
-
-        saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
-        saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
-        saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
-        saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
-        saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
-        saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
-        saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
-        saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
-        saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-        saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
-        saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );  
+      
+        saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
+        saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
+        saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
+        saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
+        saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum                    );
+        saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
+        saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
+        saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
+        saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
+        saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
+        saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
 
         iter++;
       }
@@ -2229,20 +2233,18 @@ main (int argc, char** argv)
         
         if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
         {
-          const auto currentDay = iter;
-          
 
-          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
-          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
-          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
-          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
-          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
-          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
-          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
+          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
+          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum                    );
+          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
+          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
+          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
+          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
+          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
+          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );
 
           iter++;
         }
