@@ -4992,69 +4992,85 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
                            std::vector<std::array<Real, 2> >& Gamma_y )
 {
 
+#pragma omp parallel
+  {
 
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) //( const auto & Id : idStaggeredInternalVectHorizontal )
     {
-      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-        * ( .5 - .5 * signum( u[ Id ] ) ),
+      const auto & Id = idStaggeredInternalVectHorizontal[ii];
 
-        coeff_left = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-        * ( .5 + .5 * signum( u[ Id ] ) );
+      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
+      * ( .5 - .5 * signum( u[ Id ] ) ),
+
+      coeff_left = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
+      * ( .5 + .5 * signum( u[ Id ] ) );
 
       Gamma_x[ Id ][ 0 ] = coeff_right;
       Gamma_x[ Id ][ 1 ] = coeff_left;
     }
 
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectWest )
     {
-      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-        * ( .5 - .5 * signum( u[ Id ] ) ),
+      const auto & Id = idStaggeredBoundaryVectWest[ii];
 
-        coeff_left = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
-        * ( .5 + .5 * signum( u[ Id ] ) );
+      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
+      * ( .5 - .5 * signum( u[ Id ] ) ),
+
+      coeff_left = c1 * alpha * std::pow( std::abs( S_x[ Id ] ), beta ) * u[ Id ]
+      * ( .5 + .5 * signum( u[ Id ] ) );
 
       Gamma_x[ Id ][ 0 ] = coeff_right;
       Gamma_x[ Id ][ 1 ] = coeff_left;
     }
 
 
-
-  for ( const auto & Id : idStaggeredInternalVectVertical )
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ ) //( const auto & Id : idStaggeredInternalVectVertical )
     {
-      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 - .5 * signum( v[ Id ] ) ),
+      const auto & Id = idStaggeredInternalVectVertical[ii];
 
-        coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 + .5 * signum( v[ Id ] ) );
+      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 - .5 * signum( v[ Id ] ) ),
+
+      coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 + .5 * signum( v[ Id ] ) );
 
 
       Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
     }
 
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectNorth )
     {
-      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 - .5 * signum( v[ Id ] ) ),
+      const auto & Id = idStaggeredBoundaryVectNorth[ii];
 
-        coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 + .5 * signum( v[ Id ] ) );
+      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 - .5 * signum( v[ Id ] ) ),
+
+      coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 + .5 * signum( v[ Id ] ) );
 
 
       Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
     }
 
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectSouth )
     {
-      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 - .5 * signum( v[ Id ] ) ),
+      const auto & Id = idStaggeredBoundaryVectSouth[ii];
 
-        coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
-        * ( .5 + .5 * signum( v[ Id ] ) );
+      const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 - .5 * signum( v[ Id ] ) ),
+
+      coeff_left = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
+      * ( .5 + .5 * signum( v[ Id ] ) );
 
 
       Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
     }
-
+  }
 
 }
 
