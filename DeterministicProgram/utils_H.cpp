@@ -4816,7 +4816,7 @@ computeResiduals (const std::vector<Real>& n_x,
                   const UInt&              N_cols,
                   const UInt&              N_rows,
                   const std::vector<Real>& h,
-                  const std::vector<Real>& coeff, // conducibilità idraulica
+                  const std::vector<Real>& coeff, // conducibilita' idraulica
                   const std::vector<UInt>& idStaggeredInternalVectHorizontal,
                   const std::vector<UInt>& idStaggeredInternalVectVertical,
                   const std::vector<UInt>& idStaggeredBoundaryVectWest,
@@ -4996,7 +4996,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
   {
 
 #pragma omp for
-    for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) //( const auto & Id : idStaggeredInternalVectHorizontal )
+    for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) 
     {
       const auto & Id = idStaggeredInternalVectHorizontal[ii];
 
@@ -5011,7 +5011,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
     }
 
 #pragma omp for
-    for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectWest )
+    for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectWest[ii];
 
@@ -5027,7 +5027,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
 
 
 #pragma omp for
-    for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ ) //( const auto & Id : idStaggeredInternalVectVertical )
+    for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ ) 
     {
       const auto & Id = idStaggeredInternalVectVertical[ii];
 
@@ -5042,7 +5042,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
     }
 
 #pragma omp for
-    for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectNorth )
+    for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectNorth[ii];
 
@@ -5057,7 +5057,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
     }
 
 #pragma omp for
-    for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) //( const auto & Id : idStaggeredBoundaryVectSouth )
+    for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectSouth[ii];
 

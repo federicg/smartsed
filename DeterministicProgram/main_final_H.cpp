@@ -1850,13 +1850,9 @@ main (int argc, char** argv)
           H ( Id ) = std::abs(H_basin ( IDreIndex ));
           eta ( Id ) = H ( Id ) + orography[ Id ];
         }
-      toc ("solve");
 
-      tic();
-      
-      
-      
-      
+
+
       // +-----------------------------------------------+
       // |                  Update u, v                  |
       // +-----------------------------------------------+
@@ -1896,7 +1892,9 @@ main (int argc, char** argv)
               eta ( k ) = H ( k ) + orography[ k ];
             }
         }*/
+      toc ("solve");
 
+      tic();
 
 
       // +-----------------------------------------------+
@@ -1905,7 +1903,9 @@ main (int argc, char** argv)
 
       if (is_sediment_transport)
       {
-        dt_sed = compute_dt_sediment ( 2.5, 1.6, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
+        const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
+
+        dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
         c1_sed = dt_sed / pixel_size;
 
 
@@ -1919,9 +1919,9 @@ main (int argc, char** argv)
                                     c1_sed,
                                     slope_x,
                                     slope_y,
-                                    2.5,   // alfa
-                                    1.6,   // beta
-                                    1.,    // gamma
+                                    alfa_coeff,   // alfa
+                                    beta_coeff,   // beta
+                                    gamma_coeff,    // gamma
                                     idStaggeredInternalVectHorizontal_excluded,
                                     idStaggeredInternalVectVertical_excluded,
                                     idStaggeredBoundaryVectWest_excluded,
@@ -1930,7 +1930,7 @@ main (int argc, char** argv)
                                     idStaggeredBoundaryVectSouth_excluded,
                                     Gamma_vect_x,
                                     Gamma_vect_y
-                                  );
+                                    );
 
 
         additional_source_term.assign(N, 0.);
@@ -1950,199 +1950,189 @@ main (int argc, char** argv)
 
 
         for ( const UInt& k : idBasinVect_excluded )
-          {
+        {
             // 1.e-3 is the conversion factor, look at EPM theory
-            W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed + additional_source_term[ k ];
-          }
+          W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed + additional_source_term[ k ];
+        }
 
         std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
 
         for ( UInt kk = 0; kk < numberOfSteps; kk++ )
+        {
+
+          additional_source_term.assign(N, 0.);
+
+          // horizontal
+          for ( const UInt& Id : idStaggeredInternalVectHorizontal_excluded )
           {
-            
-            additional_source_term.assign(N, 0.);
+            const UInt i       = Id / ( N_cols + 1 ),
+            IDeast  = Id - i,
+            IDwest  = Id - i - 1;
 
-            for ( const UInt& Id : idStaggeredInternalVectHorizontal_excluded )
-              {
-                const UInt i       = Id / ( N_cols + 1 ),
-                           IDeast  = Id - i,
-                           IDwest  = Id - i - 1;
-
-                const Real& h_left  = h_sd[ IDwest ],
-                          & h_right = h_sd[ IDeast ];
+            const Real& h_left  = h_sd[ IDwest ],
+            & h_right = h_sd[ IDeast ];
 
 
-                h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_x[ Id ][ 1 ] * h_left;
-
-              }
-
-
-            for ( const UInt& Id : idStaggeredBoundaryVectWest_excluded )
-              {
-
-                const UInt i = Id / ( N_cols + 1 );
-
-                const Real h_left  = 0, //0,
-                           h_right = h_sd[ Id - i ];
+            h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+          }
 
 
-                h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_x[ Id ][ 1 ] * h_left;
+          for ( const UInt& Id : idStaggeredBoundaryVectWest_excluded )
+          {
+            const UInt i = Id / ( N_cols + 1 );
+
+            const Real h_left  = 0, //0,
+            h_right = h_sd[ Id - i ];
 
 
-              }
+            h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+          }
 
 
-            for ( const UInt& Id : idStaggeredBoundaryVectEast_excluded )
-              {
+          for ( const UInt& Id : idStaggeredBoundaryVectEast_excluded )
+          {
 
-                const UInt i = Id / ( N_cols + 1 );
-
-
-                const Real h_left  = h_sd[ Id - i - 1 ],
-                           h_right = 0;
+            const UInt i = Id / ( N_cols + 1 );
 
 
-                h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_x[ Id ][ 1 ] * h_left;
+            const Real h_left  = h_sd[ Id - i - 1 ],
+            h_right = 0;
 
-              }
 
-            for ( const UInt& Id : idBasinVect_excluded )
-              {
-                const UInt i = Id / N_cols;
+            h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+          }
 
-                Res_x[ Id ] = h_interface_x[ Id + 1 + i ] - h_interface_x[ Id + i ];
-              }
+          for ( const UInt& Id : idBasinVect_excluded )
+          {
+            const UInt i = Id / N_cols;
+
+            Res_x[ Id ] = h_interface_x[ Id + 1 + i ] - h_interface_x[ Id + i ];
+          }
 
 
 
 
 
 
+          // vertical
+          for ( const UInt& Id : idStaggeredInternalVectVertical_excluded )
+          {
+            const UInt IDsouth = Id,
+            IDnorth = Id - N_cols;
 
-            for ( const UInt& Id : idStaggeredInternalVectVertical_excluded )
-              {
-                const UInt IDsouth = Id,
-                           IDnorth = Id - N_cols;
-
-                const Real& h_left  = h_sd[ IDnorth ],
-                          & h_right = h_sd[ IDsouth ];
-
-
-                h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_y[ Id ][ 1 ] * h_left;
-
-              }
+            const Real& h_left  = h_sd[ IDnorth ],
+            & h_right = h_sd[ IDsouth ];
 
 
-            for ( const UInt& Id : idStaggeredBoundaryVectNorth_excluded )
-              {
-
-                const Real h_left  = 0, // 0
-                           h_right = h_sd[ Id ];
+            h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
+          }
 
 
-                h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_y[ Id ][ 1 ] * h_left;
+          for ( const UInt& Id : idStaggeredBoundaryVectNorth_excluded )
+          {
 
-              }
-
-
-
-            for ( const UInt& Id : idStaggeredBoundaryVectSouth_excluded )
-              {
-
-                const Real h_left  = h_sd[ Id - N_cols ],
-                           h_right = 0;
+            const Real h_left  = 0, // 0
+            h_right = h_sd[ Id ];
 
 
-                h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                      Gamma_vect_y[ Id ][ 1 ] * h_left;
+            h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
 
-              }
+          }
 
-            for ( const UInt& Id : idBasinVect_excluded )
-              {
-                Res_y[ Id ] = h_interface_y[ Id + N_cols ] - h_interface_y[ Id ];
-              }
 
-            
-            
-            for ( const auto & Id : idStaggeredInternalVectHorizontal )
+
+          for ( const UInt& Id : idStaggeredBoundaryVectSouth_excluded )
+          {
+
+            const Real h_left  = h_sd[ Id - N_cols ],
+            h_right = 0;
+
+            h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
+                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
+          }
+
+          for ( const UInt& Id : idBasinVect_excluded )
+          {
+            Res_y[ Id ] = h_interface_y[ Id + N_cols ] - h_interface_y[ Id ];
+          }
+
+
+
+          for ( const auto & Id : idStaggeredInternalVectHorizontal )
+          {
+
+            const UInt i       = Id / ( N_cols + 1 ),
+
+            IDleft  = Id - i - 1,
+            IDright = Id - i;
+
+
+
+            if ( std::get<0> ( excluded_ids[ IDleft ] ) )
             {
-              
-              const UInt i       = Id / ( N_cols + 1 ),
-              
-              IDleft  = Id - i - 1,
-              IDright = Id - i;
-              
-
-              
-              if ( std::get<0> ( excluded_ids[ IDleft ] ) )
+              const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
+              if ( k_pour >= 0 )
               {
-                const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
-                if ( k_pour >= 0 )
-                {
-                  additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
-                }
+                additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
               }
-              
-              if ( std::get<0> ( excluded_ids[ IDright ] ) )
-              {
-                const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
-                if ( k_pour >= 0 )
-                {
-                  additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
-                }
-              }
-                
-              
-              
             }
-            
-            
-            for ( const auto & Id : idStaggeredInternalVectVertical )
+
+            if ( std::get<0> ( excluded_ids[ IDright ] ) )
             {
-              
-              const UInt IDleft  = Id - N_cols,
-              IDright = Id;
-              
-    
-              if ( std::get<0> ( excluded_ids[ IDleft ] ) )
+              const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
+              if ( k_pour >= 0 )
               {
-                const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
-                if ( k_pour >= 0 )
-                {
-                  additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
-                }
+                additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
               }
-              
-              if ( std::get<0> ( excluded_ids[ IDright ] ) )
-              {
-                const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
-                if ( k_pour >= 0 )
-                {
-                  additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
-                }
-              }
-               
             }
-            
-
-
-            for ( const UInt& Id : idBasinVect_excluded )
-              {
-                h_sd[ Id ] += - ( Res_x[ Id ] + Res_y[ Id ] ) + W_Gav[ Id ] + additional_source_term[ Id ];
-              }
-
 
 
 
           }
-      }
 
+
+          for ( const auto & Id : idStaggeredInternalVectVertical )
+          {
+
+            const UInt IDleft  = Id - N_cols,
+            IDright = Id;
+
+
+            if ( std::get<0> ( excluded_ids[ IDleft ] ) )
+            {
+              const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
+              if ( k_pour >= 0 )
+              {
+                additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
+              }
+            }
+
+            if ( std::get<0> ( excluded_ids[ IDright ] ) )
+            {
+              const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
+              if ( k_pour >= 0 )
+              {
+                additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
+              }
+            }
+
+          }
+
+
+
+          for ( const UInt& Id : idBasinVect_excluded )
+          {
+            h_sd[ Id ] += - ( Res_x[ Id ] + Res_y[ Id ] ) + W_Gav[ Id ] + additional_source_term[ Id ];
+          }
+
+
+        }
+      }
       toc ("advance");
 
       
