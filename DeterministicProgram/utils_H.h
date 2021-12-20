@@ -4,6 +4,10 @@
 #include "typedefs_H.h"
 #include <array>
 
+//! for parallelize with openmp
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 namespace Eigen {
   

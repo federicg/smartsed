@@ -64,10 +64,6 @@
 //! Parse library
 #include "GetPot.hpp"
 
-//! for parallelize with openmp
-#if defined(_OPENMP)
-#include <omp.h>
-#endif
 
 //! for simple profiling
 #include "timing.h"
