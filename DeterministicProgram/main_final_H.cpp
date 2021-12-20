@@ -2150,7 +2150,7 @@ main (int argc, char** argv)
       tic();
 
       // +-----------------------------------------------+
-      // |               Update time step                |
+      // |               Update time                     |
       // +-----------------------------------------------+
       
       time += dt_DSV;
@@ -2161,19 +2161,6 @@ main (int argc, char** argv)
         is_last_step = true;
       }
       
-      dt_DSV = maxdt(u, v, g, maxH, pixel_size);
-      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
-      
-      c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
-      c2_DSV_ = c2_DSV (g, c1_DSV_);
-      c3_DSV_ = c3_DSV (g, c1_DSV_);
-      
-      
-      if ((time+dt_DSV) > t_final)
-      {
-        dt_DSV = t_final - time;
-        check_last = true;
-      }
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
@@ -2257,6 +2244,23 @@ main (int argc, char** argv)
         }
       }
       
+      // +-----------------------------------------------+
+      // |               Update time step                |
+      // +-----------------------------------------------+
+
+      dt_DSV = maxdt(u, v, g, maxH, pixel_size);
+      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
+      
+      c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
+      c2_DSV_ = c2_DSV (g, c1_DSV_);
+      c3_DSV_ = c3_DSV (g, c1_DSV_);
+      
+      
+      if ((time+dt_DSV) > t_final)
+      {
+        dt_DSV = t_final - time;
+        check_last = true;
+      }
       
       
       toc ("file output");
