@@ -4992,10 +4992,12 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
                            std::vector<std::array<Real, 2> >& Gamma_y )
 {
 
-#pragma omp parallel
-  {
+//#pragma omp parallel
+  { 
 
-#pragma omp for
+    //std::cout << omp_get_num_threads() << std::endl;
+
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) 
     {
       const auto & Id = idStaggeredInternalVectHorizontal[ii];
@@ -5010,7 +5012,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
       Gamma_x[ Id ][ 1 ] = coeff_left;
     }
 
-#pragma omp for
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectWest[ii];
@@ -5026,9 +5028,10 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
     }
 
 
-#pragma omp for
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ ) 
     {
+
       const auto & Id = idStaggeredInternalVectVertical[ii];
 
       const Real coeff_right = c1 * alpha * std::pow( std::abs( S_y[ Id ] ), beta ) * v[ Id ]
@@ -5041,7 +5044,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
       Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
     }
 
-#pragma omp for
+//#pragma omp parallel for
     for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectNorth[ii];
@@ -5056,7 +5059,7 @@ computeResidualsTruncated (const std::vector<Real>&                 u,
       Gamma_y[ Id ] = std::array<Real,2>{{ coeff_right, coeff_left }};
     }
 
-#pragma omp for
+//#pragma omp parallel for
     for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) 
     {
       const auto & Id = idStaggeredBoundaryVectSouth[ii];
