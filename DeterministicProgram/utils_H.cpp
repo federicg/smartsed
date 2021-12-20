@@ -1426,7 +1426,7 @@ void
 frictionClass::f_x ()
 {
 
-  #pragma omp parallel for num_threads(MAX)  
+  #pragma omp parallel for 
   for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
         Real alfa = 1.;
@@ -1449,7 +1449,7 @@ frictionClass::f_x ()
 
     }
 
-    #pragma omp parallel for num_threads(MAX)
+    #pragma omp parallel for 
     for ( const auto & Id : idStaggeredBoundaryVectWest )
       {
           Real alfa = 1.;
@@ -1472,7 +1472,7 @@ frictionClass::f_x ()
 
       }
 
-    #pragma omp parallel for num_threads(MAX)
+    #pragma omp parallel for 
     for ( const auto & Id : idStaggeredBoundaryVectEast )
       {
           Real alfa = 1.;
@@ -1502,7 +1502,7 @@ void
 frictionClass::f_y ()
 {
 
-    #pragma omp parallel for num_threads(MAX)
+    #pragma omp parallel for 
     for ( const auto & Id : idStaggeredInternalVectVertical )
       {
           Real alfa = 1.;
@@ -1526,7 +1526,7 @@ frictionClass::f_y ()
 
       }
 
-      #pragma omp parallel for num_threads(MAX)
+      #pragma omp parallel for 
       for ( const auto & Id : idStaggeredBoundaryVectNorth )
         {
             Real alfa = 1.;
@@ -1550,7 +1550,7 @@ frictionClass::f_y ()
 
         }
 
-      #pragma omp parallel for num_threads(MAX)
+      #pragma omp parallel for 
       for ( const auto & Id : idStaggeredBoundaryVectSouth )
         {
             Real alfa = 1.;
