@@ -1549,9 +1549,11 @@ main (int argc, char** argv)
   int iter = 0;
   
   
-  double c1_DSV_, c2_DSV_, c3_DSV_;
+  double c1_DSV_, c2_DSV_, c3_DSV_, H_min, H_max;
+
+  H_max = H.maxCoeff();
    
-  dt_DSV = maxdt(u, v, g, H.maxCoeff(), pixel_size);
+  dt_DSV = maxdt(u, v, g, H_max, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
   dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
       
@@ -1817,8 +1819,7 @@ main (int argc, char** argv)
     
       
       
-      const double minH = H_basin.minCoeff();
-      const double maxH = H_basin.maxCoeff();
+      minH = H_basin.minCoeff(); maxH = H_basin.maxCoeff();
       std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
       
       
