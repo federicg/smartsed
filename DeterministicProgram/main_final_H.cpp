@@ -2157,6 +2157,7 @@ main (int argc, char** argv)
 
       if (check_last)
       {
+        time = t_final;
         is_last_step = true;
       }
       
@@ -2235,6 +2236,9 @@ main (int argc, char** argv)
         if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
         {
           iter++;
+
+          std::cout << std::floor ( time / (frequency_save * 3600) ) << " " << 
+              std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) << std::endl;
 
           std::cout << "Saving solution..., current day " << iter << std::endl;
 
