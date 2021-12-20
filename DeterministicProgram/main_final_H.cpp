@@ -1560,7 +1560,7 @@ main (int argc, char** argv)
   c3_DSV_ = c3_DSV (g, c1_DSV_);
   
   double time = 0.;
-  bool is_last_step = false;
+  bool is_last_step = false, check_last = false;
   while ( !is_last_step )
     {
 
@@ -2155,7 +2155,7 @@ main (int argc, char** argv)
       
       time += dt_DSV;
 
-      if (time >= t_final)
+      if (check_last)
       {
         is_last_step = true;
       }
@@ -2171,6 +2171,7 @@ main (int argc, char** argv)
       if ((time+dt_DSV) > t_final)
       {
         dt_DSV = t_final - time;
+        check_last = true;
       }
       
       // +-----------------------------------------------+
