@@ -1508,7 +1508,7 @@ main (int argc, char** argv)
 
   upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_excluded,
                                 idStaggeredBoundaryVectWest_excluded,
-                                idStaggeredBoundaryVectEast_excluded,
+                                idStaggeredBoundaryVectEast_excluded, 
                                 idStaggeredInternalVectVertical_excluded,
                                 idStaggeredBoundaryVectNorth_excluded,
                                 idStaggeredBoundaryVectSouth_excluded, N_rows, N_cols );
@@ -1525,9 +1525,10 @@ main (int argc, char** argv)
   H_basin.resize ( idBasinVect_excluded.size() );
   rhs    .resize ( idBasinVect_excluded.size() );
   
+
   for (int i = 0; i < H_basin.size(); i++) H_basin( i ) = 0.;
   for (int i = 0; i < rhs.size(); i++) rhs( i ) = 0.;
-  
+   
   saveSolution (output_dir + "excluded_ids", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, excluded_ids);
   
   
@@ -1556,6 +1557,8 @@ main (int argc, char** argv)
   c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
   c2_DSV_ = c2_DSV (g, c1_DSV_);
   c3_DSV_ = c3_DSV (g, c1_DSV_);
+
+  
   
   double time = 0.;
   bool is_last_step = false, check_last = false;

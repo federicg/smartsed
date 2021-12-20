@@ -18,6 +18,7 @@
 #include "Eigen/Sparse"
 #include "Eigen/SparseCholesky"
 
+
 //! Python interface --> correctly the QGIS path in Makefile
 //#include "Python.h"
 
@@ -42,6 +43,7 @@ createCN_map_Gav ()
 {
   std::map<Int, std::array<Real,2> > CN;
 
+/*
   // Marrazzo evento Ottobre,
   CN[ 111 ] = std::array<Real,2>{{ 0.05,0.2 }};
   CN[ 112 ] = std::array<Real,2>{{ 0.2,0.2 }};
@@ -87,9 +89,9 @@ createCN_map_Gav ()
   CN[ 521 ] = std::array<Real,2>{{ 1,0 }};
   CN[ 522 ] = std::array<Real,2>{{ 1,0 }};
   CN[ 523 ] = std::array<Real,2>{{ 1,0 }};
+**/
 
-
-  /*
+  
   // Graziotto Luglio-Ottobre,
   CN[ 111 ] = std::array<Real,2>{{ 0.2,0.6 }};
   CN[ 112 ] = std::array<Real,2>{{ 0.6,0.6 }};
@@ -134,7 +136,7 @@ createCN_map_Gav ()
   CN[ 512 ] = std::array<Real,2>{{ 1,0 }};
   CN[ 521 ] = std::array<Real,2>{{ 1,0 }};
   CN[ 522 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 523 ] = std::array<Real,2>{{ 1,0 }};*/
+  CN[ 523 ] = std::array<Real,2>{{ 1,0 }};
 
   return CN;
 
@@ -1426,74 +1428,84 @@ void
 frictionClass::f_x ()
 {
 
-  #pragma omp parallel for 
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
+#pragma omp parallel
+  {
+
+#pragma omp for 
+    for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) 
     {
-        Real alfa = 1.;
+      Real alfa = 1.;
 
-        const auto & H_int = H_interface_horizontal[ Id ];
-        const auto & exponent = M_expo_r_x_vect[ Id ];
-        const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+      const auto & Id = idStaggeredInternalVectHorizontal[ii];
 
-        if ( den > M_H_min )
-          {
+      const auto & H_int = H_interface_horizontal[ Id ];
+      const auto & exponent = M_expo_r_x_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
-              const auto u_abs = std::abs( u[ Id ] );
+      if ( den > M_H_min )
+      {
 
-              Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-              coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-              alfa = 1. / ( 1. + coeff );
-          }
+        const auto u_abs = std::abs( u[ Id ] );
 
-        alfa_x[ Id ] = alfa;
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
+      }
+
+      alfa_x[ Id ] = alfa;
 
     }
 
-    #pragma omp parallel for 
-    for ( const auto & Id : idStaggeredBoundaryVectWest )
+#pragma omp for 
+    for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) 
+    {
+      Real alfa = 1.;
+
+      const auto & Id = idStaggeredBoundaryVectWest[ii];
+
+      const auto & H_int = H_interface_horizontal[ Id ];
+      const auto & exponent = M_expo_r_x_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+      if ( den > M_H_min )
       {
-          Real alfa = 1.;
 
-          const auto & H_int = H_interface_horizontal[ Id ];
-          const auto & exponent = M_expo_r_x_vect[ Id ];
-          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+        const auto u_abs = std::abs( u[ Id ] );
 
-          if ( den > M_H_min )
-            {
-
-                const auto u_abs = std::abs( u[ Id ] );
-
-                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-                alfa = 1. / ( 1. + coeff );
-            }
-
-          alfa_x[ Id ] = alfa;
-
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
       }
 
-    #pragma omp parallel for 
-    for ( const auto & Id : idStaggeredBoundaryVectEast )
+      alfa_x[ Id ] = alfa;
+
+    }
+
+#pragma omp for 
+    for ( int ii=0; ii<idStaggeredBoundaryVectEast.size(); ii++ ) 
+    {
+      Real alfa = 1.; 
+
+      const auto & Id = idStaggeredBoundaryVectEast[ii];
+
+      const auto & H_int = H_interface_horizontal[ Id ];
+      const auto & exponent = M_expo_r_x_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+      if ( den > M_H_min )
       {
-          Real alfa = 1.;
 
-          const auto & H_int = H_interface_horizontal[ Id ];
-          const auto & exponent = M_expo_r_x_vect[ Id ];
-          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+        const auto u_abs = std::abs( u[ Id ] );
 
-          if ( den > M_H_min )
-            {
-
-                const auto u_abs = std::abs( u[ Id ] );
-
-                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-                alfa = 1. / ( 1. + coeff );
-            }
-
-          alfa_x[ Id ] = alfa;
-
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
       }
+
+      alfa_x[ Id ] = alfa; 
+
+    }
+  }
 
 }
 
@@ -1502,77 +1514,87 @@ void
 frictionClass::f_y ()
 {
 
-    #pragma omp parallel for 
-    for ( const auto & Id : idStaggeredInternalVectVertical )
+#pragma omp parallel
+  {
+
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ )  
+    {
+      Real alfa = 1.;
+
+      const auto & Id = idStaggeredInternalVectVertical[ii];
+
+      const auto & H_int = H_interface_vertical[ Id ];
+      const auto & exponent = M_expo_r_y_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+      if ( den > M_H_min )
       {
-          Real alfa = 1.;
 
-          const auto & H_int = H_interface_vertical[ Id ];
-          const auto & exponent = M_expo_r_y_vect[ Id ];
-          const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+        const auto v_abs = std::abs( v[ Id ] );
 
-          if ( den > M_H_min )
-            {
-
-                const auto v_abs = std::abs( v[ Id ] );
-
-                Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-                coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-                alfa = 1. / ( 1. + coeff );
-            }
-
-
-          alfa_y[ Id ] = alfa;
-
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
       }
 
-      #pragma omp parallel for 
-      for ( const auto & Id : idStaggeredBoundaryVectNorth )
-        {
-            Real alfa = 1.;
 
-            const auto & H_int = H_interface_vertical[ Id ];
-            const auto & exponent = M_expo_r_y_vect[ Id ];
-            const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+      alfa_y[ Id ] = alfa;
 
-            if ( den > M_H_min )
-              {
+    } 
 
-                  const auto v_abs = std::abs( v[ Id ] );
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) 
+    {
+      Real alfa = 1.;
 
-                  Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-                  coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-                  alfa = 1. / ( 1. + coeff );
-              }
+      const auto & Id = idStaggeredBoundaryVectNorth[ii];
 
+      const auto & H_int = H_interface_vertical[ Id ];
+      const auto & exponent = M_expo_r_y_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
 
-            alfa_y[ Id ] = alfa;
+      if ( den > M_H_min )
+      {
 
-        }
+        const auto v_abs = std::abs( v[ Id ] );
 
-      #pragma omp parallel for 
-      for ( const auto & Id : idStaggeredBoundaryVectSouth )
-        {
-            Real alfa = 1.;
-
-            const auto & H_int = H_interface_vertical[ Id ];
-            const auto & exponent = M_expo_r_y_vect[ Id ];
-            const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-            if ( den > M_H_min )
-              {
-
-                  const auto v_abs = std::abs( v[ Id ] );
-
-                  Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-                  coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-                  alfa = 1. / ( 1. + coeff );
-              }
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
+      }
 
 
-            alfa_y[ Id ] = alfa;
+      alfa_y[ Id ] = alfa;
 
-        }
+    }
+
+#pragma omp for
+    for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) 
+    {
+      Real alfa = 1.;
+
+      const auto & Id = idStaggeredBoundaryVectSouth[ii];
+
+      const auto & H_int = H_interface_vertical[ Id ];
+      const auto & exponent = M_expo_r_y_vect[ Id ];
+      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+      if ( den > M_H_min )
+      {
+
+        const auto v_abs = std::abs( v[ Id ] );
+
+        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+        alfa = 1. / ( 1. + coeff );
+      }
+
+
+      alfa_y[ Id ] = alfa;
+
+    }
+  }
 
 }
 
