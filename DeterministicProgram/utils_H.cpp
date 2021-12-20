@@ -1428,10 +1428,10 @@ void
 frictionClass::f_x ()
 {
 
-#pragma omp parallel
+//#pragma omp parallel
   {
 
-#pragma omp for 
+//#pragma omp for 
     for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) 
     {
       Real alfa = 1.;
@@ -1456,7 +1456,7 @@ frictionClass::f_x ()
 
     }
 
-#pragma omp for 
+//#pragma omp for 
     for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) 
     {
       Real alfa = 1.;
@@ -1481,7 +1481,7 @@ frictionClass::f_x ()
 
     }
 
-#pragma omp for 
+//#pragma omp for 
     for ( int ii=0; ii<idStaggeredBoundaryVectEast.size(); ii++ ) 
     {
       Real alfa = 1.; 
@@ -1514,10 +1514,10 @@ void
 frictionClass::f_y ()
 {
 
-#pragma omp parallel
+//#pragma omp parallel
   {
 
-#pragma omp for
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ )  
     {
       Real alfa = 1.;
@@ -1543,7 +1543,7 @@ frictionClass::f_y ()
 
     } 
 
-#pragma omp for
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) 
     {
       Real alfa = 1.;
@@ -1569,7 +1569,7 @@ frictionClass::f_y ()
 
     }
 
-#pragma omp for
+//#pragma omp for
     for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) 
     {
       Real alfa = 1.;
