@@ -1549,11 +1549,11 @@ main (int argc, char** argv)
   int iter = 0;
   
   
-  double c1_DSV_, c2_DSV_, c3_DSV_, H_min, H_max;
+  double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
 
-  H_max = H.maxCoeff();
+  maxH = H.maxCoeff();
    
-  dt_DSV = maxdt(u, v, g, H_max, pixel_size);
+  dt_DSV = maxdt(u, v, g, maxH, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
   dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
       
@@ -1566,7 +1566,7 @@ main (int argc, char** argv)
   while ( !is_last_step )
     {
 
-      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runout vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runout cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << " H has been negative: " << isHNegative << std::endl;
+      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface runout vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface runout cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
       std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
 
       tic();
@@ -1886,7 +1886,7 @@ main (int argc, char** argv)
       
       
       
-      
+      /*
       for ( const UInt& k : idBasinVect )
         {
           if ( H ( k ) < 0 )
@@ -1896,7 +1896,7 @@ main (int argc, char** argv)
               
               eta ( k ) = H ( k ) + orography[ k ];
             }
-        }
+        }*/
 
 
 

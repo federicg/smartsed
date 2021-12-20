@@ -1226,7 +1226,7 @@ Temperature::computeTemperature (const UInt&              i,
       exit( -1 );
     }
 
-  for ( const auto & j : idBasinVect )
+  for ( const auto & j : idBasinVect ) 
     {
       T_raster [ j ] = T + Temp_diff * ( orography[ j ] - height_th );
       melt_mask[ j ] = ( T_raster[ j ] > T_crit );    // melt_mask = 1 -\mu in the paper
@@ -1426,7 +1426,7 @@ void
 frictionClass::f_x ()
 {
 
-  
+  #pragma omp parallel for num_threads(MAX)  
   for ( const auto & Id : idStaggeredInternalVectHorizontal )
     {
         Real alfa = 1.;
@@ -1449,6 +1449,7 @@ frictionClass::f_x ()
 
     }
 
+    #pragma omp parallel for num_threads(MAX)
     for ( const auto & Id : idStaggeredBoundaryVectWest )
       {
           Real alfa = 1.;
@@ -1471,6 +1472,7 @@ frictionClass::f_x ()
 
       }
 
+    #pragma omp parallel for num_threads(MAX)
     for ( const auto & Id : idStaggeredBoundaryVectEast )
       {
           Real alfa = 1.;
@@ -1500,6 +1502,7 @@ void
 frictionClass::f_y ()
 {
 
+    #pragma omp parallel for num_threads(MAX)
     for ( const auto & Id : idStaggeredInternalVectVertical )
       {
           Real alfa = 1.;
@@ -1523,6 +1526,7 @@ frictionClass::f_y ()
 
       }
 
+      #pragma omp parallel for num_threads(MAX)
       for ( const auto & Id : idStaggeredBoundaryVectNorth )
         {
             Real alfa = 1.;
@@ -1546,6 +1550,7 @@ frictionClass::f_y ()
 
         }
 
+      #pragma omp parallel for num_threads(MAX)
       for ( const auto & Id : idStaggeredBoundaryVectSouth )
         {
             Real alfa = 1.;
