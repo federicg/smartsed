@@ -68,10 +68,17 @@
 //! for simple profiling
 #include "timing.h"
 
+
+
 int
 main (int argc, char** argv)
 {
 
+  // Initialize MPI
+  MPI_Init (&argc, &argv);
+  int rank, size;
+  MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+  MPI_Comm_size (MPI_COMM_WORLD, &size);
 
   tic();
   // Reading parameters through GetPot
@@ -118,17 +125,18 @@ main (int argc, char** argv)
   const Real dt_DSV_given  = t_final / Real ( nstep );
   Real dt_DSV = dt_DSV_given;
 
-
-  std::cout << "------------------------ "                            << std::endl;
-  std::cout << "friction_model         = " << friction_model          << std::endl;
-  std::cout << "n_manning              = " << n_manning               << std::endl;
-  std::cout << "steps_per_hour         = " << steps_per_hour          << std::endl;
-  std::cout << "max_Days               = " << max_Days                << std::endl;
-  std::cout << "t_final                = " << t_final    << " sec."   << std::endl;
-  std::cout << "dt_DSV_given           = " << dt_DSV     << " sec."   << std::endl;
-  std::cout << "H_min                  = " << H_min                   << std::endl;
-  std::cout << "------------------------ "                            << std::endl;
-
+  if (rank == 0)
+  {
+    std::cout << "------------------------ "                            << std::endl;
+    std::cout << "friction_model         = " << friction_model          << std::endl;
+    std::cout << "n_manning              = " << n_manning               << std::endl;
+    std::cout << "steps_per_hour         = " << steps_per_hour          << std::endl;
+    std::cout << "max_Days               = " << max_Days                << std::endl;
+    std::cout << "t_final                = " << t_final    << " sec."   << std::endl;
+    std::cout << "dt_DSV_given           = " << dt_DSV     << " sec."   << std::endl;
+    std::cout << "H_min                  = " << H_min                   << std::endl;
+    std::cout << "------------------------ "                            << std::endl;
+  }
   toc ("parse command line");
 
   // +-----------------------------------------------+
@@ -156,7 +164,7 @@ main (int argc, char** argv)
   const bool restart_soilMoisture  = dataFile ( "files/initial_conditions/restart_soilMoisture",  false );
 
   
-
+  if (rank == 0)
   {
     const std::string cmd_str = "mkdir -p " + output_dir;
     char* chararray_cmd = new char[ cmd_str.length() + 1 ];
@@ -255,11 +263,11 @@ main (int argc, char** argv)
     Raster orographyMat ( file_dir + orography_file );
     Raster basin_mask   ( file_dir + mask_file      );
 
-    if ( basin_mask.cellsize != orographyMat.cellsize )
-      {
-        std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
-        exit ( -1 );
-      }
+    if ( basin_mask.cellsize != orographyMat.cellsize && rank==0 )
+    {
+      std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
+      exit ( -1 );
+    }
 
     pixel_size = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
 
@@ -269,28 +277,30 @@ main (int argc, char** argv)
     xllcorner    = basin_mask.xllcorner;
     yllcorner    = basin_mask.yllcorner;
     NODATA_value = basin_mask.NODATA_value;
-    if ( basin_mask.cellsize <= pixel_size )
+    if (rank==0)
+    {
+      if ( basin_mask.cellsize <= pixel_size )
       {
 
         const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                        "dem=raster('" + file_dir + orography_file + "');" +
-                                        "basin=raster('" + file_dir + mask_file + "');" +
-                                        "basin=aggregate(basin," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
-                                        "values(basin)[values(basin)>0]=1;" +
-                                        "dem=resample(dem,basin,method='bilinear');" +
+        "dem=raster('" + file_dir + orography_file + "');" +
+        "basin=raster('" + file_dir + mask_file + "');" +
+        "basin=aggregate(basin," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
+        "values(basin)[values(basin)>0]=1;" +
+        "dem=resample(dem,basin,method='bilinear');" +
                                         //"values(dem)[is.na(values(dem))]=0;" +
-                                        "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
-                                        "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
+        "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
+        "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
         std::system ( bashCommand.c_str() );
       }
-    else
+      else
       {
         std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
         exit ( -1. );
       }
+    }
 
-
-    if ( dataFile( "discretization/FillSinks", false ) )
+    if ( dataFile( "discretization/FillSinks", false ) && rank==0 )
       {
             
           std::string bashCommand = std::string( "python3 -c " ) + "\"import os; import sys; import gdal; cwd = os.getcwd();" +
@@ -311,6 +321,7 @@ main (int argc, char** argv)
 
 
   }
+  MPI_Barrier (MPI_COMM_WORLD);
 
   {
 
@@ -420,7 +431,7 @@ main (int argc, char** argv)
         eta ( i ) = 0.;
       }
 
-      saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
+      if (rank==0) saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
     }
 
 
@@ -1119,7 +1130,7 @@ main (int argc, char** argv)
   tic();
   for ( const auto& k : idBasinVect )
     {
-      const UInt i = k / N_cols;
+      const UInt i = k/N_cols;
       slope_cell[ k ] = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
 
       Z_Gav[ k ] *= ( .5 + std::sqrt ( slope_cell[ k ] ) );
@@ -2275,9 +2286,10 @@ main (int argc, char** argv)
     } // End Time Loop
 
 
-
-  print_timing_report();
-
+  // Close MPI and print report
+  MPI_Barrier (MPI_COMM_WORLD);
+  if (rank == 0) { print_timing_report (); }
+  MPI_Finalize ();
   return ( EXIT_SUCCESS );
 
 }

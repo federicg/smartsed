@@ -95,8 +95,6 @@ main (int argc, char** argv)
 
   const bool        direct_method          = dataFile ( "linear_solver/direct_method", true );
 
-  const Real        X_gauges               = dataFile ( "discretization/X_gauges", 530850.173 );
-  const Real        Y_gauges               = dataFile ( "discretization/Y_gauges", 5077721.741 );
   const bool        save_temporal_sequence = dataFile ( "discretization/save_temporal_sequence", false );
   const bool        isNonReflectingBC      = dataFile ( "discretization/isNonReflectingBC", false );
 
@@ -108,8 +106,6 @@ main (int argc, char** argv)
   std::string       tmpname = "";
 
   const bool        spit_out_solutions_each_time_step = dataFile ( "debug/spit_out_solutions_each_time_step", false );
-  
-  const Vector2D    XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
   
   const Real        frequency_save         = dataFile( "debug/frequency_save", 24. );
 
@@ -1117,7 +1113,7 @@ main (int argc, char** argv)
   // +-----------------------------------------------+
 
   tic();
-  for ( const auto& k : idBasinVect )
+  for ( const auto & k : idBasinVect )
     {
       const UInt i = k / N_cols;
       slope_cell[ k ] = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
@@ -1133,9 +1129,76 @@ main (int argc, char** argv)
 
   tic();
 
-  std::vector<UInt> kk_gauges;
+  std::vector<std::vector<UInt> > kk_gauges;
 
+  const Int number_gauges = dataFile ( "discretization/number_gauges", 1 );
   const double delta_gauges = dataFile ( "discretization/delta_gauges", 0 );
+
+
+  kk_gauges.resize(number_gauges);
+
+  for (Int number=1; number<=number_gauges; number++)
+  {
+    std::string filename_x = "discretization/X_gauges_", 
+                filename_y = "discretization/Y_gauges_";
+
+    filename_x += std::to_string(number); 
+    filename_y += std::to_string(number);
+
+    const Real X_gauges = dataFile ( filename_x.c_str(), 0.);
+    const Real Y_gauges = dataFile ( filename_y.c_str(), 0.);
+
+    const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
+
+
+    if ( save_temporal_sequence )
+    {
+
+      const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
+
+      auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
+
+      auto XX_east  = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+      auto XX_west  = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+
+      auto XX_south = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+      auto XX_north = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+
+      XX(1) = -std::round(XX(1));
+      XX(0) =  std::round(XX(0));
+      if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
+      {
+        std::cout << "The gauges in the input file are not good" << std::endl;
+        exit ( 1. );
+      }
+
+
+      int i_1 = -std::round(XX_north(1));
+      int i_2 = -std::round(XX_south(1));
+
+      int j_1 = std::round(XX_west(0));
+      int j_2 = std::round(XX_east(0));
+
+      i_1 = std::min(std::max(i_1, 0), int(N_rows-1));
+      j_1 = std::min(std::max(j_1, 0), int(N_cols-1));
+
+      i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
+      j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
+
+
+      for (int i = i_2; i <= i_1; i++)
+      {
+        for (int j = j_1; j <= j_2; j++)
+        {
+          kk_gauges[number-1].push_back(i * N_cols + j);
+        }
+      }
+
+    }
+
+  }
+
+/*
   if ( save_temporal_sequence )
     {
 
@@ -1179,7 +1242,7 @@ main (int argc, char** argv)
         }
       }
 
-    }
+    }*/
 
   toc ("gauges i,j ");
   
@@ -2175,26 +2238,42 @@ main (int argc, char** argv)
       if ( save_temporal_sequence )
       {
 
-        double H_current = 0.;
-        UInt kk_gauges_max = 0;
-        for (const auto candidate : kk_gauges)
+        for (Int number=1; number<=number_gauges; number++)
         {
-          const auto & cc = H[ candidate ];
-          if (cc > H_current)
+          std::string filename_x = "discretization/X_gauges_", 
+                      filename_y = "discretization/Y_gauges_";
+
+          filename_x += std::to_string(number); 
+          filename_y += std::to_string(number);
+
+          const Real X_gauges = dataFile ( filename_x.c_str(), 0.);
+          const Real Y_gauges = dataFile ( filename_y.c_str(), 0.);
+
+          const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
+
+
+
+          double H_current = 0.;
+          UInt kk_gauges_max = 0;
+          for (const auto candidate : kk_gauges[number-1])
           {
-            kk_gauges_max = candidate;
-            H_current = cc;
+            const auto & cc = H[ candidate ];
+            if (cc > H_current)
+            {
+              kk_gauges_max = candidate;
+              H_current = cc;
+            }
           }
+          const UInt i = kk_gauges_max/N_cols;
+
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
+            H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+             std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+            h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
         }
-        const UInt i = kk_gauges_max/N_cols;
-        
-        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight", H[ kk_gauges_max ] );
-        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux",
-                              H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-                                                               std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
-        saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux",
-                              h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-                                                                  std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
       }
       
       
