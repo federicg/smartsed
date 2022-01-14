@@ -1632,9 +1632,9 @@ main (int argc, char** argv)
   c2_DSV_ = c2_DSV (g, c1_DSV_);
   c3_DSV_ = c3_DSV (g, c1_DSV_);
 
-  omp_set_num_threads(omp_get_num_procs());
+  //omp_set_num_threads(omp_get_num_procs());
 
-  std::cout << "# of available threads, " << omp_get_num_procs() << std::endl;
+  //std::cout << "# of available threads, " << omp_get_num_procs() << std::endl; 
   
   
   double time = 0.; 
@@ -2228,7 +2228,7 @@ main (int argc, char** argv)
         is_last_step = true;
       }
       
-      is_last_step = true;
+      //is_last_step = true;
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
