@@ -10,18 +10,10 @@
 # X = 532714.4289
 # Y = 5081673.379
 
-# steps_per_hour
-# 100 metri --> 1500
-# 50 metri --> 2700
-# 40 metri --> 3000
-# 30 metri --> 3900
-# 25 metri --> 4200
-# 10 metri --> 8400
-
 
       
 [files]
-    orography_file              = realOrography/DEM_tanks.asc  #DEM_tanks.asc
+    orography_file              = realOrography/DEM.asc  #DEM_tanks.asc
     mask_file                   = realOrography/Mask_bin.asc #mask.asc copre tutto il bacino
 
     [./meteo_data]
@@ -34,11 +26,11 @@
     constant_precipitation      = false  # false: IDW
 
     # comune lecco files
-    rain_file                   = pioggia_test.txt 
-    time_spacing_rain           = 0.1667
+    rain_file                   = pioggia_id.txt #100_anni.txt #rain/event/pioggia_id.txt 
+    time_spacing_rain           = 1 #0.1667
 
     # arpa files
-    number_stations             = 9 
+    number_stations             = 9
     # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
     rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_ev0.txt
     X_1                         = 539709.2
@@ -90,11 +82,11 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_ev.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/H_ev_5.asc   #realOrography/H.asc
     
     restart_vel                 = true
-    vel_file_u                  = ../Outputs/initial_cond/u_ev.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_ev.asc
+    vel_file_u                  = ../Outputs/initial_cond/u_ev_5.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_ev_5.asc
     
     restart_snow                = false
     snow_file                   = ../Outputs/restart/hsn_1.asc
@@ -105,18 +97,18 @@
     restart_gravitational       = false
     gravitational_file          = ../Outputs/restart/hG_1.asc
 
-    restart_soilMoisture        = false
-    clay_file                   = ideal/clay_id.asc
-    sand_file                   = ideal/sand_id.asc
+    restart_soilMoisture        = true
+    clay_file                   = ../Outputs/initial_cond/clay_0.asc 
+    sand_file                   = ../Outputs/initial_cond/sand_0.asc 
 
     [../]
 
     [./infiltration]
     infiltration_model           = SCS-CN # None, SCS-CN
     isInitialLoss                = true
-    roughness_scale_factor1      = 1.e2
-    roughness_scale_factor2      = 1.e2
-    roughness_scale_factor3      = 1.e2
+    roughness_scale_factor1      = 1.e0
+    roughness_scale_factor2      = 1.e0
+    roughness_scale_factor3      = 1.e0
     perc_initialLoss             = 0.2  # i.e. c in I_a <= c * S
     corineCode_file              = CorineLandCover/CaldoneCLC_5.asc
 
@@ -146,16 +138,23 @@
    FillSinks = false
 
    # per ora time_spacing deve essere un numero intero
-   steps_per_hour    = 50    # number of time steps per hour
-   max_Days          = 35   # maximum number of simulated days
+   steps_per_hour    = 5    # number of time steps per hour
+   max_Days          = 1   # maximum number of simulated days
    H_min             = 1.e-5 # threshold for max mass loss
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
 
-   # for H, 530884.2, 5077668,
-   X_gauges          = 530850.173
-   Y_gauges          = 5077721.741
-   delta_gauges      = 50
+   # 
+   number_gauges = 2;
+
+   X_gauges_1          = 530850.173
+   Y_gauges_1          = 5077721.741
+
+   X_gauges_2          = 531640.745
+   Y_gauges_2          = 5078711.930
+
+
+   delta_gauges      = 7.5
 
    save_temporal_sequence = true # if true the value of the gauges are considered
 
