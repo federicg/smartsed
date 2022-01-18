@@ -26,12 +26,12 @@
     @file main.cpp
     @brief
 
-    @author      Federico     Gatti               MOX Politecnico di Milano   <federico.gatti@polimi.it>
+    @author      Federico     Gatti        MOX Politecnico di Milano               <federico.gatti@polimi.it>
     @mantainer
 
-    @supervisors       Luca           Bonaventura  MOX Politecnico di Milano   <luca.bonaventura@polimi.it>
-                 Alessandra Menafoglio     MOX Politecnico di Milano   <alessandra.menafoglio@polimi.it>
-                 Laura          Longoni          Applied Geology Politecnico di Milano   <laura.longoni@polimi.it>
+    @supervisors Luca         Bonaventura  MOX Politecnico di Milano               <luca.bonaventura@polimi.it>
+                 Alessandra   Menafoglio   MOX Politecnico di Milano               <alessandra.menafoglio@polimi.it>
+                 Laura        Longoni      Applied Geology Politecnico di Milano   <laura.longoni@polimi.it>
 
     @date 20-06-2020
 
@@ -103,7 +103,7 @@ main (int argc, char** argv)
   const bool        spit_out_matrix        = dataFile ( "debug/spit_out_matrix", false );
   const std::string matrix_name            = dataFile ( "debug/matrix_name", "/tmp/matrix_" );
   const std::string vector_name            = dataFile ( "debug/vector_name", "/tmp/vector_" );
-  std::string       tmpname = "";
+        std::string tmpname = "";
 
   const bool        spit_out_solutions_each_time_step = dataFile ( "debug/spit_out_solutions_each_time_step", false );
   
@@ -1131,8 +1131,8 @@ main (int argc, char** argv)
 
   std::vector<std::vector<UInt> > kk_gauges;
 
-  const Int number_gauges = dataFile ( "discretization/number_gauges", 1 );
-  const double delta_gauges = dataFile ( "discretization/delta_gauges", 0 );
+  const Int    number_gauges = dataFile ( "discretization/number_gauges", 1 );
+  const double delta_gauges  = dataFile ( "discretization/delta_gauges",  0 );
 
 
   kk_gauges.resize(number_gauges);
@@ -2277,7 +2277,7 @@ main (int argc, char** argv)
       }
       
       
-      // zone sorgenti,
+      // sediment production zones,
       for ( const UInt& k : idBasinVect )
         {
           W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );

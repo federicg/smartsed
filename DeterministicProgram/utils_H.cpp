@@ -1475,84 +1475,76 @@ void
 frictionClass::f_x ()
 {
 
-//#pragma omp parallel
+
+  for ( const auto & Id : idStaggeredInternalVectHorizontal )
   {
+    Real alfa = 1.;
 
-//#pragma omp for 
-    for ( int ii=0; ii<idStaggeredInternalVectHorizontal.size(); ii++ ) 
+    const auto & H_int = H_interface_horizontal[ Id ];
+    const auto & exponent = M_expo_r_x_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
     {
-      Real alfa = 1.;
 
-      const auto & Id = idStaggeredInternalVectHorizontal[ii];
+      const auto u_abs = std::abs( u[ Id ] );
 
-      const auto & H_int = H_interface_horizontal[ Id ];
-      const auto & exponent = M_expo_r_x_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto u_abs = std::abs( u[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-      alfa_x[ Id ] = alfa;
-
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
     }
 
-//#pragma omp for 
-    for ( int ii=0; ii<idStaggeredBoundaryVectWest.size(); ii++ ) 
-    {
-      Real alfa = 1.;
+    alfa_x[ Id ] = alfa;
 
-      const auto & Id = idStaggeredBoundaryVectWest[ii];
-
-      const auto & H_int = H_interface_horizontal[ Id ];
-      const auto & exponent = M_expo_r_x_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto u_abs = std::abs( u[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-      alfa_x[ Id ] = alfa;
-
-    }
-
-//#pragma omp for 
-    for ( int ii=0; ii<idStaggeredBoundaryVectEast.size(); ii++ ) 
-    {
-      Real alfa = 1.; 
-
-      const auto & Id = idStaggeredBoundaryVectEast[ii];
-
-      const auto & H_int = H_interface_horizontal[ Id ];
-      const auto & exponent = M_expo_r_x_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto u_abs = std::abs( u[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-      alfa_x[ Id ] = alfa; 
-
-    }
   }
+
+
+  for ( const auto & Id : idStaggeredBoundaryVectWest )
+  {
+    Real alfa = 1.;
+
+
+    const auto & H_int = H_interface_horizontal[ Id ];
+    const auto & exponent = M_expo_r_x_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
+    {
+
+      const auto u_abs = std::abs( u[ Id ] );
+
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
+    }
+
+    alfa_x[ Id ] = alfa;
+
+  }
+
+
+  for ( const auto & Id : idStaggeredBoundaryVectEast )
+  {
+    Real alfa = 1.; 
+
+    const auto & H_int = H_interface_horizontal[ Id ];
+    const auto & exponent = M_expo_r_x_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
+    {
+
+      const auto u_abs = std::abs( u[ Id ] );
+
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_x_[ Id ] * std::pow( u_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
+    }
+
+    alfa_x[ Id ] = alfa; 
+
+  }
+
 
 }
 
@@ -1561,87 +1553,79 @@ void
 frictionClass::f_y ()
 {
 
-//#pragma omp parallel
+
+
+  for ( const auto & Id : idStaggeredInternalVectVertical ) 
   {
+    Real alfa = 1.;
 
-//#pragma omp for
-    for ( int ii=0; ii<idStaggeredInternalVectVertical.size(); ii++ )  
+    const auto & H_int = H_interface_vertical[ Id ];
+    const auto & exponent = M_expo_r_y_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
     {
-      Real alfa = 1.;
 
-      const auto & Id = idStaggeredInternalVectVertical[ii];
+      const auto v_abs = std::abs( v[ Id ] );
 
-      const auto & H_int = H_interface_vertical[ Id ];
-      const auto & exponent = M_expo_r_y_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto v_abs = std::abs( v[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-
-      alfa_y[ Id ] = alfa;
-
-    } 
-
-//#pragma omp for
-    for ( int ii=0; ii<idStaggeredBoundaryVectNorth.size(); ii++ ) 
-    {
-      Real alfa = 1.;
-
-      const auto & Id = idStaggeredBoundaryVectNorth[ii];
-
-      const auto & H_int = H_interface_vertical[ Id ];
-      const auto & exponent = M_expo_r_y_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto v_abs = std::abs( v[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-
-      alfa_y[ Id ] = alfa;
-
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
     }
 
-//#pragma omp for
-    for ( int ii=0; ii<idStaggeredBoundaryVectSouth.size(); ii++ ) 
+
+    alfa_y[ Id ] = alfa;
+
+  } 
+
+
+  for ( const auto & Id : idStaggeredBoundaryVectNorth ) 
+  {
+    Real alfa = 1.;
+
+    const auto & H_int = H_interface_vertical[ Id ];
+    const auto & exponent = M_expo_r_y_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
     {
-      Real alfa = 1.;
 
-      const auto & Id = idStaggeredBoundaryVectSouth[ii];
+      const auto v_abs = std::abs( v[ Id ] );
 
-      const auto & H_int = H_interface_vertical[ Id ];
-      const auto & exponent = M_expo_r_y_vect[ Id ];
-      const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
-
-      if ( den > M_H_min )
-      {
-
-        const auto v_abs = std::abs( v[ Id ] );
-
-        Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
-        coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
-        alfa = 1. / ( 1. + coeff );
-      }
-
-
-      alfa_y[ Id ] = alfa;
-
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
     }
+
+
+    alfa_y[ Id ] = alfa;
+
   }
+
+
+  for ( const auto & Id : idStaggeredBoundaryVectSouth ) 
+  {
+    Real alfa = 1.;
+
+    const auto & H_int = H_interface_vertical[ Id ];
+    const auto & exponent = M_expo_r_y_vect[ Id ];
+    const auto den = std::pow( H_int, M_expo + exponent * (M_frictionModel == 2) );
+
+    if ( den > M_H_min )
+    {
+
+      const auto v_abs = std::abs( v[ Id ] );
+
+      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den * (M_frictionModel > 0);
+      coeff = std::max( coeff, M_dt_DSV * M_gamma_dt_DSV_y_[ Id ] * std::pow( v_abs, 1. - exponent * (M_frictionModel == 2) ) / den );
+      alfa = 1. / ( 1. + coeff );
+    }
+
+
+    alfa_y[ Id ] = alfa;
+
+  }
+  
 
 }
 
@@ -2840,14 +2824,13 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
     {
       for ( UInt j = 0; j < N_cols; j++ )
         {
-          const UInt k = j + i * N_cols;
+          const UInt k = j + i*N_cols;
 
           idBasinVectReIndex.push_back( h );
 
           if ( basin_mask_Vec[ k ] == 1 )
             {
               idBasinVect.push_back( k );
-              //                std::cout << k << std::endl;
               h++;
             }
         }
@@ -2862,7 +2845,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
     {
       for ( UInt j = 0; j < N_cols; j++ )
         {
-          const UInt IDcell       = j + i * N_cols,
+          const UInt IDcell       = j + i*N_cols,
             IDcell_south = IDcell + N_cols,
 
             IDvel        = IDcell + N_cols; // interface between IDcell and IDcell_south
@@ -2918,7 +2901,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
   // +-----------------------------------------------+
 
 
-  // cicle on centered cells
+  // cycle on centered cells
   for ( UInt i = 0; i < N_rows; i++ )
     {
       for ( UInt j = 0; j < N_cols; j++ )
@@ -2974,14 +2957,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
         }
     }
 
-  /*
-    for (UInt i = 0; i < idStaggeredBoundaryVectEast.size(); i++)
-    {
-    //        if ( idBasinVect[ i ] != idBasinVectReIndex[ i ])
-    std::cout << idStaggeredBoundaryVectEast[ i ] << std::endl;
-    }
-    exit(1);*/
-
 
 }
 
@@ -3033,7 +3008,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
       if ( basin_mask_Vec[ k ] == 1 )
       {
         idBasinVect.push_back( k );
-          //                std::cout << k << std::endl;
         h++;
       }
     }
@@ -3111,7 +3085,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
     {
       const UInt IDcell      = j + i * N_cols,
       IDcell_east = IDcell + 1,
-      
       IDvel       = IDcell + i + 1; // interface between IDcell and IDcell_east
       
       
@@ -3160,13 +3133,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
     }
   }
   
-  /*
-   for (UInt i = 0; i < idStaggeredBoundaryVectEast.size(); i++)
-   {
-   //        if ( idBasinVect[ i ] != idBasinVectReIndex[ i ])
-   std::cout << idStaggeredBoundaryVectEast[ i ] << std::endl;
-   }
-   exit(1);*/
   
   
 }
@@ -3255,9 +3221,8 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     
     
-      // define H at interfaces
+    // define H at interfaces
     const auto H_interface = H_int_x[ Id ];
-    
     const Real coeff_m = H_interface * alfa_x[ Id ];
     
     
@@ -3352,9 +3317,8 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     
     
-      // define H at interfaces
+    // define H at interfaces
     const auto H_interface = H_int_y[ Id ];
-    
     
     const Real coeff_m = H_interface * alfa_y[ Id ];
     
@@ -3537,7 +3501,7 @@ putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal
                       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
                       const std::vector<UInt>& idStaggeredBoundaryVectSouth,
                       const std::vector<UInt>& idBasinVect,
-                      const UInt& N_cols,
+                      const UInt&              N_cols,
                       const std::vector<std::tuple<bool, int> >& excluded_ids,
 
                             Eigen::VectorXd&   H,
@@ -3951,6 +3915,22 @@ compute_dt_sediment (const Real&              alpha,
 
 }
 
+UInt
+current_start_chunk(const UInt& rank, const std::vector<UInt>& chunk_length_vec)
+{
+  UInt result;
+  if (rank-1<0)
+  {
+    result = 0;
+  }
+  else
+  {
+    result = chunk_length_vec[rank-1] + current_start_chunk(rank-1, chunk_length_vec, result);
+  }
+
+  return(result);
+
+}
 
 void
 saveVector (const Eigen::VectorXd& b,

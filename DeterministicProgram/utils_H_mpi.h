@@ -8,6 +8,8 @@
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
+
+#include <mpi.h>
  
 namespace Eigen {
   
@@ -704,8 +706,6 @@ compute_dt_sediment (const Real&              alpha,
                      const Real&              dt_DSV,
                      UInt&              numberOfSteps);
 
-UInt
-current_start_chunk(const UInt& rank, const std::vector<UInt>& chunk_length_vec);
 
 void
 saveVector (const Eigen::VectorXd& b,
