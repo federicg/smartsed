@@ -59,7 +59,8 @@
 
 */
 
-#include "utils_H.h"
+
+#include "utils_H_mpi.h"
 
 //! Parse library
 #include "GetPot.hpp"
@@ -70,16 +71,25 @@
 
 
 
+
+
 int
 main (int argc, char** argv)
 {
 
-  // Initialize MPI
-  MPI_Init (&argc, &argv);
-  int rank, size;
-  MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-  MPI_Comm_size (MPI_COMM_WORLD, &size);
+  LIS_Comm comm;
 
+  // Initialize MPI
+  lis_initialize (&argc, &argv);
+
+  comm = LIS_COMM_WORLD;
+  
+  int rank, size;
+  MPI_Comm_rank (comm, &rank);
+  MPI_Comm_size (comm, &size);  
+
+  
+  
   tic();
   // Reading parameters through GetPot
   GetPot command_line (argc, argv);
@@ -178,7 +188,7 @@ main (int argc, char** argv)
   const std::string infiltrationModel = dataFile ( "files/infiltration/infiltration_model", "None" );
 
 
-  /* Static Variables */
+  //- Static Variables -//
 
   UInt N_rows,
        N_cols,
@@ -192,15 +202,17 @@ main (int argc, char** argv)
       idStaggeredInternalVectVertical,
       idBasinVect,
       idBasinVectReIndex,
-  
-      idStaggeredBoundaryVectSouth_excluded,
-      idStaggeredBoundaryVectNorth_excluded,
-      idStaggeredBoundaryVectWest_excluded,
-      idStaggeredBoundaryVectEast_excluded,
-      idStaggeredInternalVectHorizontal_excluded,
-      idStaggeredInternalVectVertical_excluded,
-      idBasinVect_excluded,
-      idBasinVectReIndex_excluded;
+
+      idStaggeredBoundaryVectSouth_mpi,
+      idStaggeredBoundaryVectNorth_mpi,
+      idStaggeredBoundaryVectWest_mpi,
+      idStaggeredBoundaryVectEast_mpi,
+      idStaggeredInternalVectHorizontal_mpi,
+      idStaggeredInternalVectVertical_mpi,
+      idStaggeredBoundaryVectHorizontal_among_ranks,
+      idStaggeredBoundaryVectVertical_among_ranks
+      idBasinVect_mpi,
+      idBasinVectReIndex_mpi;
 
   
   std::vector<std::array<Real, 2> > Gamma_vect_x,
@@ -208,7 +220,6 @@ main (int argc, char** argv)
 
 
   std::vector<std::tuple<bool, int> > excluded_ids;
-  std::vector<Real> additional_source_term;
   
   std::vector<Real> basin_mask_Vec,
       orography,
@@ -218,6 +229,7 @@ main (int argc, char** argv)
       S_coeff,
       W_Gav,
       W_Gav_cum,
+      W_Gav_cum_save,
       hydraulic_conductivity,
       Z_Gav,
       d_90,
@@ -235,12 +247,15 @@ main (int argc, char** argv)
       slope_y,
       slope_cell,
       soilMoistureRetention,
-      roughness_vect;
+      roughness_vect,
+      eta, H;
 
-  Eigen::VectorXd   eta,
-        H,
-        H_basin,
-        rhs;
+
+  LIS_VECTOR H_basin, rhs;
+  LIS_MATRIX A;
+  LIS_SOLVER solver;
+
+  LIS_INT *nnz_vect;
 
   Real pixel_size, // meter/pixel
        xllcorner,
@@ -251,7 +266,7 @@ main (int argc, char** argv)
        yllcorner_staggered_v,
        NODATA_value;
 
-  /*                   */
+  //-                   -//
 
 
 
@@ -259,8 +274,8 @@ main (int argc, char** argv)
 
   //
   {
-    Raster orographyMat ( file_dir + orography_file );
-    Raster basin_mask   ( file_dir + mask_file      );
+    Raster orographyMat ( file_dir + orography_file, rank );
+    Raster basin_mask   ( file_dir + mask_file, rank      );
 
     if ( basin_mask.cellsize != orographyMat.cellsize && rank==0 )
     {
@@ -327,8 +342,8 @@ main (int argc, char** argv)
 
   {
 
-    Raster orographyMat ( output_dir + "DEM.asc" );
-    Raster basin_mask   ( output_dir + "basin_mask.asc" );
+    Raster orographyMat ( output_dir + "DEM.asc", rank );
+    Raster basin_mask   ( output_dir + "basin_mask.asc", rank );
 
 
     N_rows = basin_mask.Coords.rows();
@@ -337,24 +352,24 @@ main (int argc, char** argv)
 
 
     H                     .resize ( N );
+    eta                   .resize ( N );
     orography             .resize ( N );
     basin_mask_Vec        .resize ( N );
-    eta                   .resize ( N );
     h_G                   .resize ( N );
     h_sd                  .resize ( N );
     h_sn                  .resize ( N );
     S_coeff               .resize ( N );
     W_Gav                 .resize ( N );
     W_Gav_cum             .resize ( N );
+    W_Gav_cum_save        .resize ( N );
     Res_x                 .resize ( N );
     Res_y                 .resize ( N );
+    excluded_ids          .resize ( N );
     Z_Gav                 .resize ( N );
     d_90                  .resize ( N );
     soilMoistureRetention .resize ( N );
     hydraulic_conductivity.resize ( N );
     roughness_vect        .resize ( N );
-    excluded_ids          .resize ( N );
-    additional_source_term.resize ( N );
     slope_cell            .resize ( N );
 
     u             .resize ( ( N_cols + 1 ) * N_rows );
@@ -393,7 +408,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string H_file = dataFile ( "files/initial_conditions/H_file", "H.txt" );
-        Raster HMat ( file_dir + H_file );
+        Raster HMat ( file_dir + H_file, rank );
 
         
         
@@ -417,7 +432,7 @@ main (int argc, char** argv)
       }
       MPI_Barrier (MPI_COMM_WORLD);
 
-      Raster HMat ( output_dir + "H_0.asc" );
+      Raster HMat ( output_dir + "H_0.asc", rank );
 
 
       for ( UInt i = 0; i < N_rows; i++ )
@@ -425,8 +440,8 @@ main (int argc, char** argv)
           for ( UInt j = 0; j < N_cols; j++ )
             {
               const auto k = j + i * N_cols;
-              H ( k )   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-              eta ( k ) = H ( k ) + orography[ k ];
+              H [ k ]   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
+              eta [ k ] = H [ k ] + orography[ k ];
             }
         }
 
@@ -435,8 +450,8 @@ main (int argc, char** argv)
     {
       for ( UInt i = 0; i < N; i++ )
       {
-        H   ( i ) = 0.;
-        eta ( i ) = 0.;
+        H   [ i ] = 0.;
+        eta [ i ] = 0.;
       }
 
       if (rank==0) saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
@@ -448,7 +463,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string restart_vel_u_file = dataFile ( "files/initial_conditions/vel_file_u", "restart_vel_u.txt" );
-        Raster vel_u_Mat ( file_dir + restart_vel_u_file );
+        Raster vel_u_Mat ( file_dir + restart_vel_u_file, rank );
 
 
         if ( vel_u_Mat.cellsize <= pixel_size )
@@ -477,7 +492,7 @@ main (int argc, char** argv)
       }
       MPI_Barrier (MPI_COMM_WORLD);
 
-      Raster vel_u_Mat ( output_dir + "u_0.asc" );
+      Raster vel_u_Mat ( output_dir + "u_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
         {
@@ -494,7 +509,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string restart_vel_v_file = dataFile ( "files/initial_conditions/vel_file_v", "restart_vel_v.txt" );
-        Raster vel_v_Mat ( file_dir + restart_vel_v_file );
+        Raster vel_v_Mat ( file_dir + restart_vel_v_file, rank );
 
         if ( vel_v_Mat.cellsize <= pixel_size )
         {
@@ -521,7 +536,7 @@ main (int argc, char** argv)
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
-      Raster vel_v_Mat ( output_dir + "v_0.asc" );
+      Raster vel_v_Mat ( output_dir + "v_0.asc", rank );
 
       xllcorner_staggered_v = vel_v_Mat.xllcorner;
       yllcorner_staggered_v = vel_v_Mat.yllcorner;
@@ -560,7 +575,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string restart_snow_file = dataFile ( "files/initial_conditions/snow_file", "h_sn.asc" );
-        Raster snow_Mat ( file_dir + restart_snow_file );
+        Raster snow_Mat ( file_dir + restart_snow_file, rank );
 
         if ( snow_Mat.cellsize <= pixel_size )
           {
@@ -581,7 +596,7 @@ main (int argc, char** argv)
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
-      Raster snow_Mat ( output_dir + "hsn_0.asc" );
+      Raster snow_Mat ( output_dir + "hsn_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
         {
@@ -605,7 +620,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string restart_sediment_file = dataFile ( "files/initial_conditions/sediment_file", "h_sd.asc" );
-        Raster sediment_Mat ( file_dir + restart_sediment_file );
+        Raster sediment_Mat ( file_dir + restart_sediment_file, rank );
 
         if ( sediment_Mat.cellsize <= pixel_size )
           {
@@ -626,7 +641,7 @@ main (int argc, char** argv)
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
-      Raster sediment_Mat ( output_dir + "hsd_0.asc" );
+      Raster sediment_Mat ( output_dir + "hsd_0.asc", rank );
 
 
       for ( UInt i = 0; i < N_rows; i++ )
@@ -651,7 +666,7 @@ main (int argc, char** argv)
       if (rank==0)
       {
         const std::string restart_gravitational_file = dataFile ( "files/initial_conditions/gravitational_file", "h_G.asc" );
-        Raster gravitational_Mat ( file_dir + restart_gravitational_file );
+        Raster gravitational_Mat ( file_dir + restart_gravitational_file, rank );
 
         if ( gravitational_Mat.cellsize <= pixel_size )
           {
@@ -672,13 +687,13 @@ main (int argc, char** argv)
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
-      Raster gravitational_Mat ( output_dir + "hG_0.asc" );
+      Raster gravitational_Mat ( output_dir + "hG_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
         {
           for ( UInt j = 0; j < N_cols; j++ )
             {
-              const auto k = j + i * N_cols;
+              const auto k = j + i*N_cols;
               h_G[ k ] = gravitational_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
             }
         }
@@ -726,7 +741,7 @@ main (int argc, char** argv)
     }
     MPI_Barrier(MPI_COMM_WORLD);
     
-    Raster corineCode ( output_dir + "CLC.asc" );
+    Raster corineCode ( output_dir + "CLC.asc", rank );
     
     
     if ( corineCode.cellsize != pixel_size )
@@ -811,8 +826,8 @@ main (int argc, char** argv)
       MPI_Barrier(MPI_COMM_WORLD);
 
 
-      Raster clayPercentage ( str1 ),
-             sandPercentage ( str2 );
+      Raster clayPercentage ( str1, rank ),
+             sandPercentage ( str2, rank );
       
       cellsize_psf = clayPercentage.cellsize;
       if ( cellsize_psf != sandPercentage.cellsize && rank==0 )
@@ -1076,7 +1091,7 @@ main (int argc, char** argv)
     {
       for ( UInt j = 1; j < N_cols; j++ )
         {
-          const auto Id = j + i * ( N_cols + 1 );
+          const auto Id = j + i*( N_cols + 1 );
 
           slope_x[ Id ] = ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / pixel_size;
           n_x    [ Id ] = - ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / std::abs ( ( orography[ Id - i ] - orography[ Id - 1 - i ] ) );
@@ -1087,7 +1102,7 @@ main (int argc, char** argv)
 
   for ( UInt i = 0, j = 0; i < N_rows; i++ )
     {
-      const auto Id = j + i * ( N_cols + 1 );
+      const auto Id = j + i*( N_cols + 1 );
 
       slope_x[ Id ] = slope_x[ Id + 1 ];
       n_x    [ Id ] = n_x    [ Id + 1 ];
@@ -1095,7 +1110,7 @@ main (int argc, char** argv)
 
   for ( UInt i = 0, j = N_cols; i < N_rows; i++ )
     {
-      const auto Id = j + i * ( N_cols + 1 );
+      const auto Id = j + i*( N_cols + 1 );
 
       slope_x[ Id ] = slope_x[ Id - 1 ];
       n_x    [ Id ] = n_x    [ Id - 1 ];
@@ -1108,7 +1123,7 @@ main (int argc, char** argv)
     {
       for ( UInt j = 0; j < N_cols; j++ )
         {
-          const auto Id = j + i * N_cols;
+          const auto Id = j + i*N_cols;
 
           slope_y[ Id ] = ( orography[ Id ] - orography[ Id - N_cols ] ) / pixel_size;
           n_y    [ Id ] = - ( orography[ Id ] - orography[ Id - N_cols ] ) / std::abs ( ( orography[ Id ] - orography[ Id - N_cols ] ) );
@@ -1119,7 +1134,7 @@ main (int argc, char** argv)
 
   for ( UInt j = 0, i = 0; j < N_cols; j++ )
     {
-      const auto Id = j + i * N_cols;
+      const auto Id = j + i*N_cols;
 
       slope_y[ Id ] = slope_y[ Id + N_cols ];
       n_y    [ Id ] = n_y    [ Id + N_cols ];
@@ -1127,7 +1142,7 @@ main (int argc, char** argv)
 
   for ( UInt j = 0, i = N_rows; j < N_cols; j++ )
     {
-      const auto Id = j + i * N_cols;
+      const auto Id = j + i*N_cols;
 
       slope_y[ Id ] = slope_y[ Id - N_cols ];
       n_y    [ Id ] = n_y    [ Id - N_cols ];
@@ -1140,10 +1155,6 @@ main (int argc, char** argv)
     saveSolution ( output_dir + "slope_y", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_y );
   }
   toc ("compute slopes");
-
-  // +-----------------------------------------------+
-  // |     Compute boundaries of basin domain        |
-  // +-----------------------------------------------+
 
 
   tic();
@@ -1158,9 +1169,8 @@ main (int argc, char** argv)
                        idBasinVectReIndex,
                        N_rows,
                        N_cols );
-  
-  
   toc ("compute basin boundaries");
+
 
   // +-----------------------------------------------+
   // |                Gavrilovic Coeff.              |
@@ -1243,7 +1253,7 @@ main (int argc, char** argv)
       {
         for (int j = j_1; j <= j_2; j++)
         {
-          kk_gauges[number-1].push_back(i * N_cols + j);
+          kk_gauges[number-1].push_back(i*N_cols + j);
         }
       }
 
@@ -1350,6 +1360,7 @@ main (int argc, char** argv)
   evapoTranspiration ET ( ET_model, N, orography, temp.J, max_Days, phi_rad, height_thermometer );
   toc ("evapotranspiration");
 
+
   // +-----------------------------------------------+
   // |                   Core Part                   |
   // +-----------------------------------------------+
@@ -1408,9 +1419,9 @@ main (int argc, char** argv)
 
   Real slope_y_max = 0.;
   Real slope_x_max = 0.;  
-  for ( const auto& k : idBasinVect )
+  for ( const auto & k : idBasinVect )
     {
-      const UInt i = k / N_cols;
+      const UInt i = k/N_cols;
 
       const auto slope_x_l = std::abs(slope_x[ k + i      ]);
       const auto slope_x_r = std::abs(slope_x[ k + i + 1  ]);
@@ -1438,249 +1449,99 @@ main (int argc, char** argv)
   
   
   // +-----------------------------------------------+
-  // |              compute_sub_basins               |
-  // +-----------------------------------------------+
-  
-  excluded_ids.assign(N, std::tuple<bool,int>( false, -1 ));
-  additional_source_term.assign(N, 0.);
-  
-  const bool static_subbasin_approx = dataFile ( "discretization/static_subbasin_approx", false );
-  if (static_subbasin_approx)
-  {
-  
-    tic();
-    
-    const std::set<UInt> idBasinVect_set                 (idBasinVect.begin(),                  idBasinVect.end()),
-                         idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(), idStaggeredBoundaryVectSouth.end()),
-                         idStaggeredBoundaryVectNorth_set(idStaggeredBoundaryVectNorth.begin(), idStaggeredBoundaryVectNorth.end()),
-                         idStaggeredBoundaryVectWest_set (idStaggeredBoundaryVectWest.begin(),  idStaggeredBoundaryVectWest.end()),
-                         idStaggeredBoundaryVectEast_set (idStaggeredBoundaryVectEast.begin(),  idStaggeredBoundaryVectEast.end());
-    
-    const Real slope_thr = dataFile("discretization/slope_thr", 1.);
-    
-    
-    
-    // exclude high slopes,
-    for ( const UInt& Id : idBasinVect )
-    {
-      
-      const auto & current_slope_cell = slope_cell[ Id ];
-      if (current_slope_cell > slope_thr)
-      {
-        std::get<0>( excluded_ids[ Id ] ) = true;
-      }
-    }
-    
-    // exclude also isolated cells, see below,
-    // maybe cycle on intefaces, build a list of bool for each id
-    std::vector<UInt> counter_near_excl;
-    counter_near_excl.resize(N);
-    counter_near_excl.assign(N, 0);
-    
-    // cycle over interfaces, internal vertical and horizontal
-    for ( const auto & Id : idStaggeredInternalVectHorizontal )
-    {
-      const UInt i = Id / ( N_cols + 1 ),
-      
-      IDleft  = Id - i - 1, // H
-      IDright = Id - i;
-      
-      if ( std::get<0>(excluded_ids[ IDleft ]) )
-      {
-        counter_near_excl[ IDright ] += 1;
-      }
-      if ( std::get<0>(excluded_ids[ IDright ]) )
-      {
-        counter_near_excl[ IDleft ] += 1;
-      }
-      
-    }
-    
-    
-    for ( const auto & Id : idStaggeredInternalVectVertical )
-    {
-      
-      const UInt IDleft  = Id - N_cols, // H
-      IDright = Id;
-      
-      if ( std::get<0>(excluded_ids[ IDleft ]) )
-      {
-        counter_near_excl[ IDright ] += 1;
-      }
-      if ( std::get<0>(excluded_ids[ IDright ]) )
-      {
-        counter_near_excl[ IDleft ] += 1;
-      }
-      
-    }
-
-    for ( const auto & Id : idBasinVect )
-    {
-      if ( counter_near_excl[ Id ] == 4 ) // it is surely an isolated cell! (can be also an excluded cell but no problem..)
-      {
-        std::get<0>( excluded_ids[ Id ] ) = true;
-      }
-    }
-    
-
-    // compute pour points, local movement in the 8 directions! (also diagonal ones)
-    for ( const UInt& Id : idBasinVect )
-    {
-
-      auto & current_tuple = excluded_ids[ Id ];
-
-      const auto & current_is      = std::get<0>( current_tuple );
-            auto & current_pour_id = std::get<1>( current_tuple );
-
-      if ( current_is )
-      {
-        // start from Id and perform a local search (by means of the gradient) to get the pour point
-        int candidate_pour_id = Id;
-
-        while (true)
-        {
-
-          candidate_pour_id = computePourCell(candidate_pour_id,
-                                              N_cols,
-                                              orography,
-                                              idBasinVect_set,
-                                              idStaggeredBoundaryVectSouth_set,
-                                              idStaggeredBoundaryVectNorth_set,
-                                              idStaggeredBoundaryVectWest_set,
-                                              idStaggeredBoundaryVectEast_set);
-
-
-
-          // if the gradient points outside the basin leave current_pour_id = -1
-          if (candidate_pour_id < 0) break;
-
-
-          const auto & is_current_id_again_excluded = std::get<0> ( excluded_ids[ candidate_pour_id ] );
-          if ( !is_current_id_again_excluded )
-          {
-            current_pour_id = candidate_pour_id;
-            break;
-          }
-
-
-        }
-
-      }
-    }
-    
-
-    toc ("get sub-basins");
-    
-  }
-
-  if (rank==0) saveSolution (output_dir + "excluded_ids", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, excluded_ids);
-  
-
-  // +-----------------------------------------------+
   // |      Subdivisions among available cores       |
   // +-----------------------------------------------+
 
-  UInt nnz_basin_mask_Vec_excl = 0;
-  std::set<UInt> ids_isInBasin;
-  std::vector<Real> basin_mask_Vec_excl = basin_mask_Vec;
-  for ( UInt i = 0; i < basin_mask_Vec_excl.size(); i++ )
-  {
-    if ( std::get<0>( excluded_ids[ i ] ) )
-    {
-      basin_mask_Vec_excl[ i ] = 0.;
-    }
 
-    if (basin_mask_Vec_excl[ i ]>0)
-    {
-      nnz_basin_mask_Vec_excl++;
-      ids_isInBasin.insert(i);
-    }
-  }
-
-  // build basin_mask_Vec_mpi,
-  const UInt chunk_length = nnz_basin_mask_Vec_excl/size;
-  const UInt residual = std::round((double(nnz_basin_mask_Vec_excl)/size - chunk_length)*size);
+  const auto nnz_basin_mask_Vec = idBasinVect.size();
+  const UInt chunk_length = nnz_basin_mask_Vec/size;
+  const UInt residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
 
   std::vector<UInt> chunk_length_vec(size);
   chunk_length_vec.assign(size, chunk_length);
 
   for (UInt i = 0; i < residual; i++)
   {
-    chunk_length_vec[i] += 1; 
+    chunk_length_vec[i] += 1;
   }
+
+  std::vector<int> corresponding_rank_given_id(N);
+  corresponding_rank_given_id.assign(N, -1);
 
   std::vector<Real> basin_mask_Vec_mpi(N);
   basin_mask_Vec_mpi.assign (N, 0);
-
-
   for ( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
   {
-    basin_mask_Vec_mpi[ids_isInBasin[i]] = 1;
+    basin_mask_Vec_mpi[idBasinVect[i]] = 1;
+    corresponding_rank_given_id[idBasinVect[i]] = rank;
   }
+  
+  MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
 
   // for each processor
-  computeAdjacencies ( basin_mask_Vec_mpi,
-                      idStaggeredBoundaryVectSouth_excluded,
-                      idStaggeredBoundaryVectNorth_excluded,
-                      idStaggeredBoundaryVectWest_excluded,
-                      idStaggeredBoundaryVectEast_excluded,
-                      idStaggeredInternalVectHorizontal_excluded,
-                      idStaggeredInternalVectVertical_excluded,
-                      idBasinVect_excluded,
-                      idBasinVectReIndex_excluded,
+  computeAdjacencies ( basin_mask_Vec,
+                      basin_mask_Vec_mpi,
+                      idStaggeredBoundaryVectSouth_mpi,
+                      idStaggeredBoundaryVectNorth_mpi,
+                      idStaggeredBoundaryVectWest_mpi,
+                      idStaggeredBoundaryVectEast_mpi,
+                      idStaggeredInternalVectHorizontal_mpi,
+                      idStaggeredInternalVectVertical_mpi,
+                      idStaggeredBoundaryVectHorizontal_among_ranks,
+                      idStaggeredBoundaryVectVertical_among_ranks,
+                      idBasinVect_mpi,
+                      idBasinVectReIndex_mpi,
                       N_rows,
                       N_cols );
 
-  // full
-  computeAdjacencies ( basin_mask_Vec_excl,
-                      idStaggeredBoundaryVectSouth_excluded_full,
-                      idStaggeredBoundaryVectNorth_excluded_full,
-                      idStaggeredBoundaryVectWest_excluded_full,
-                      idStaggeredBoundaryVectEast_excluded_full,
-                      idStaggeredInternalVectHorizontal_excluded_full,
-                      idStaggeredInternalVectVertical_excluded_full,
-                      idBasinVect_excluded_full,
-                      idBasinVectReIndex_excluded_full,
-                      N_rows,
-                      N_cols );
 
   // +-----------------------------------------------+
 
 
 
-  upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_excluded,
-                                idStaggeredBoundaryVectWest_excluded,
-                                idStaggeredBoundaryVectEast_excluded, 
-                                idStaggeredInternalVectVertical_excluded,
-                                idStaggeredBoundaryVectNorth_excluded,
-                                idStaggeredBoundaryVectSouth_excluded, N_rows, N_cols );
+  upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_mpi,
+                                idStaggeredBoundaryVectWest_mpi,
+                                idStaggeredBoundaryVectEast_mpi, 
+                                idStaggeredInternalVectVertical_mpi,
+                                idStaggeredBoundaryVectNorth_mpi,
+                                idStaggeredBoundaryVectSouth_mpi, N_rows, N_cols );
 
   frictionClass alfa ( H_interface.horizontal, H_interface.vertical, u, v, 
-                       idStaggeredInternalVectHorizontal_excluded,
-                       idStaggeredBoundaryVectWest_excluded,
-                       idStaggeredBoundaryVectEast_excluded,
-                       idStaggeredInternalVectVertical_excluded,
-                       idStaggeredBoundaryVectNorth_excluded,
-                       idStaggeredBoundaryVectSouth_excluded, friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
-  
-  
-  H_basin.resize ( idBasinVect_excluded.size() );
-  rhs    .resize ( idBasinVect_excluded.size() );
+                       idStaggeredInternalVectHorizontal_mpi,
+                       idStaggeredBoundaryVectWest_mpi,
+                       idStaggeredBoundaryVectEast_mpi,
+                       idStaggeredInternalVectVertical_mpi,
+                       idStaggeredBoundaryVectNorth_mpi,
+                       idStaggeredBoundaryVectSouth_mpi, friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
   
 
-  for (int i = 0; i < H_basin.size(); i++) H_basin( i ) = 0.;
-  for (int i = 0; i < rhs.size(); i++) rhs( i ) = 0.;
+
+  //LIS_INT is,ie;
+
+  lis_vector_create(comm,&H_basin);
+  lis_vector_set_size(H_basin,chunk_length_vec[rank],0); 
+  //lis_vector_get_range(H_basin,&is,&ie);
+  lis_vector_set_all(0.,H_basin);
+
+  //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << nnz_basin_mask_Vec_excl << std::endl;
+
+  lis_vector_create(comm,&rhs);
+  lis_vector_set_size(rhs,chunk_length_vec[rank],0); 
+  //lis_vector_get_range(rhs,&is,&ie);
+  lis_vector_set_all(0.,rhs);
+
+  lis_matrix_create(comm,&A);
+  lis_matrix_set_size(A,chunk_length_vec[rank],0);
+  lis_matrix_malloc(A, 5, nnz_vect);
   
   
-  SpMat A ( idBasinVect_excluded.size(), idBasinVect_excluded.size() );
+  lis_solver_create(&solver);
+  lis_solver_set_option("-i cg -p none",solver);
+  lis_solver_set_option("-tol 1.0e-12",solver);
+
   
-  // row, column and value in the Triplet
-  std::vector<Eigen::Triplet<Real> > coefficients;
-  
-  /*
-  coefficients.reserve ( idBasinVect_excluded.size() +
-                        4 * idStaggeredInternalVectHorizontal_excluded.size() +
-                        4 * idStaggeredInternalVectVertical_excluded.size() );*/
+
   
   
   int iter = 0;
@@ -1688,7 +1549,7 @@ main (int argc, char** argv)
   
   double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
 
-  maxH = H.maxCoeff();
+  maxH = *std::max_element( H.begin(), H.end() ); 
    
   dt_DSV = maxdt(u, v, g, maxH, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
@@ -1698,18 +1559,18 @@ main (int argc, char** argv)
   c2_DSV_ = c2_DSV (g, c1_DSV_);
   c3_DSV_ = c3_DSV (g, c1_DSV_);
 
-  /*
-  omp_set_num_threads(omp_get_num_procs());
-  std::cout << "# of available threads, " << omp_get_num_procs() << std::endl;
-  */
+  LIS_INT nsol;
+  char solvername[128];
   
   double time = 0.; 
   bool is_last_step = false, check_last = false;
   while ( !is_last_step )
     {
-
-      std::cout << "Simulation progress: " << time/t_final*100 << " %" << " max surface run-off vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface run-off cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
-      std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
+      if (rank==0)
+      {
+        std::cout << "Simulation progress: " << time/t_final*100 << " %" << " max surface run-off vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface run-off cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
+        std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
+      }
 
       tic();
       // Compute interface fluxes via upwind method
@@ -1723,33 +1584,35 @@ main (int argc, char** argv)
       alfa.f_y ( );
       toc ("alfa");
 
-      tic();
+      
       // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
       if ( std::floor ( time / dt_temp ) > std::floor ( (time - dt_DSV) / dt_temp ) )
         {
+          tic();
           // Compute temperature map
           temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect );
+          toc ("temperature");
         }
-      toc ("temperature");
 
-      tic();
+
       // ET varies daily
       if ( std::floor ( time / (24.*3600) ) > std::floor ( (time - dt_DSV) / (24.*3600) ) )
         {
+          tic();
           // Get ET rate at the current time
           ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24.*3600 ) ), idBasinVect, orography );
+          toc ("ET");
         }
-      toc ("ET");
 
-      tic();
+      // +-----------------------------------------------+
+      // |            Gravitational Layer                |
+      // +-----------------------------------------------+
+
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
 
-          // +-----------------------------------------------+
-          // |            Gravitational Layer                |
-          // +-----------------------------------------------+
-
+          tic();
           // h_G
           // vertical and horizontal residuals for Gravitational Layer
           computeResiduals ( n_x,
@@ -1764,16 +1627,20 @@ main (int argc, char** argv)
                              idStaggeredBoundaryVectEast,
                              idStaggeredBoundaryVectNorth,
                              idStaggeredBoundaryVectSouth,
-                             idBasinVect,
+                             idBasinVect_mpi,
                              h_interface_x,
                              h_interface_y,
                              Res_x,
                              Res_y );
+          toc ("gravit") ;
         }
-      toc ("gravit") ;
+      
 
       tic();
-      //
+      precipitation.DP_total      .assign(N, 0.);
+      precipitation.DP_cumulative .assign(N, 0.);
+      precipitation.DP_infiltrated.assign(N, 0.);
+
       precipitation.computePrecipitation (time,
                                           soilMoistureRetention,
                                           temp.melt_mask,
@@ -1781,20 +1648,26 @@ main (int argc, char** argv)
                                           H,
                                           N_rows,
                                           N_cols,
-                                          idBasinVect);
+                                          idBasinVect_mpi);
+
+      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_total      .data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_cumulative .data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_infiltrated.data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       toc ("precipitation");
 
-      tic();
+      
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
+
+          tic();
 
           for ( const UInt & k : idBasinVect )
             {
               S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
             }
 
-          for ( const auto & k : idBasinVect )
+          for ( const UInt & k : idBasinVect )
             {
               h_G[ k ] += ( S_coeff[ k ] - ET.ET_vec[ k ] ) * dt_min + precipitation.DP_infiltrated[ k ] * dt_min - c1_min * ( Res_x[ k ] + Res_y[ k ] );
               h_G[ k ] *= ( h_G[ k ] >= 0 ); // to account for evapotranspiration
@@ -1805,14 +1678,16 @@ main (int argc, char** argv)
           // +-----------------------------------------------+
 
 
-          for ( const auto & k : idBasinVect )
+          for ( const UInt & k : idBasinVect )
             {
               const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
               h_sn[ k ] += snow_acc;
             }
 
+          toc ("snow");
+
         }
-      toc ("snow");
+      
 
 
       // +-----------------------------------------------+
@@ -1830,12 +1705,12 @@ main (int argc, char** argv)
                               N_cols,
                               dt_DSV,
                               pixel_size,
-                              idStaggeredInternalVectHorizontal_excluded,
-                              idStaggeredInternalVectVertical_excluded,
-                              idStaggeredBoundaryVectWest_excluded,
-                              idStaggeredBoundaryVectEast_excluded,
-                              idStaggeredBoundaryVectNorth_excluded,
-                              idStaggeredBoundaryVectSouth_excluded );
+                              idStaggeredInternalVectHorizontal_mpi,
+                              idStaggeredInternalVectVertical_mpi,
+                              idStaggeredBoundaryVectWest_mpi,
+                              idStaggeredBoundaryVectEast_mpi,
+                              idStaggeredBoundaryVectNorth_mpi,
+                              idStaggeredBoundaryVectSouth_mpi );
 
       
       toc ("bilinearInterpolation");
@@ -1843,12 +1718,6 @@ main (int argc, char** argv)
 
 
       tic();
-
-      coefficients.reserve ( idBasinVect_excluded.size() +
-                        4 * idStaggeredInternalVectHorizontal_excluded.size() +
-                        4 * idStaggeredInternalVectVertical_excluded.size() );
-
-      additional_source_term.assign(N, 0.);
       
       buildMatrix ( H_interface.horizontal,
                    H_interface.vertical,
@@ -1863,101 +1732,58 @@ main (int argc, char** argv)
                    N,
                    c1_DSV_,
                    c3_DSV_,
-                   0, // 0 
+                   0., 
                    precipitation.DP_cumulative,
                    dt_DSV,  
                    alfa.alfa_x,
                    alfa.alfa_y,
-                   idStaggeredInternalVectHorizontal_excluded,
-                   idStaggeredInternalVectVertical_excluded,
-                   idStaggeredBoundaryVectWest_excluded,
-                   idStaggeredBoundaryVectEast_excluded,
-                   idStaggeredBoundaryVectNorth_excluded,
-                   idStaggeredBoundaryVectSouth_excluded,
-                   idBasinVect_excluded,
-                   idBasinVect,
-                   idStaggeredInternalVectHorizontal,
-                   idStaggeredInternalVectVertical,
-                   idBasinVectReIndex_excluded,
+                   idStaggeredInternalVectHorizontal_mpi,
+                   idStaggeredInternalVectVertical_mpi,
+                   idStaggeredBoundaryVectWest_mpi,
+                   idStaggeredBoundaryVectEast_mpi,
+                   idStaggeredBoundaryVectNorth_mpi,
+                   idStaggeredBoundaryVectSouth_mpi,
+                   idBasinVect_mpi,
+
+                   basin_mask_Vec_mpi,
+
+                   idBasinVectReIndex,
                    isNonReflectingBC,
                    true,
-                   excluded_ids,
-                   additional_source_term,
-                   coefficients,
+                   A,
                    rhs );
       
-      
-      
-
-
-
-      A.setFromTriplets ( coefficients.begin(), coefficients.end() );
-      A.makeCompressed();
-      coefficients.clear();
-
+      lis_matrix_set_type(A,LIS_MATRIX_CSR);
+      //lis_matrix_set_csr(nnz,ptr,index,value,A);
+      lis_matrix_assemble(A);
       toc ("assemble matrix");
 
-      tic();
-      if (spit_out_matrix)
-        {
-          tmpname = matrix_name + std::to_string (iter);
-          std::cout << "saving " << tmpname << std::endl;
-          Eigen::saveMarket (A, tmpname, false);
-          tmpname = vector_name + std::to_string (iter);
-          std::cout << "saving " << tmpname << std::endl;
-          Eigen::saveMarketVector_lis (rhs, tmpname);
-        }
-      toc ("spit out matrix for debug");
+      // tic();
+      //
+      // if (spit_out_matrix)
+      //   {
+      //     tmpname = matrix_name + std::to_string (iter);
+      //     std::cout << "saving " << tmpname << std::endl;
+      //     Eigen::saveMarket (A, tmpname, false);
+      //     tmpname = vector_name + std::to_string (iter);
+      //     std::cout << "saving " << tmpname << std::endl;
+      //     Eigen::saveMarketVector_lis (rhs, tmpname);
+      //   }
+      //
+      // toc ("spit out matrix for debug");
 
 
       tic();
-      if ( direct_method )  // Direct Sparse method: Cholesky being A spd
-        {
-          Eigen::SimplicialLDLT<SpMat, Eigen::Upper> solver;   
 
+      lis_solve(A, rhs, H_basin, solver);
+      lis_solver_get_iter(solver, &iter);
+      lis_solver_get_solver(solver, &nsol);
+      lis_solver_get_solvername(nsol, solvername);
+      lis_printf(comm, "%s: number of iterations = %D\n",solvername,iter);
 
-          solver.compute ( A );
+      // lis_vector_print(H_basin);
 
-          if ( solver.info() != Eigen::Success )
-            {
-              std::cout << "Decomposition Failed" << std::endl;
-              exit ( -1. );
-            }
-
-          H_basin = solver.solve ( rhs );
-
-        }
-      else
-        {
-
-          double tol = 1.e-6;
-          int result, maxit = 15000;
-          
-          /*
-          Eigen::ConjugateGradient < SpMat, Eigen::Lower | Eigen::Upper, Eigen::IncompleteCholesky<double> > cg;
-          cg.compute ( A );
-
-
-          H_basin = cg.solveWithGuess ( rhs, H_basin );
-
-          std::cout << "# threads used by Eigen, " << Eigen::nbThreads( ) << std::endl;
-          std::cout << "# iterations:    "         << cg.iterations()     << std::endl;
-          std::cout << "estimated error: "         << cg.error()          << std::endl;*/
-          
-          
-          
-          // Now with IML++
-          Eigen::IncompleteCholesky<double> IC(A);// Create I cholesky preconditioner
-          //Eigen::IncompleteLUT<double> ILU(A); // create ILU preconditioner
-          result = LinearAlgebra::CG(A, H_basin, rhs, IC, maxit, tol);   // Solve system
-          
-          std::cout <<" IML++ CG "<< std::endl;
-          std::cout << "CG flag = " << result << std::endl;
-          std::cout << "iterations performed: " << maxit << std::endl;
-          std::cout << "tolerance achieved  : " << tol << std::endl;
-           
-
-        }
+      lis_matrix_unset(A);
     
       
       
@@ -1985,15 +1811,27 @@ main (int argc, char** argv)
 
       }
       
+      // 
+      H.assign(H.size(), 0.);
+      u.assign(u.size(), 0.);
+      v.assign(v.size(), 0.);
 
-      for ( const UInt& Id : idBasinVect_excluded )
+      for ( const UInt & Id : idBasinVect_mpi )
         {
-          const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
+          const UInt & IDreIndex = idBasinVectReIndex[ Id ];
 
-          H ( Id ) = std::abs(H_basin ( IDreIndex ));
-          eta ( Id ) = H ( Id ) + orography[ Id ];
+          LIS_SCALAR value;
+          lis_vector_get_value(H_basin, IDreIndex, &value);
+
+          H [ Id ] = std::abs(value);
         }
 
+      MPI_Allreduce (MPI_IN_PLACE, H.data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+      for ( const UInt & Id : idBasinVect )
+        {
+          eta [ Id ] = H [ Id ] + orography[ Id ];
+        }
 
 
       // +-----------------------------------------------+
@@ -2010,17 +1848,20 @@ main (int argc, char** argv)
                   N_rows,
                   N_cols,
                   c2_DSV_,
-                  0, // 0
+                  0., // 0
                   eta,
                   H,
                   orography,
-                  idStaggeredInternalVectHorizontal_excluded,
-                  idStaggeredInternalVectVertical_excluded,
-                  idStaggeredBoundaryVectWest_excluded,
-                  idStaggeredBoundaryVectEast_excluded,
-                  idStaggeredBoundaryVectNorth_excluded,
-                  idStaggeredBoundaryVectSouth_excluded,
+                  idStaggeredInternalVectHorizontal_mpi,
+                  idStaggeredInternalVectVertical_mpi,
+                  idStaggeredBoundaryVectWest_mpi,
+                  idStaggeredBoundaryVectEast_mpi,
+                  idStaggeredBoundaryVectNorth_mpi,
+                  idStaggeredBoundaryVectSouth_mpi,
                   isNonReflectingBC );
+
+      MPI_Allreduce (MPI_IN_PLACE, u.data(), u.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      MPI_Allreduce (MPI_IN_PLACE, v.data(), v.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       
       toc ("solve");
 
@@ -2036,7 +1877,7 @@ main (int argc, char** argv)
         const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
         dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
-        c1_sed = dt_sed / pixel_size;
+        c1_sed = dt_sed/pixel_size;
 
 
 
@@ -2051,55 +1892,39 @@ main (int argc, char** argv)
                                     slope_y,
                                     alfa_coeff,   // alfa
                                     beta_coeff,   // beta
-                                    gamma_coeff,    // gamma
-                                    idStaggeredInternalVectHorizontal_excluded,
-                                    idStaggeredInternalVectVertical_excluded,
-                                    idStaggeredBoundaryVectWest_excluded,
-                                    idStaggeredBoundaryVectEast_excluded,
-                                    idStaggeredBoundaryVectNorth_excluded,
-                                    idStaggeredBoundaryVectSouth_excluded,
+                                    gamma_coeff,  // gamma
+                                    idStaggeredInternalVectHorizontal_mpi,
+                                    idStaggeredInternalVectVertical_mpi,
+                                    idStaggeredBoundaryVectWest_mpi,
+                                    idStaggeredBoundaryVectEast_mpi,
+                                    idStaggeredBoundaryVectNorth_mpi,
+                                    idStaggeredBoundaryVectSouth_mpi,
                                     Gamma_vect_x,
                                     Gamma_vect_y
                                     );
 
 
-        additional_source_term.assign(N, 0.);
-        
-        for ( const auto & k : idBasinVect )
+
+
+        for ( const UInt & k : idBasinVect_mpi )
         {
-          const auto & current_tuple = excluded_ids[ k ];
-          if ( std::get<0>( current_tuple ) )
-          {
-            const auto & k_pour = std::get<1>( current_tuple );
-            if ( k_pour >= 0 )
-            {
-              additional_source_term[ k_pour ] += 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed;
-            }
-          }
+          // 1.e-3 is the conversion factor, look at EPM theory
+          W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed;
         }
 
-
-        for ( const UInt& k : idBasinVect_excluded )
-        {
-            // 1.e-3 is the conversion factor, look at EPM theory
-          W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed + additional_source_term[ k ];
-        }
-
-        std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
+        if (rank==0) std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
 
         for ( UInt kk = 0; kk < numberOfSteps; kk++ )
         {
 
-          additional_source_term.assign(N, 0.);
-
           // horizontal
-          for ( const UInt& Id : idStaggeredInternalVectHorizontal_excluded )
+          for ( const UInt & Id : idStaggeredInternalVectHorizontal_mpi )
           {
             const UInt i       = Id / ( N_cols + 1 ),
             IDeast  = Id - i,
             IDwest  = Id - i - 1;
 
-            const Real& h_left  = h_sd[ IDwest ],
+            const Real & h_left  = h_sd[ IDwest ],
             & h_right = h_sd[ IDeast ];
 
 
@@ -2108,12 +1933,12 @@ main (int argc, char** argv)
           }
 
 
-          for ( const UInt& Id : idStaggeredBoundaryVectWest_excluded )
+          for ( const UInt & Id : idStaggeredBoundaryVectWest_mpi )
           {
             const UInt i = Id / ( N_cols + 1 );
 
             const Real h_left  = 0, //0,
-            h_right = h_sd[ Id - i ];
+            & h_right = h_sd[ Id - i ];
 
 
             h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
@@ -2121,13 +1946,13 @@ main (int argc, char** argv)
           }
 
 
-          for ( const UInt& Id : idStaggeredBoundaryVectEast_excluded )
+          for ( const UInt & Id : idStaggeredBoundaryVectEast_mpi )
           {
 
             const UInt i = Id / ( N_cols + 1 );
 
 
-            const Real h_left  = h_sd[ Id - i - 1 ],
+            const Real & h_left  = h_sd[ Id - i - 1 ],
             h_right = 0;
 
 
@@ -2135,7 +1960,7 @@ main (int argc, char** argv)
                                   Gamma_vect_x[ Id ][ 1 ] * h_left;
           }
 
-          for ( const UInt& Id : idBasinVect_excluded )
+          for ( const UInt & Id : idBasinVect_mpi )
           {
             const UInt i = Id / N_cols;
 
@@ -2148,12 +1973,12 @@ main (int argc, char** argv)
 
 
           // vertical
-          for ( const UInt& Id : idStaggeredInternalVectVertical_excluded )
+          for ( const UInt & Id : idStaggeredInternalVectVertical_mpi )
           {
             const UInt IDsouth = Id,
             IDnorth = Id - N_cols;
 
-            const Real& h_left  = h_sd[ IDnorth ],
+            const Real & h_left  = h_sd[ IDnorth ],
             & h_right = h_sd[ IDsouth ];
 
 
@@ -2162,11 +1987,11 @@ main (int argc, char** argv)
           }
 
 
-          for ( const UInt& Id : idStaggeredBoundaryVectNorth_excluded )
+          for ( const UInt & Id : idStaggeredBoundaryVectNorth_mpi )
           {
 
             const Real h_left  = 0, // 0
-            h_right = h_sd[ Id ];
+            & h_right = h_sd[ Id ];
 
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
@@ -2176,88 +2001,25 @@ main (int argc, char** argv)
 
 
 
-          for ( const UInt& Id : idStaggeredBoundaryVectSouth_excluded )
+          for ( const UInt & Id : idStaggeredBoundaryVectSouth_mpi )
           {
 
-            const Real h_left  = h_sd[ Id - N_cols ],
+            const Real & h_left  = h_sd[ Id - N_cols ],
             h_right = 0;
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
                                   Gamma_vect_y[ Id ][ 1 ] * h_left;
           }
 
-          for ( const UInt& Id : idBasinVect_excluded )
+          for ( const UInt & Id : idBasinVect_mpi )
           {
             Res_y[ Id ] = h_interface_y[ Id + N_cols ] - h_interface_y[ Id ];
           }
 
 
-
-          for ( const auto & Id : idStaggeredInternalVectHorizontal )
+          for ( const UInt & Id : idBasinVect_mpi )
           {
-
-            const UInt i       = Id / ( N_cols + 1 ),
-
-            IDleft  = Id - i - 1,
-            IDright = Id - i;
-
-
-
-            if ( std::get<0> ( excluded_ids[ IDleft ] ) )
-            {
-              const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
-              if ( k_pour >= 0 )
-              {
-                additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
-              }
-            }
-
-            if ( std::get<0> ( excluded_ids[ IDright ] ) )
-            {
-              const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
-              if ( k_pour >= 0 )
-              {
-                additional_source_term[ k_pour ] += h_interface_x[ Id ] * std::abs (u[ Id ]) * c1_sed;
-              }
-            }
-
-
-
-          }
-
-
-          for ( const auto & Id : idStaggeredInternalVectVertical )
-          {
-
-            const UInt IDleft  = Id - N_cols,
-            IDright = Id;
-
-
-            if ( std::get<0> ( excluded_ids[ IDleft ] ) )
-            {
-              const auto& k_pour = std::get<1> ( excluded_ids[ IDleft ] );
-              if ( k_pour >= 0 )
-              {
-                additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
-              }
-            }
-
-            if ( std::get<0> ( excluded_ids[ IDright ] ) )
-            {
-              const auto& k_pour = std::get<1> ( excluded_ids[ IDright ] );
-              if ( k_pour >= 0 )
-              {
-                additional_source_term[ k_pour ] += h_interface_y[ Id ] * std::abs (v[ Id ]) * c1_sed;
-              }
-            }
-
-          }
-
-
-
-          for ( const UInt& Id : idBasinVect_excluded )
-          {
-            h_sd[ Id ] += - ( Res_x[ Id ] + Res_y[ Id ] ) + W_Gav[ Id ] + additional_source_term[ Id ];
+            h_sd[ Id ] += - ( Res_x[ Id ] + Res_y[ Id ] ) + W_Gav[ Id ];
           }
 
 
@@ -2281,14 +2043,13 @@ main (int argc, char** argv)
         is_last_step = true;
       }
       
-      //is_last_step = true;
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
       // +-----------------------------------------------+
 
       
-      if ( save_temporal_sequence )
+      if ( save_temporal_sequence && rank==0 )
       {
 
         for (Int number=1; number<=number_gauges; number++)
@@ -2296,7 +2057,7 @@ main (int argc, char** argv)
           std::string filename_x = "discretization/X_gauges_", 
                       filename_y = "discretization/Y_gauges_";
 
-          filename_x += std::to_string(number); 
+          filename_x += std::to_string(number);
           filename_y += std::to_string(number);
 
           const Real X_gauges = dataFile ( filename_x.c_str(), 0.);
@@ -2331,7 +2092,7 @@ main (int argc, char** argv)
       
       
       // sediment production zones,
-      for ( const UInt& k : idBasinVect )
+      for ( const UInt & k : idBasinVect_mpi )
         {
           W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );
         }
@@ -2339,44 +2100,53 @@ main (int argc, char** argv)
       
       if ( spit_out_solutions_each_time_step )
       {
-        iter++;
+        MPI_Reduce(W_Gav_cum.data(), W_Gav_cum_save.data(), N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-        saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
-        saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
-        saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
-        saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
-        saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum                    );
-        saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
-        saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
-        saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
-        saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
-        saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
-        saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
-
-      }
-      else
-      {
-        
-        if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
+        if (rank==0)
         {
           iter++;
 
-          const auto & currentDay = iter; // std::floor ( time / (frequency_save * 3600) )
+          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
+          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum_save               );
+          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
+          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
+          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
+          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
+          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
+          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
+        }
+      }
+      else
+      {
 
-          std::cout << "Saving solution..., current day " << iter << std::endl;
+        if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
+        {
 
-          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
-          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
-          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
-          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
-          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
-          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
-          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
-          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
+          MPI_Reduce(W_Gav_cum.data(), W_Gav_cum_save.data(), N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
+          if (rank==0)
+          {
+            iter++;
+
+            const auto & currentDay = iter; 
+
+            std::cout << "Saving solution ..., current day " << iter << std::endl;
+
+            saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
+            saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum_save               );
+            saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
+            saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
+            saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
+            saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+            saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
+            saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
+          }
         }
       }
       
@@ -2406,12 +2176,18 @@ main (int argc, char** argv)
       
     } // End Time Loop
 
+  lis_solver_destroy(solver);
+  lis_vector_destroy(H_basin);
+  lis_vector_destroy(rhs);
+  lis_matrix_destroy(A);
+
+
 
   // Close MPI and print report
-  MPI_Barrier (MPI_COMM_WORLD);
+  MPI_Barrier (MPI_COMM_WORLD); 
   if (rank == 0) { print_timing_report (); }
-  MPI_Finalize ();
-  return ( EXIT_SUCCESS );
+  lis_finalize ();
+  return ( 0 );
 
 }
 

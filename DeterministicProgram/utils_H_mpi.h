@@ -4,53 +4,12 @@
 #include "typedefs_H.h"
 #include <array>
 
-//! to parallelize with openmp
-#if defined(_OPENMP)
 #include <omp.h>
-#endif
 
+// you have to declare both to make it work
 #include <mpi.h>
- 
-namespace Eigen {
-  
-  namespace internal {
-    
-    template<typename Scalar>
-    inline void putVectorElt(Scalar value, std::ofstream& out, const UInt& i)
-    {
-    out << i << " " << value << "\n";
-    }
-    template<typename Scalar>
-    inline void putVectorElt(std::complex<Scalar> value, std::ofstream& out, const UInt& i)
-    {
-    out << i << " " << value.real << " " << value.imag()<< "\n";
-    }
-    
-  }
-  
-  template<typename VectorType>
-  bool saveMarketVector_lis (const VectorType& vec, const std::string& filename)
-  {
-  typedef typename VectorType::Scalar Scalar;
-  std::ofstream out(filename.c_str(),std::ios::out);
-  if(!out)
-    return false;
-  
-  out.flags(std::ios_base::scientific);
-  out.precision(64);
-  if(internal::is_same<Scalar, std::complex<float> >::value || internal::is_same<Scalar, std::complex<double> >::value)
-    out << "%%MatrixMarket vector coordinate complex general\n";
-  else
-    out << "%%MatrixMarket vector coordinate real general\n";
-  out << vec.size() << "\n";
-  for (int i=0; i < vec.size(); i++){
-    internal::putVectorElt(vec(i), out, i+1);
-  }
-  out.close();
-  return true;
-  }
-  
-}
+#include <lis.h>
+
 
 class
 Vector2D
@@ -195,7 +154,7 @@ Raster
 
 public:
 
-  Raster (const std::string& file);
+  Raster (const std::string& file, const int& rank);
 
   ~Raster() = default;
 
@@ -250,7 +209,7 @@ public:
                         const std::vector<Real>& S,
                         const std::vector<Real>& melt_mask,
                         const std::vector<Real>& h_G,
-                        const Eigen::VectorXd&   H,
+                        const std::vector<Real>& H,
                         const UInt&              N_rows,
                         const UInt&              N_cols,
                         const std::vector<UInt>& idBasinVect);
@@ -437,7 +396,7 @@ upwind
 
 public:
 
-  upwind (const Eigen::VectorXd&   H,
+  upwind (const std::vector<Real>& H,
           const std::vector<Real>& u,
           const std::vector<Real>& v,
 
@@ -474,7 +433,7 @@ public:
 
 private:
 
-  const Eigen::VectorXd&   H;
+  const std::vector<Real>& H;
   const std::vector<Real>& u;
   const std::vector<Real>& v;
 
@@ -520,25 +479,6 @@ bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<UInt>& idStaggeredBoundaryVectNorth,
                        const std::vector<UInt>& idStaggeredBoundaryVectSouth);
 
-void
-bilinearInterpolation (const std::vector<Real>& u,
-                       const std::vector<Real>& v,
-                       const std::vector<Real>& slope_x,
-                       const std::vector<Real>& slope_y,
-                       const Real& slope_thr,
-                       std::vector<Real>& u_star,
-                       std::vector<Real>& v_star,
-                       const UInt&              nrows,
-                       const UInt&              ncols,
-                       const Real&              dt_DSV,
-                       const Real&              pixel_size,
-                       const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                       const std::vector<UInt>& idStaggeredInternalVectVertical,
-                       const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                       const std::vector<UInt>& idStaggeredBoundaryVectEast,
-                       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                       const std::vector<UInt>& idStaggeredBoundaryVectSouth);
-
 
 int
 computePourCell(const int& IDcell,
@@ -549,6 +489,31 @@ computePourCell(const int& IDcell,
                 const std::set<UInt>& idStaggeredBoundaryVectNorth,
                 const std::set<UInt>& idStaggeredBoundaryVectWest,
                 const std::set<UInt>& idStaggeredBoundaryVectEast); 
+
+
+
+
+
+void
+computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
+                    const std::vector<Real>& basin_mask_Vec_mpi,
+
+                    std::vector<UInt>& idStaggeredBoundaryVectSouth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectNorth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectWest_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectEast_mpi,
+
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal_mpi,
+                    std::vector<UInt>& idStaggeredInternalVectVertical_mpi,
+
+                    std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
+                    std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
+
+                    std::vector<UInt>& idBasinVect_mpi,
+                    std::vector<UInt>& idBasinVectReIndex_mpi,
+
+                    const UInt&              N_rows,
+                    const UInt&              N_cols);
 
 
 void
@@ -568,27 +533,6 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                     const UInt&              N_rows,
                     const UInt&              N_cols);
 
-void
-computeAdjacencies (const std::vector<Real>& basin_mask_Vec_input,
-                    const std::vector<std::tuple<bool, int> >& excluded_ids,
-                    
-                    std::vector<UInt>& idStaggeredBoundaryVectSouth,
-                    std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                    std::vector<UInt>& idStaggeredBoundaryVectWest,
-                    std::vector<UInt>& idStaggeredBoundaryVectEast,
-                    
-                    std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                    std::vector<UInt>& idStaggeredInternalVectVertical,
-                    
-                    std::vector<UInt>& idBasinVect,
-                    std::vector<UInt>& idBasinVectReIndex,
-                    
-                    const UInt&              N_rows,
-                    const UInt&              N_cols);
-
-
-
-
 
 void
 buildMatrix (const std::vector<Real>& H_int_x,
@@ -598,7 +542,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<Real>& v_star,
              const std::vector<Real>& u,
              const std::vector<Real>& v,
-             const Eigen::VectorXd&   H,
+             const std::vector<Real>& H,
              const UInt&              N_cols,
              const UInt&              N_rows,
              const UInt&              N,
@@ -616,20 +560,15 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<UInt>& idStaggeredBoundaryVectNorth,
              const std::vector<UInt>& idStaggeredBoundaryVectSouth,
              const std::vector<UInt>& idBasinVect,
-             const std::vector<UInt>& idBasinVect_not_excluded,
-             const std::vector<UInt>& idStaggeredInternalVectHorizontal_not_excluded,
-             const std::vector<UInt>& idStaggeredInternalVectVertical_not_excluded,
+
+             const std::vector<Real>& basin_mask_Vec_mpi,
+
              const std::vector<UInt>& idBasinVectReIndex,
              const bool&              isNonReflectingBC,
              const bool&              isH,
              
-             const std::vector<std::tuple<bool, int> >& excluded_ids,
-                   std::vector<Real>&                   additional_source_term,
-             
-             std::vector<Eigen::Triplet<Real> >& coefficients,
-             Eigen::VectorXd&                    rhs);
-
-
+             LIS_MATRIX&    A,
+             LIS_VECTOR&                    rhs);
 
 
 
@@ -644,8 +583,8 @@ updateVel (std::vector<Real>& u,
            const Real&              N_cols,
            const Real&              c2,
            const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const Eigen::VectorXd&   H,
+           const std::vector<Real>& eta,
+           const std::vector<Real>& H,
            const std::vector<Real>& orography,
            const std::vector<UInt>& idStaggeredInternalVectHorizontal,
            const std::vector<UInt>& idStaggeredInternalVectVertical,
@@ -658,22 +597,6 @@ updateVel (std::vector<Real>& u,
 
 
 
-void
-putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                     const std::vector<UInt>& idStaggeredInternalVectVertical,
-                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                     const std::vector<UInt>& idStaggeredBoundaryVectEast,
-                     const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                     const std::vector<UInt>& idStaggeredBoundaryVectSouth,
-                     const std::vector<UInt>& idBasinVect,
-                     const UInt& N_cols,
-                     const std::vector<std::tuple<bool, int> >& excluded_ids,
-                     
-                     Eigen::VectorXd&   H,
-                     Eigen::VectorXd&   eta,
-                     const std::vector<Real>& orography,
-                     std::vector<Real>& u, 
-                     std::vector<Real>& v );
 
 
 
@@ -691,7 +614,7 @@ maxCourant (const std::vector<Real>& u,
             const Real&              c1);
 
 Real
-maxCourant (const Eigen::VectorXd& H,
+maxCourant (const std::vector<Real>& H,
             const Real&            gravity,
             const Real&            c1);
 
@@ -706,25 +629,17 @@ compute_dt_sediment (const Real&              alpha,
                      const Real&              dt_DSV,
                      UInt&              numberOfSteps);
 
+UInt
+current_start_chunk(const int& rank, const std::vector<UInt>& chunk_length_vec);
 
 void
-saveVector (const Eigen::VectorXd& b,
+saveVector (const std::vector<Real>& b,
             const std::string& Name);
 
 void
 saveMatrix (const SpMat& A,
             const std::string& Name);
 
-void
-saveSolution (const std::string& preName,
-              const std::string& flag,
-              const UInt& N_rows,
-              const UInt& N_cols,
-              const Real& xllcorner,
-              const Real& yllcorner,
-              const Real& cellsize,
-              const Real& NODATA_value,
-              const Eigen::VectorXd& H); // it is H or orography
 
 void
 saveSolution(const std::string& preName,
@@ -748,19 +663,6 @@ saveSolution (const std::string& preName,
               const Real& NODATA_value,
               const std::vector<Int>& H); // it is H or orography
 
-void
-saveSolution(const std::string& preName,
-             const std::string& flag,
-             const UInt& N_rows,
-             const UInt& N_cols,
-             const Real& xllcorner,
-             const Real& yllcorner,
-             const Real& cellsize,
-             const Real& NODATA_value,
-             const UInt& n,
-             const std::vector<Real>& u,
-             const std::vector<Real>& v,
-             const Eigen::VectorXd& H); // it is H or orography
 
 void
 saveSolution (const std::string& preName,
