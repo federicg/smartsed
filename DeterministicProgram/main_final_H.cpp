@@ -1969,7 +1969,7 @@ main (int argc, char** argv)
           double tol = 1.e-6;
           int result, maxit = 15000;
           
-          
+          /*
           Eigen::ConjugateGradient < SpMat, Eigen::Lower | Eigen::Upper, Eigen::IncompleteCholesky<double> > cg;
           cg.compute ( A );
 
@@ -1979,9 +1979,9 @@ main (int argc, char** argv)
           std::cout << "# threads used by Eigen, " << Eigen::nbThreads( ) << std::endl;
           std::cout << "# iterations:    "         << cg.iterations()     << std::endl;
           std::cout << "estimated error: "         << cg.error()          << std::endl;
+          */
           
           
-          /*
           // Now with IML++
           Eigen::IncompleteCholesky<double> IC(A);// Create I cholesky preconditioner
           //Eigen::IncompleteLUT<double> ILU(A); // create ILU preconditioner
@@ -1990,7 +1990,7 @@ main (int argc, char** argv)
           std::cout <<" IML++ CG "<< std::endl;
           std::cout << "CG flag = " << result << std::endl;
           std::cout << "iterations performed: " << maxit << std::endl;
-          std::cout << "tolerance achieved  : " << tol << std::endl;*/
+          std::cout << "tolerance achieved  : " << tol << std::endl;
            
 
         }
