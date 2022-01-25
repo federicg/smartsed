@@ -208,6 +208,8 @@ main (int argc, char** argv)
     }
   MPI_Barrier (MPI_COMM_WORLD); 
 
+  if (rank==0) std::cout << "mean # of simulations per rank, " << chunk_length << std::endl;
+
   for (int currentSimNumber = std::min(totSimNumber, current_start_chunk(rank, chunk_sim_vec)+1); 
     currentSimNumber <= std::min(totSimNumber,current_start_chunk(rank+1, chunk_sim_vec)); currentSimNumber++)
   {
