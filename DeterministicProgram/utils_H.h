@@ -550,6 +550,25 @@ computePourCell(const int& IDcell,
 
 
 void
+computeAdjacencies (const std::vector<Real>& basin_mask_Vec_mpi,
+                    const std::vector<Real>& basin_mask_Vec,
+
+                    std::vector<UInt>& idStaggeredBoundaryVectSouth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectNorth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectWest_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectEast_mpi,
+
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal_mpi,
+                    std::vector<UInt>& idStaggeredInternalVectVertical_mpi,
+
+                    std::vector<UInt>& idBasinVectReIndex_mpi,
+                    std::vector<UInt>& idBasinVectReIndex,
+
+                    const UInt&              N_rows,
+                    const UInt&              N_cols);
+
+
+void
 computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
 
                     std::vector<UInt>& idStaggeredBoundaryVectSouth,
@@ -704,8 +723,8 @@ compute_dt_sediment (const Real&              alpha,
                      const Real&              dt_DSV,
                      UInt&              numberOfSteps);
 
-UInt
-current_start_chunk(const UInt& rank, const std::vector<UInt>& chunk_length_vec);
+int
+current_start_chunk(const int& rank, const std::vector<int>& chunk_length_vec);
 
 void
 saveVector (const Eigen::VectorXd& b,

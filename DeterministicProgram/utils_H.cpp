@@ -1661,7 +1661,7 @@ upwind::computeHorizontal ()
         & H_right = H( Id - i );
 
 
-      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id + 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocit√† interna di fianco
+      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id + 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocit‡ interna di fianco
 
     }
 
@@ -1677,7 +1677,7 @@ upwind::computeHorizontal ()
         H_right = 0;
 
 
-      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id - 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocit√† interna di fianco
+      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id - 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocit‡ interna di fianco
 
 
     }
@@ -1761,14 +1761,12 @@ bilinearInterpolation (const std::vector<Real>& u,
 
           const auto Id    = j + i * ( ncols + 1 ), // u
 
-            // ID della velocit√
+            // ID della velocit‡
             ID_NE = Id - i,        // v
             ID_NW = ID_NE - 1,     // v
             ID_SE = ID_NE + ncols, // v
             ID_SW = ID_NW + ncols; // v
 
-
-          //std::cout << i << std::endl;
 
 
           Vector2D vel( std::array<Real,2>{{ u[ Id ], ( v[ ID_NE ] + v[ ID_NW ] + v[ ID_SE ] + v[ ID_SW ] ) / 4. }} );
@@ -2793,6 +2791,191 @@ computePourCell(const int& IDcell,
   return candidate_id;
 }
 
+
+
+void
+computeAdjacencies (const std::vector<Real>& basin_mask_Vec_mpi,
+                    const std::vector<Real>& basin_mask_Vec,
+
+                    std::vector<UInt>& idStaggeredBoundaryVectSouth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectNorth_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectWest_mpi,
+                    std::vector<UInt>& idStaggeredBoundaryVectEast_mpi,
+
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal_mpi,
+                    std::vector<UInt>& idStaggeredInternalVectVertical_mpi,
+
+                    std::vector<UInt>& idBasinVectReIndex_mpi,
+                    std::vector<UInt>& idBasinVectReIndex,
+
+                    const UInt&              N_rows,
+                    const UInt&              N_cols)
+{
+
+  // +-----------------------------------------------+
+  // |                 Basin H IDs                   |
+  // +-----------------------------------------------+
+
+  UInt h = 0, hh = 0;
+  for ( UInt i = 0; i < N_rows; i++ )
+    {
+      for ( UInt j = 0; j < N_cols; j++ )
+        {
+          const UInt k = j + i*N_cols;
+
+          idBasinVectReIndex.push_back( h );
+          idBasinVectReIndex_mpi.push_back( hh );
+
+          if ( basin_mask_Vec[ k ] == 1 )
+            {
+              h++;
+            }
+
+          if ( basin_mask_Vec_mpi[ k ] == 1 )
+            {
+              hh++;
+            }
+        }
+    }
+
+
+  // +-----------------------------------------------+
+  // |         Vertical Vel. Staggered IDs           |
+  // +-----------------------------------------------+
+
+  // cycle on centered cells
+  for ( UInt i = 0; i < N_rows; i++ )
+    {
+      for ( UInt j = 0; j < N_cols; j++ )
+        {
+          const UInt IDcell       = j + i*N_cols,
+            IDcell_south = IDcell + N_cols,
+
+            IDvel        = IDcell + N_cols; // interface between IDcell and IDcell_south
+
+
+          if ( i != ( N_rows - 1 ) )
+            {
+              if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_south ] ) == 1 ) // interface cell
+                {
+                  if ( ( basin_mask_Vec[ IDcell ] + basin_mask_Vec[ IDcell_south ] ) == 1 )
+                  {
+                    if ( basin_mask_Vec_mpi[ IDcell ] == 0 )
+                    {
+                      idStaggeredBoundaryVectNorth_mpi.push_back( IDvel );
+                    }
+                    else
+                    {
+                      idStaggeredBoundaryVectSouth_mpi.push_back( IDvel );
+                    }
+                  }
+                  else
+                  {
+                    idStaggeredInternalVectVertical_mpi.push_back( IDvel );
+                  }
+                }
+
+              if ( i == 0 && basin_mask_Vec_mpi[ IDcell ] == 1 )
+                {
+                  const auto IDvel_north = IDcell;
+
+                  idStaggeredBoundaryVectNorth_mpi.push_back( IDvel_north ); // it is ok
+                }
+
+              if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_south ] ) == 2 )
+                {
+                  idStaggeredInternalVectVertical_mpi.push_back( IDvel ); // it is ok no repetition
+                }
+
+            }
+          else
+            {
+
+              if ( basin_mask_Vec_mpi[ IDcell ] == 1 )
+                {
+                  const auto IDvel_south = IDvel;
+
+                  idStaggeredBoundaryVectSouth_mpi.push_back( IDvel_south );
+                }
+
+
+
+            }
+
+
+        }
+    }
+
+  // +-----------------------------------------------+
+  // |         Horizontal Vel. Staggered IDs         |
+  // +-----------------------------------------------+
+
+
+  // cycle on centered cells
+  for ( UInt i = 0; i < N_rows; i++ )
+    {
+      for ( UInt j = 0; j < N_cols; j++ )
+        {
+          const UInt IDcell      = j + i * N_cols,
+            IDcell_east = IDcell + 1,
+
+            IDvel       = IDcell + i + 1; // interface between IDcell and IDcell_east
+
+
+          if ( j != ( N_cols - 1 ) )
+            {
+              if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_east ] ) == 1 )
+                {
+                  if ( ( basin_mask_Vec[ IDcell ] + basin_mask_Vec[ IDcell_east ] ) == 1 )
+                  {
+                    if ( basin_mask_Vec_mpi[ IDcell ] == 0 )
+                    {
+                      idStaggeredBoundaryVectWest_mpi.push_back( IDvel );
+                    }
+                    else
+                    {
+                      idStaggeredBoundaryVectEast_mpi.push_back( IDvel );
+                    }
+                  }
+                  else
+                  {
+                    idStaggeredInternalVectHorizontal_mpi.push_back( IDvel );
+                  }
+                }
+
+              if ( j == 0 && basin_mask_Vec_mpi[ IDcell ] == 1 )
+                {
+                  const auto IDvel_west = IDcell + i;
+
+                  idStaggeredBoundaryVectWest_mpi.push_back( IDvel_west );
+                }
+
+              if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_east ] ) == 2 )
+                {
+                  idStaggeredInternalVectHorizontal_mpi.push_back( IDvel );
+                }
+
+            }
+          else
+            {
+
+              if ( basin_mask_Vec_mpi[ IDcell ] == 1 )
+                {
+                  const auto IDvel_east = IDvel;
+
+                  idStaggeredBoundaryVectEast_mpi.push_back( IDvel_east );
+                }
+
+
+
+            }
+
+
+        }
+    }
+
+
+}
 
 
 
@@ -3915,17 +4098,17 @@ compute_dt_sediment (const Real&              alpha,
 
 }
 
-UInt
-current_start_chunk(const UInt& rank, const std::vector<UInt>& chunk_length_vec)
+int
+current_start_chunk(const int& rank, const std::vector<int>& chunk_length_vec)
 {
-  UInt result;
+  int result;
   if (rank-1<0)
   {
     result = 0;
   }
   else
   {
-    result = chunk_length_vec[rank-1] + current_start_chunk(rank-1, chunk_length_vec, result);
+    result = chunk_length_vec[rank-1] + current_start_chunk(rank-1, chunk_length_vec);
   }
 
   return(result);

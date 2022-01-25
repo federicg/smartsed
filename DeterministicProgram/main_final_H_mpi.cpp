@@ -210,16 +210,15 @@ main (int argc, char** argv)
       idStaggeredInternalVectHorizontal_mpi,
       idStaggeredInternalVectVertical_mpi,
       idStaggeredBoundaryVectHorizontal_among_ranks,
-      idStaggeredBoundaryVectVertical_among_ranks
+      idStaggeredBoundaryVectVertical_among_ranks,
+      idStaggeredInternalVectHorizontal_in_rank,
+      idStaggeredInternalVectVertical_in_rank,
       idBasinVect_mpi,
       idBasinVectReIndex_mpi;
 
   
   std::vector<std::array<Real, 2> > Gamma_vect_x,
       Gamma_vect_y;
-
-
-  std::vector<std::tuple<bool, int> > excluded_ids;
   
   std::vector<Real> basin_mask_Vec,
       orography,
@@ -248,7 +247,7 @@ main (int argc, char** argv)
       slope_cell,
       soilMoistureRetention,
       roughness_vect,
-      eta, H;
+      H;
 
 
   LIS_VECTOR H_basin, rhs;
@@ -352,7 +351,6 @@ main (int argc, char** argv)
 
 
     H                     .resize ( N );
-    eta                   .resize ( N );
     orography             .resize ( N );
     basin_mask_Vec        .resize ( N );
     h_G                   .resize ( N );
@@ -364,7 +362,6 @@ main (int argc, char** argv)
     W_Gav_cum_save        .resize ( N );
     Res_x                 .resize ( N );
     Res_y                 .resize ( N );
-    excluded_ids          .resize ( N );
     Z_Gav                 .resize ( N );
     d_90                  .resize ( N );
     soilMoistureRetention .resize ( N );
@@ -441,7 +438,6 @@ main (int argc, char** argv)
             {
               const auto k = j + i * N_cols;
               H [ k ]   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-              eta [ k ] = H [ k ] + orography[ k ];
             }
         }
 
@@ -450,8 +446,7 @@ main (int argc, char** argv)
     {
       for ( UInt i = 0; i < N; i++ )
       {
-        H   [ i ] = 0.;
-        eta [ i ] = 0.;
+        H [ i ] = 0.;
       }
 
       if (rank==0) saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
@@ -1392,7 +1387,7 @@ main (int argc, char** argv)
 
 
   const Real dt_min = std::min ( dt_rain, dt_temp );
-  for ( const auto& kk : hydraulic_conductivity )
+  for ( const auto & kk : hydraulic_conductivity )
     {
       if ( kk * ( dt_min / pixel_size ) > 1. )
         {
@@ -1449,15 +1444,15 @@ main (int argc, char** argv)
   
   
   // +-----------------------------------------------+
-  // |      Subdivisions among available cores       |
+  // |      Subdivision among available cores        |
   // +-----------------------------------------------+
 
 
-  const auto nnz_basin_mask_Vec = idBasinVect.size();
-  const UInt chunk_length = nnz_basin_mask_Vec/size;
-  const UInt residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
+  const int nnz_basin_mask_Vec = idBasinVect.size();
+  const int chunk_length = nnz_basin_mask_Vec/size;
+  const int residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
 
-  std::vector<UInt> chunk_length_vec(size);
+  std::vector<int> chunk_length_vec(size);
   chunk_length_vec.assign(size, chunk_length);
 
   for (UInt i = 0; i < residual; i++)
@@ -1475,7 +1470,6 @@ main (int argc, char** argv)
     basin_mask_Vec_mpi[idBasinVect[i]] = 1;
     corresponding_rank_given_id[idBasinVect[i]] = rank;
   }
-  
   MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
 
@@ -1490,6 +1484,8 @@ main (int argc, char** argv)
                       idStaggeredInternalVectVertical_mpi,
                       idStaggeredBoundaryVectHorizontal_among_ranks,
                       idStaggeredBoundaryVectVertical_among_ranks,
+                      idStaggeredInternalVectHorizontal_in_rank,
+                      idStaggeredInternalVectVertical_in_rank,
                       idBasinVect_mpi,
                       idBasinVectReIndex_mpi,
                       N_rows,
@@ -1540,18 +1536,23 @@ main (int argc, char** argv)
   lis_solver_set_option("-i cg -p none",solver);
   lis_solver_set_option("-tol 1.0e-12",solver);
 
-  
-
-  
+  std::vector<MPI_Request> requests(2*current_size_b, MPI_REQUEST_NULL);  
   
   int iter = 0;
   
   
-  double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
+  double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, u_abs_max, v_abs_max;
 
-  maxH = *std::max_element( H.begin(), H.end() ); 
+  for (const auto & Id : idBasinVect_mpi)
+  {
+    maxH = std::max(maxH, H[Id]);
+  }
+  MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&maxH), 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
    
-  dt_DSV = maxdt(u, v, g, maxH, pixel_size);
+  dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
+  MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
   dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
       
@@ -1590,7 +1591,7 @@ main (int argc, char** argv)
         {
           tic();
           // Compute temperature map
-          temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect );
+          temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect_mpi );
           toc ("temperature");
         }
 
@@ -1600,7 +1601,7 @@ main (int argc, char** argv)
         {
           tic();
           // Get ET rate at the current time
-          ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24.*3600 ) ), idBasinVect, orography );
+          ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24.*3600 ) ), idBasinVect_mpi, orography );
           toc ("ET");
         }
 
@@ -1613,6 +1614,13 @@ main (int argc, char** argv)
         {
 
           tic();
+
+          // communication to make available ghost cells
+          comunicationStencil(requests, corresponding_rank_given_id, 
+            h_G, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
+            rank, N_cols);
+
+
           // h_G
           // vertical and horizontal residuals for Gravitational Layer
           computeResiduals ( n_x,
@@ -1621,12 +1629,12 @@ main (int argc, char** argv)
                              N_rows,
                              h_G,
                              hydraulic_conductivity,
-                             idStaggeredInternalVectHorizontal,
-                             idStaggeredInternalVectVertical,
-                             idStaggeredBoundaryVectWest,
-                             idStaggeredBoundaryVectEast,
-                             idStaggeredBoundaryVectNorth,
-                             idStaggeredBoundaryVectSouth,
+                             idStaggeredInternalVectHorizontal_mpi,
+                             idStaggeredInternalVectVertical_mpi,
+                             idStaggeredBoundaryVectWest_mpi,
+                             idStaggeredBoundaryVectEast_mpi,
+                             idStaggeredBoundaryVectNorth_mpi,
+                             idStaggeredBoundaryVectSouth_mpi,
                              idBasinVect_mpi,
                              h_interface_x,
                              h_interface_y,
@@ -1637,10 +1645,6 @@ main (int argc, char** argv)
       
 
       tic();
-      precipitation.DP_total      .assign(N, 0.);
-      precipitation.DP_cumulative .assign(N, 0.);
-      precipitation.DP_infiltrated.assign(N, 0.);
-
       precipitation.computePrecipitation (time,
                                           soilMoistureRetention,
                                           temp.melt_mask,
@@ -1649,10 +1653,6 @@ main (int argc, char** argv)
                                           N_rows,
                                           N_cols,
                                           idBasinVect_mpi);
-
-      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_total      .data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_cumulative .data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-      MPI_Allreduce (MPI_IN_PLACE, precipitation.DP_infiltrated.data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       toc ("precipitation");
 
       
@@ -1662,12 +1662,12 @@ main (int argc, char** argv)
 
           tic();
 
-          for ( const UInt & k : idBasinVect )
+          for ( const UInt & k : idBasinVect_mpi )
             {
               S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
             }
 
-          for ( const UInt & k : idBasinVect )
+          for ( const UInt & k : idBasinVect_mpi )
             {
               h_G[ k ] += ( S_coeff[ k ] - ET.ET_vec[ k ] ) * dt_min + precipitation.DP_infiltrated[ k ] * dt_min - c1_min * ( Res_x[ k ] + Res_y[ k ] );
               h_G[ k ] *= ( h_G[ k ] >= 0 ); // to account for evapotranspiration
@@ -1678,7 +1678,7 @@ main (int argc, char** argv)
           // +-----------------------------------------------+
 
 
-          for ( const UInt & k : idBasinVect )
+          for ( const UInt & k : idBasinVect_mpi )
             {
               const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
               h_sn[ k ] += snow_acc;
@@ -1696,6 +1696,8 @@ main (int argc, char** argv)
 
 
       tic();
+      // mettere la comunicazione sulla vel. u, v
+
       // fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation ( u,
                               v,
@@ -1784,12 +1786,23 @@ main (int argc, char** argv)
       // lis_vector_print(H_basin);
 
       lis_matrix_unset(A);
-    
+
+      minH = 1e4; maxH = -1e4;
+      for (const auto & Id : idBasinVect_mpi)
+      {
+        const UInt & IDreIndex = idBasinVectReIndex[ Id ];
+
+        LIS_SCALAR value;
+        lis_vector_get_value(H_basin, IDreIndex, &value);
+
+        maxH = std::max(maxH, value);
+        minH = std::min(minH, value);
+      }
+      MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&maxH), 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+      MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&minH), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
       
-      
-      minH = H_basin.minCoeff(); maxH = H_basin.maxCoeff();
-      std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
-      
+
+      if (rank==0) std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
       
       
       if (minH < -H_min) 
@@ -1797,7 +1810,7 @@ main (int argc, char** argv)
         
         dt_DSV = dt_DSV/10.;
         
-        if (dt_DSV == 0)
+        if (dt_DSV == 0 && rank==0)
         {
           std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
           exit( -1. );
@@ -1811,10 +1824,7 @@ main (int argc, char** argv)
 
       }
       
-      // 
-      H.assign(H.size(), 0.);
-      u.assign(u.size(), 0.);
-      v.assign(v.size(), 0.);
+
 
       for ( const UInt & Id : idBasinVect_mpi )
         {
@@ -1826,12 +1836,9 @@ main (int argc, char** argv)
           H [ Id ] = std::abs(value);
         }
 
-      MPI_Allreduce (MPI_IN_PLACE, H.data(), N, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-
-      for ( const UInt & Id : idBasinVect )
-        {
-          eta [ Id ] = H [ Id ] + orography[ Id ];
-        }
+      comunicationStencil(requests, corresponding_rank_given_id, 
+            H, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
+            rank, N_cols);
 
 
       // +-----------------------------------------------+
@@ -1849,7 +1856,6 @@ main (int argc, char** argv)
                   N_cols,
                   c2_DSV_,
                   0., // 0
-                  eta,
                   H,
                   orography,
                   idStaggeredInternalVectHorizontal_mpi,
@@ -1859,9 +1865,6 @@ main (int argc, char** argv)
                   idStaggeredBoundaryVectNorth_mpi,
                   idStaggeredBoundaryVectSouth_mpi,
                   isNonReflectingBC );
-
-      MPI_Allreduce (MPI_IN_PLACE, u.data(), u.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-      MPI_Allreduce (MPI_IN_PLACE, v.data(), v.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
       
       toc ("solve");
 
@@ -1876,9 +1879,19 @@ main (int argc, char** argv)
       {
         const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
-        dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
-        c1_sed = dt_sed/pixel_size;
+        // make an Allreduce here to get global dt_sed
+        dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x, slope_y, u, v, pixel_size, dt_DSV, 
+                                    idStaggeredInternalVectHorizontal_mpi,
+                                    idStaggeredInternalVectVertical_mpi,
+                                    idStaggeredBoundaryVectWest_mpi,
+                                    idStaggeredBoundaryVectEast_mpi,
+                                    idStaggeredBoundaryVectNorth_mpi,
+                                    idStaggeredBoundaryVectSouth_mpi );
 
+        MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_sed), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
+        c1_sed = dt_sed/pixel_size;
+        numberOfSteps = std::floor( dt_DSV / dt_sed );
 
 
         // vertical and horizontal residuals truncated for Sediment Transport
@@ -1917,6 +1930,11 @@ main (int argc, char** argv)
         for ( UInt kk = 0; kk < numberOfSteps; kk++ )
         {
 
+          comunicationStencil(requests, corresponding_rank_given_id, 
+            h_sd, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
+            rank, N_cols);
+
+
           // horizontal
           for ( const UInt & Id : idStaggeredInternalVectHorizontal_mpi )
           {
@@ -1953,7 +1971,7 @@ main (int argc, char** argv)
 
 
             const Real & h_left  = h_sd[ Id - i - 1 ],
-            h_right = 0;
+                         h_right = 0;
 
 
             h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
@@ -1963,11 +1981,8 @@ main (int argc, char** argv)
           for ( const UInt & Id : idBasinVect_mpi )
           {
             const UInt i = Id / N_cols;
-
             Res_x[ Id ] = h_interface_x[ Id + 1 + i ] - h_interface_x[ Id + i ];
           }
-
-
 
 
 
@@ -1976,10 +1991,10 @@ main (int argc, char** argv)
           for ( const UInt & Id : idStaggeredInternalVectVertical_mpi )
           {
             const UInt IDsouth = Id,
-            IDnorth = Id - N_cols;
+                       IDnorth = Id - N_cols;
 
             const Real & h_left  = h_sd[ IDnorth ],
-            & h_right = h_sd[ IDsouth ];
+                       & h_right = h_sd[ IDsouth ];
 
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
@@ -1990,8 +2005,8 @@ main (int argc, char** argv)
           for ( const UInt & Id : idStaggeredBoundaryVectNorth_mpi )
           {
 
-            const Real h_left  = 0, // 0
-            & h_right = h_sd[ Id ];
+            const Real h_left  = 0., // 0
+                     & h_right = h_sd[ Id ];
 
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
@@ -2005,7 +2020,7 @@ main (int argc, char** argv)
           {
 
             const Real & h_left  = h_sd[ Id - N_cols ],
-            h_right = 0;
+                         h_right = 0.;
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
                                   Gamma_vect_y[ Id ][ 1 ] * h_left;
@@ -2049,7 +2064,7 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
 
       
-      if ( save_temporal_sequence && rank==0 )
+      if ( save_temporal_sequence )
       {
 
         for (Int number=1; number<=number_gauges; number++)
@@ -2065,28 +2080,29 @@ main (int argc, char** argv)
 
           const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
 
-
-
-          double H_current = 0.;
-          UInt kk_gauges_max = 0;
-          for (const auto candidate : kk_gauges[number-1])
+          if ( basin_mask_Vec_mpi[kk_gauges[number-1]] )
           {
-            const auto & cc = H[ candidate ];
-            if (cc > H_current)
+            double H_current = 0.;
+            UInt kk_gauges_max = 0;
+            for (const auto candidate : kk_gauges[number-1])
             {
-              kk_gauges_max = candidate;
-              H_current = cc;
+              const auto & cc = H[ candidate ];
+              if (cc > H_current)
+              {
+                kk_gauges_max = candidate;
+                H_current = cc;
+              }
             }
-          }
-          const UInt i = kk_gauges_max/N_cols;
+            const UInt i = kk_gauges_max/N_cols;
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
-            H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-             std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
-            h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
+              H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+               std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+              h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+                std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+          }
         }
       }
       
@@ -2154,7 +2170,37 @@ main (int argc, char** argv)
       // |               Update time step                |
       // +-----------------------------------------------+
 
-      dt_DSV = maxdt(u, v, g, maxH, pixel_size);
+      u_abs_max = 0.;
+      for (const auto & Id : idStaggeredInternalVectHorizontal_mpi)
+      {
+        u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+      }
+      for (const auto & Id : idStaggeredBoundaryVectWest_mpi)
+      {
+        u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+      }
+      for (const auto & Id : idStaggeredBoundaryVectEast_mpi)
+      {
+        u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+      }
+
+      v_abs_max = 0.;
+      for (const auto & Id : idStaggeredInternalVectVertical_mpi)
+      {
+        v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+      }
+      for (const auto & Id : idStaggeredBoundaryVectNorth_mpi)
+      {
+        v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+      }
+      for (const auto & Id : idStaggeredBoundaryVectSouth_mpi)
+      {
+        v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+      }
+
+      dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
+      MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
@@ -2187,7 +2233,7 @@ main (int argc, char** argv)
   MPI_Barrier (MPI_COMM_WORLD); 
   if (rank == 0) { print_timing_report (); }
   lis_finalize ();
-  return ( 0 );
+  return ( EXIT_SUCCESS );
 
 }
 

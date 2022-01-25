@@ -1996,13 +1996,13 @@ bilinearInterpolation (const std::vector<Real>& u,
         y = xx( 1 );
 
 
-      auto x_1 = std::floor( x ),              //  11    21     ----> x
+      auto x_1 = std::floor( x ),           //  11    21     ----> x
         y_1 = std::floor( y ),              //
         x_2 = x_1 + 1,                      //
         y_2 = y_1 + 1;                      //  12    22
-      //
-      // |
-      // | y
+                                            //
+                                            // |
+                                            // | y
 
 
 
@@ -2137,13 +2137,13 @@ bilinearInterpolation (const std::vector<Real>& u,
         y = xx( 1 );
 
 
-      auto x_1 = std::floor( x ),              //  11    21     ----> x
+      auto x_1 = std::floor( x ),           //  11    21     ----> x
         y_1 = std::floor( y ),              //
         x_2 = x_1 + 1,                      //
         y_2 = y_1 + 1;                      //  12    22
-      //
-      // |
-      // | y
+                                            //
+                                            // |
+                                            // | y
 
 
 
@@ -2394,6 +2394,9 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                     std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
                     std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
 
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal_in_rank,
+                    std::vector<UInt>& idStaggeredInternalVectVertical_in_rank,
+
                     std::vector<UInt>& idBasinVect_mpi,
                     std::vector<UInt>& idBasinVectReIndex_mpi,
 
@@ -2470,6 +2473,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
               if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_south ] ) == 2 )
                 {
                   idStaggeredInternalVectVertical_mpi.push_back( IDvel ); // it is ok no repetition
+                  idStaggeredInternalVectVertical_in_rank.push_back( IDvel );
                 }
 
             }
@@ -2525,6 +2529,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                   else
                   {
                     idStaggeredInternalVectHorizontal_mpi.push_back( IDvel );
+                    idStaggeredBoundaryVectHorizontal_among_ranks.push_back( IDvel );
                   }
                 }
 
@@ -2538,7 +2543,7 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
               if ( ( basin_mask_Vec_mpi[ IDcell ] + basin_mask_Vec_mpi[ IDcell_east ] ) == 2 )
                 {
                   idStaggeredInternalVectHorizontal_mpi.push_back( IDvel );
-                  idStaggeredBoundaryVectHorizontal_among_ranks.push_back( IDvel );
+                  idStaggeredInternalVectHorizontal_in_rank.push_back( IDvel );
                 }
 
             }
@@ -3099,7 +3104,6 @@ updateVel (std::vector<Real>& u,
            const Real&              N_cols,
            const Real&              c2,
            const Real&              H_min,
-           const std::vector<Real>& eta,
            const std::vector<Real>& H,
            const std::vector<Real>& orography,
            const std::vector<UInt>& idStaggeredInternalVectHorizontal,
@@ -3122,12 +3126,13 @@ updateVel (std::vector<Real>& u,
       const UInt IDsouth = Id,
         IDnorth = Id - N_cols;
 
+      const auto eta_south = H[ IDsouth ] + orography[ IDsouth ],
+      eta_north = H[ IDnorth ] + orography[ IDnorth ];
 
-
-      const auto & H_interface = (H[ IDsouth ] + H[ IDnorth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (-H[ IDsouth ] + H[ IDnorth ])*.5;
+      const auto & H_interface = (H[ IDsouth ] + H[ IDnorth ])*.5 + signum(-eta_south+eta_north) * (-H[ IDsouth ] + H[ IDnorth ])*.5;
       if ( H_interface > H_min )
         {
-          v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta[ IDsouth ] - eta[ IDnorth ] ) );
+          v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta_south - eta_north ) );
         }
       else
         {
@@ -3145,8 +3150,11 @@ updateVel (std::vector<Real>& u,
 
       const UInt IDsouth = Id + N_cols,
       IDnorth = Id;
+
+      const auto eta_south = H[ IDsouth ] + orography[ IDsouth ],
+      eta_north = H[ IDnorth ] + orography[ IDnorth ];
       
-      const auto & H_interface = (H[ IDnorth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (-H[ IDnorth ])*.5;
+      const auto & H_interface = (H[ IDnorth ])*.5 + signum(-eta_south+eta_north) * (-H[ IDnorth ])*.5;
       if ( H_interface > H_min )
         {
 //          v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
@@ -3166,8 +3174,11 @@ updateVel (std::vector<Real>& u,
 
       const UInt IDsouth = Id - N_cols,
       IDnorth = Id - 2*N_cols;
+
+      const auto eta_south = H[ IDsouth ] + orography[ IDsouth ],
+      eta_north = H[ IDnorth ] + orography[ IDnorth ];
       
-      const auto & H_interface = (H[ IDsouth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (H[ IDsouth ])*.5;
+      const auto & H_interface = (H[ IDsouth ])*.5 + signum(-eta_south+eta_north) * (H[ IDsouth ])*.5;
       if ( H_interface > H_min )
         {
 //          v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
@@ -3193,11 +3204,13 @@ updateVel (std::vector<Real>& u,
         IDeast  = Id - i,
         IDwest  = Id - i - 1;
 
+      const auto eta_east = H[ IDeast ] + orography[ IDeast ],
+      eta_west = H[ IDwest ] + orography[ IDwest ];
       
-      const auto & H_interface = (H[ IDeast ] + H[ IDwest ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (-H[ IDeast ] + H[ IDwest ])*.5;
+      const auto & H_interface = (H[ IDeast ] + H[ IDwest ])*.5 + signum(-eta_east+eta_west) * (-H[ IDeast ] + H[ IDwest ])*.5;
       if ( H_interface > H_min )
         {
-          u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta[ IDeast ] - eta[ IDwest ] ) );
+          u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta_east - eta_west ) );
         }
       else
         {
@@ -3215,7 +3228,10 @@ updateVel (std::vector<Real>& u,
       IDeast = Id - i + 1,
       IDwest = Id - i;
 
-      const auto & H_interface = (H[ IDwest ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (-H[ IDwest ])*.5;
+      const auto eta_east = H[ IDeast ] + orography[ IDeast ],
+      eta_west = H[ IDwest ] + orography[ IDwest ];
+
+      const auto & H_interface = (H[ IDwest ])*.5 + signum(-eta_east+eta_west) * (-H[ IDwest ])*.5;
       if ( H_interface > H_min )
         {
 //          u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
@@ -3238,7 +3254,10 @@ updateVel (std::vector<Real>& u,
       IDeast = Id - i - 1,
       IDwest = Id - i - 2;
 
-      const auto & H_interface = (H[ IDeast ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (H[ IDeast ])*.5;
+      const auto eta_east = H[ IDeast ] + orography[ IDeast ],
+      eta_west = H[ IDwest ] + orography[ IDwest ];
+
+      const auto & H_interface = (H[ IDeast ])*.5 + signum(-eta_east+eta_west) * (H[ IDeast ])*.5;
       if ( H_interface > H_min )
         {
 //          u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
@@ -3259,31 +3278,19 @@ updateVel (std::vector<Real>& u,
 
 
 Real
-maxdt (const std::vector<Real>& u,
-       const std::vector<Real>& v,
-       const Real&              gravity,
-       const Real&              Hmax,
-       const Real&              pixel_size)
+maxdt (const Real& vel_max_abs_x,
+       const Real& vel_max_abs_y,
+       const Real& gravity,
+       const Real& Hmax,
+       const Real& pixel_size)
 {
-  
-  // +-----------------------------------------------+
-  // |      Estimate vertical max Courant number     |
-  // +-----------------------------------------------+
-  
-  const Real vel_max_y = std::max( *std::max_element( v.begin(), v.end() ), std::abs( *std::min_element( v.begin(), v.end() ) ) );
-  
-  // +-----------------------------------------------+
-  // |    Estimate horizontal max Courant number     |
-  // +-----------------------------------------------+
-  
-  const Real vel_max_x = std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
   
   const Real Co = 0.9; // 0.3
   const Real Co_cel = 1e4; // 10
   
   const Real cel = std::sqrt( Hmax * gravity );
   
-  Real dt_candidate = Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon());
+  Real dt_candidate = Co * pixel_size / (std::max( vel_max_abs_x, vel_max_abs_y )+std::numeric_limits<double>::epsilon());
   dt_candidate = std::min(dt_candidate, Co_cel * pixel_size / (cel+std::numeric_limits<double>::epsilon()));
   
   
@@ -3333,13 +3340,18 @@ maxCourant (const std::vector<Real>& H,
 Real
 compute_dt_sediment (const Real&              alpha,
                      const Real&              beta,
-                     const Real&              S_x,
-                     const Real&              S_y,
+                     const std::vector<Real>& S_x,
+                     const std::vector<Real>& S_y,
                      const std::vector<Real>& u,
                      const std::vector<Real>& v,
                      const Real&              pixel_size,
                      const Real&              dt_DSV,
-                     UInt&              numberOfSteps)
+                     const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                     const std::vector<UInt>& idStaggeredInternalVectVertical,
+                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                     const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                     const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                     const std::vector<UInt>& idStaggeredBoundaryVectSouth)
 {
 
   const Real max_courant_number = .95;
@@ -3347,32 +3359,56 @@ compute_dt_sediment (const Real&              alpha,
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
 
-  const Real dt_y = max_courant_number * pixel_size / ( alpha * std::pow( S_y, beta ) * std::max( *std::max_element( v.begin(), v.end() ), std::abs( *std::min_element( v.begin(), v.end() ) ) ) );
+  Real dt_y = dt_DSV;
+  for (const auto & Id : idStaggeredInternalVectVertical)
+  {
+    dt_y = std::min(dt_y, max_courant_number * pixel_size / ( alpha * std::pow( S_y[ Id ], beta ) * std::abs( v[ Id ] ) ));
+  }
+
+  for (const auto & Id : idStaggeredBoundaryVectNorth)
+  {
+    dt_y = std::min(dt_y, max_courant_number * pixel_size / ( alpha * std::pow( S_y[ Id ], beta ) * std::abs( v[ Id ] ) ));
+  }
+
+  for (const auto & Id : idStaggeredBoundaryVectSouth)
+  {
+    dt_y = std::min(dt_y, max_courant_number * pixel_size / ( alpha * std::pow( S_y[ Id ], beta ) * std::abs( v[ Id ] ) ));
+  }
 
   // +-----------------------------------------------+
   // |    Estimate horizontal max Courant number     |
   // +-----------------------------------------------+
 
-  const Real dt_x = max_courant_number * pixel_size / ( alpha * std::pow( S_x, beta ) * std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) ) );
+  Real dt_x = dt_DSV;
+  for (const auto & Id : idStaggeredInternalVectHorizontal)
+  {
+    dt_x = std::min(dt_x, max_courant_number * pixel_size / ( alpha * std::pow( S_x[ Id ], beta ) * std::abs( u[ Id ] ) ));
+  }
+
+  for (const auto & Id : idStaggeredBoundaryVectWest)
+  {
+    dt_x = std::min(dt_x, max_courant_number * pixel_size / ( alpha * std::pow( S_x[ Id ], beta ) * std::abs( u[ Id ] ) ));
+  }
+
+  for (const auto & Id : idStaggeredBoundaryVectEast)
+  {
+    dt_x = std::min(dt_x, max_courant_number * pixel_size / ( alpha * std::pow( S_x[ Id ], beta ) * std::abs( u[ Id ] ) ));
+  }
 
 
-  Real dt_sed = std::min( dt_y, dt_x );
-
-  //std::cout << S_x << " " << std::pow( S_x, beta ) << " " << dt_y << " " << dt_x << " " << dt_DSV << std::endl;
+  Real dt_sed = std::min(dt_y, dt_x);
 
   dt_sed = std::min( dt_DSV / std::floor( dt_DSV / dt_sed ), dt_DSV );
-
-  numberOfSteps = std::floor( dt_DSV / dt_sed );
 
   return( dt_sed );
 
 
 }
 
-UInt
-current_start_chunk(const int& rank, const std::vector<UInt>& chunk_length_vec)
+int
+current_start_chunk(const int& rank, const std::vector<int>& chunk_length_vec)
 {
-  UInt result;
+  int result;
   if (rank-1<0)
   {
     result = 0;
@@ -3999,6 +4035,78 @@ saveTemporalSequence (const Real&        time,
   ff.close();
 }
 
+void
+comunicationStencil(std::vector<MPI_Request>& requests, 
+               const std::vector<int>& corresponding_rank_given_id, 
+                     std::vector<Real>& h,
+               const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
+               const std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
+               const int& rank,
+               const UInt& N_cols)
+{
+  // communication part, horizontal
+  int count_req = 0;
+  int current_size_b = idStaggeredBoundaryVectHorizontal_among_ranks.size();
+
+  requests.assign(2*current_size_b, MPI_REQUEST_NULL)
+  for ( const UInt & Id : idStaggeredBoundaryVectHorizontal_among_ranks )
+  {
+    const UInt i       = Id / ( N_cols + 1 ),
+    IDeast  = Id - i,
+    IDwest  = Id - i - 1;
+
+    const auto & rank_west = corresponding_rank_given_id[IDwest];
+    const auto & rank_east = corresponding_rank_given_id[IDeast];
+
+    auto & h_left  = h[ IDwest ],
+    & h_right = h[ IDeast ];
+
+    if ( rank_west!=rank )
+    {
+      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests[count_req]);
+      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_west, IDeast, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+    }
+    else
+    {
+      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_east, IDeast, MPI_COMM_WORLD, &requests[count_req]);
+      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_east, IDwest, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+    }
+
+  }
+  MPI_Waitall(2*current_size_b, requests, MPI_STATUS_IGNORE);
+
+
+  // communication part, vertical
+  requests.assign(2*current_size_b, MPI_REQUEST_NULL);
+  count_req = 0;
+  current_size_b = idStaggeredBoundaryVectVertical_among_ranks.size();
+  for ( const UInt & Id : idStaggeredBoundaryVectVertical_among_ranks )
+  {
+
+    const UInt IDsouth = Id,
+    IDnorth = Id - N_cols;
+
+    const auto & rank_north = corresponding_rank_given_id[IDnorth];
+    const auto & rank_south = corresponding_rank_given_id[IDsouth];
+
+    auto & h_left  = h[ IDnorth ],
+    & h_right = h[ IDsouth ];
+
+    if ( rank_north!=rank )
+    {
+      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_north, IDnorth, MPI_COMM_WORLD, &requests[count_req]);
+      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_north, IDsouth, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+    }
+    else
+    {
+      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_south, IDsouth, MPI_COMM_WORLD, &requests[count_req]);
+      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_south, IDnorth, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+    }
+
+  }
+  MPI_Waitall(2*current_size_b.size(), requests, MPI_STATUS_IGNORE);
+}
+
 
 
 // For gravitational layer
@@ -4030,8 +4138,6 @@ computeResiduals (const std::vector<Real>& n_x,
   // |                  Horizontal                   |
   // +-----------------------------------------------+
 
-
-
   for ( const UInt & Id : idStaggeredInternalVectHorizontal )
     {
 
@@ -4041,10 +4147,10 @@ computeResiduals (const std::vector<Real>& n_x,
 
 
       const Real & h_left  = h[ IDwest ],
-        & h_right = h[ IDeast ];
+       & h_right = h[ IDeast ];
 
-      const Real k_c_left  = coeff[ IDwest ],
-        k_c_right = coeff[ IDeast ];
+      const Real & k_c_left  = coeff[ IDwest ],
+       & k_c_right = coeff[ IDeast ];
 
       h_interface_x[ Id ] = n_x[ Id ] * ( ( k_c_left * h_left + k_c_right * h_right ) + n_x[ Id ] * ( k_c_left * h_left - k_c_right * h_right ) ) * .5;
 
@@ -4059,10 +4165,10 @@ computeResiduals (const std::vector<Real>& n_x,
 
 
       const Real h_left  = 0, //0,
-        h_right = h[ Id - i ];
+       & h_right = h[ Id - i ];
 
       const Real k_c_left  = 0.,
-        k_c_right = coeff[ Id - i ];
+       & k_c_right = coeff[ Id - i ];
 
       h_interface_x[ Id ] = n_x[ Id ] * ( ( k_c_left * h_left + k_c_right * h_right ) + n_x[ Id ] * ( k_c_left * h_left - k_c_right * h_right ) ) * .5;
 
@@ -4076,10 +4182,10 @@ computeResiduals (const std::vector<Real>& n_x,
       const UInt i = Id / ( N_cols + 1 );
 
 
-      const Real h_left  = h[ Id - i - 1 ],
+      const Real & h_left  = h[ Id - i - 1 ],
         h_right = 0; //0;
 
-      const Real k_c_left  = coeff[ Id - i - 1 ],
+      const Real & k_c_left  = coeff[ Id - i - 1 ],
         k_c_right = 0.;
 
 
@@ -4110,11 +4216,11 @@ computeResiduals (const std::vector<Real>& n_x,
         IDnorth = Id - N_cols;     // H
 
 
-      const Real  h_left  = h[ IDnorth ],
-        h_right = h[ IDsouth ];
+      const Real & h_left  = h[ IDnorth ],
+       & h_right = h[ IDsouth ];
 
-      const Real k_c_left  = coeff[ IDnorth ],
-        k_c_right = coeff[ IDsouth ];
+      const Real & k_c_left  = coeff[ IDnorth ],
+       & k_c_right = coeff[ IDsouth ];
 
       h_interface_y[ Id ] = n_y[ Id ] * ( ( k_c_left * h_left + k_c_right * h_right ) + n_y[ Id ] * ( k_c_left * h_left - k_c_right * h_right ) ) * .5;
 
@@ -4126,10 +4232,10 @@ computeResiduals (const std::vector<Real>& n_x,
     {
 
       const Real h_left  = 0, // 0
-        h_right = h[ Id ];
+       & h_right = h[ Id ];
 
       const Real k_c_left  = 0.,
-        k_c_right = coeff[ Id ];
+       & k_c_right = coeff[ Id ];
 
       h_interface_y[ Id ] = n_y[ Id ] * ( ( k_c_left * h_left + k_c_right * h_right ) + n_y[ Id ] * ( k_c_left * h_left - k_c_right * h_right ) ) * .5;
 
@@ -4141,10 +4247,10 @@ computeResiduals (const std::vector<Real>& n_x,
     {
 
       const Real h_left  = h[ Id - N_cols ],
-        h_right = 0; //0;
+       & h_right = 0; //0;
 
       const Real k_c_left  = coeff[ Id - N_cols ],
-        k_c_right = 0.;
+       & k_c_right = 0.;
 
       h_interface_y[ Id ] = n_y[ Id ] * ( ( k_c_left * h_left + k_c_right * h_right ) + n_y[ Id ] * ( k_c_left * h_left - k_c_right * h_right ) ) * .5;
 

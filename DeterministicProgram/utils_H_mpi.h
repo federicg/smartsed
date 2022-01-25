@@ -509,6 +509,9 @@ computeAdjacencies (const std::vector<Real>& basin_mask_Vec,
                     std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
                     std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
 
+                    std::vector<UInt>& idStaggeredInternalVectHorizontal_in_rank,
+                    std::vector<UInt>& idStaggeredInternalVectVertical_in_rank,
+
                     std::vector<UInt>& idBasinVect_mpi,
                     std::vector<UInt>& idBasinVectReIndex_mpi,
 
@@ -583,7 +586,6 @@ updateVel (std::vector<Real>& u,
            const Real&              N_cols,
            const Real&              c2,
            const Real&              H_min,
-           const std::vector<Real>& eta,
            const std::vector<Real>& H,
            const std::vector<Real>& orography,
            const std::vector<UInt>& idStaggeredInternalVectHorizontal,
@@ -602,11 +604,11 @@ updateVel (std::vector<Real>& u,
 
 
 Real
-maxdt (const std::vector<Real>& u,
-       const std::vector<Real>& v,
-       const Real&              gravity,
-       const Real&              Hmax,
-       const Real&              pixel_size);
+maxdt (const Real& u_abs_max,
+       const Real& v_abs_max,
+       const Real& gravity,
+       const Real& Hmax,
+       const Real& pixel_size);
 
 Real
 maxCourant (const std::vector<Real>& u,
@@ -621,16 +623,21 @@ maxCourant (const std::vector<Real>& H,
 Real
 compute_dt_sediment (const Real&              alpha,
                      const Real&              beta,
-                     const Real&              S_x,
-                     const Real&              S_y,
+                     const std::vector<Real>& S_x,
+                     const std::vector<Real>& S_y,
                      const std::vector<Real>& u,
                      const std::vector<Real>& v,
                      const Real&              pixel_size,
                      const Real&              dt_DSV,
-                     UInt&              numberOfSteps);
+                     const std::vector<UInt>& idStaggeredInternalVectHorizontal,
+                     const std::vector<UInt>& idStaggeredInternalVectVertical,
+                     const std::vector<UInt>& idStaggeredBoundaryVectWest,
+                     const std::vector<UInt>& idStaggeredBoundaryVectEast,
+                     const std::vector<UInt>& idStaggeredBoundaryVectNorth,
+                     const std::vector<UInt>& idStaggeredBoundaryVectSouth);
 
-UInt
-current_start_chunk(const int& rank, const std::vector<UInt>& chunk_length_vec);
+int
+current_start_chunk(const int& rank, const std::vector<int>& chunk_length_vec);
 
 void
 saveVector (const std::vector<Real>& b,
@@ -701,6 +708,14 @@ saveTemporalSequence (const Real&        time,
                       const std::string& preName,
                       const Real&        H);
 
+void
+comunicationStencil(std::vector<MPI_Request>& requests, 
+               const std::vector<int>& corresponding_rank_given_id, 
+                     std::vector<Real>& h,
+               const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
+               const std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
+               const int& rank,
+               const UInt& N_cols);
 
 // For gravitational layer
 void
