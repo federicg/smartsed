@@ -1,0 +1,32 @@
+CXX = mpic++
+OPENMPFLAG = -fopenmp
+LIBS =
+CXXFLAGS = #-std=c++11 -g -O2 -fpic 
+CPPFLAGS = -DNDEBUG 
+PROGRAM = main_final_eta
+CPPFLAGS = -DNDEBUG -Iinclude/eigen3 -Iinclude -Iinclude/eigen_forma -Iinclude/include -Iinclude/eigen_forma/Utilities -DENABLE_TIMING -DUSE_MPI 
+OBJ = main_final_H_mpi.o utils_H_mpi.o
+
+
+
+
+.PHONY : all clean distclean
+
+all : main
+
+
+main : $(OBJ)
+	$(CXX) $(LIBS) $(OBJ) -Linclude/lib -llis -lmpi $(OPENMPFLAG) -o main_mpi.exe
+
+
+$(OBJ) : %.o : %.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(OPENMPFLAG) -c $<
+
+
+
+clean :
+	$(RM) *.o
+
+distclean : clean
+	$(RM) main.exe
+
