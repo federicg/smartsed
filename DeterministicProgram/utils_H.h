@@ -248,7 +248,7 @@ public:
                         const std::vector<Real>& S,
                         const std::vector<Real>& melt_mask,
                         const std::vector<Real>& h_G,
-                        const Eigen::VectorXd&   H,
+                        const std::vector<Real>& H,
                         const UInt&              N_rows,
                         const UInt&              N_cols,
                         const std::vector<UInt>& idBasinVect);
@@ -435,7 +435,7 @@ upwind
 
 public:
 
-  upwind (const Eigen::VectorXd&   H,
+  upwind (const std::vector<Real>& H,
           const std::vector<Real>& u,
           const std::vector<Real>& v,
 
@@ -472,7 +472,7 @@ public:
 
 private:
 
-  const Eigen::VectorXd&   H;
+  const std::vector<Real>& H;
   const std::vector<Real>& u;
   const std::vector<Real>& v;
 
@@ -615,7 +615,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<Real>& v_star,
              const std::vector<Real>& u,
              const std::vector<Real>& v,
-             const Eigen::VectorXd&   H,
+             const std::vector<Real>& H,
              const UInt&              N_cols,
              const UInt&              N_rows,
              const UInt&              N,
@@ -661,8 +661,8 @@ updateVel (std::vector<Real>& u,
            const Real&              N_cols,
            const Real&              c2,
            const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const Eigen::VectorXd&   H,
+           const std::vector<Real>& eta,
+           const std::vector<Real>& H,
            const std::vector<Real>& orography,
            const std::vector<UInt>& idStaggeredInternalVectHorizontal,
            const std::vector<UInt>& idStaggeredInternalVectVertical,
@@ -693,6 +693,14 @@ putDry_excludedNodes( const std::vector<UInt>& idStaggeredInternalVectHorizontal
                      std::vector<Real>& v );
 
 
+void
+compute_dt_adaptive (const std::vector<Real>& H,
+                     const std::vector<Real>& H_old,
+                     const std::vector<Real>& H_oldold,
+                     const std::vector<UInt>& idBasinVect,
+                     Real& dt,
+                     const Real& local_estimator_time_tolerance,
+                     const Real& time, const Real& timed, const Real& timedd);
 
 
 Real
@@ -708,7 +716,7 @@ maxCourant (const std::vector<Real>& u,
             const Real&              c1);
 
 Real
-maxCourant (const Eigen::VectorXd& H,
+maxCourant (const std::vector<Real>& H,
             const Real&            gravity,
             const Real&            c1);
 

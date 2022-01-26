@@ -326,14 +326,13 @@ main (int argc, char** argv)
     slope_y,
     slope_cell,
     soilMoistureRetention,
-    roughness_vect;
+    roughness_vect, 
+    eta,
+    H;
 
-    Eigen::VectorXd   eta,
-    H,
-    H_basin,
-    rhs;
+    Eigen::VectorXd H_basin, rhs;
 
-  Real pixel_size, // meter / pixel
+  Real pixel_size, // meter/pixel
   xllcorner,
   yllcorner,
   xllcorner_staggered_u,
@@ -504,8 +503,8 @@ main (int argc, char** argv)
       for ( UInt j = 0; j < N_cols; j++ )
       {
         const auto k = j + i * N_cols;
-        H ( k )   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-        eta ( k ) = H ( k ) + orography[ k ];
+        H [ k ]   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
+        eta [ k ] = H [ k ] + orography[ k ];
       }
     }
 
@@ -514,8 +513,8 @@ main (int argc, char** argv)
   {
     for ( UInt i = 0; i < N; i++ )
     {
-      H   ( i ) = 0.;
-      eta ( i ) = 0.;
+      H   [ i ] = 0.;
+      eta [ i ] = 0.;
     }
 
     saveSolution ( output_dir + "H_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, H );
@@ -1724,7 +1723,7 @@ main (int argc, char** argv)
   
   double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
 
-  maxH = H.maxCoeff();
+  maxH = *std::max_element( H.begin(), H.end() );
    
   dt_DSV = maxdt(u, v, g, maxH, pixel_size);
   dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
@@ -1737,9 +1736,12 @@ main (int argc, char** argv)
   //omp_set_num_threads(omp_get_num_procs());
 
   //std::cout << "# of available threads, " << omp_get_num_procs() << std::endl; 
+
+  auto H_old    = H;
+  auto H_oldold = H;
   
   
-  double time = 0.; 
+  double time = 0., timed = -dt_DSV, timedd = -2.*dt_DSV; 
   bool is_last_step = false, check_last = false;
   while ( !is_last_step )
     {
@@ -2031,8 +2033,11 @@ main (int argc, char** argv)
         {
           const UInt IDreIndex = idBasinVectReIndex_excluded[ Id ];
 
-          H ( Id ) = std::abs(H_basin ( IDreIndex ));
-          eta ( Id ) = H ( Id ) + orography[ Id ];
+          H_oldold[ Id ] = H_old[ Id ];
+          H_old[ Id ] = H[ Id ];
+
+          H [ Id ] = std::abs(H_basin ( IDreIndex ));
+          eta [ Id ] = H [ Id ] + orography[ Id ];
         }
 
 
@@ -2328,7 +2333,9 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
       // |               Update time                     |
       // +-----------------------------------------------+
-      
+
+      timedd = timed;
+      timed = time;
       time += dt_DSV;
 
       if (check_last)
@@ -2441,9 +2448,12 @@ main (int argc, char** argv)
 
       dt_DSV = maxdt(u, v, g, maxH, pixel_size);
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
+
+      compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_excluded, dt_DSV, 1.e-3,
+        time, timed, timedd);
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
-      c2_DSV_ = c2_DSV (g, c1_DSV_);
+      c2_DSV_ = c2_DSV (g, c1_DSV_); 
       c3_DSV_ = c3_DSV (g, c1_DSV_);
       
       

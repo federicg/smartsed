@@ -837,7 +837,7 @@ Rain::computePrecipitation (const Real&              time,
                             const std::vector<Real>& S,
                             const std::vector<Real>& melt_mask,
                             const std::vector<Real>& h_G,
-                            const Eigen::VectorXd&   H,
+                            const std::vector<Real>& H,
                             const UInt&              N_rows,
                             const UInt&              N_cols,
                             const std::vector<UInt>& idBasinVect )
@@ -889,7 +889,7 @@ Rain::computePrecipitation (const Real&              time,
             potential_runoff = std::max( rainfall_intensity * melt_mask[ IDcenter ] - infiltrationRate, 0. );
                 
                 
-          if ( ( ( H( IDcenter ) + h_G[ IDcenter ] ) < ( c * S[ IDcenter ] ) ) && M_isInitialLoss ) // initial loss
+          if ( ( ( H[ IDcenter ] + h_G[ IDcenter ] ) < ( c * S[ IDcenter ] ) ) && M_isInitialLoss ) // initial loss
             {
               potential_runoff = 0.;
               infiltrationRate = rainfall_intensity * melt_mask[ IDcenter ];
@@ -1641,8 +1641,8 @@ upwind::computeHorizontal ()
         IDwest = Id - i - 1;          // H
 
 
-      const Real & H_left  = H( IDwest ),
-        & H_right = H( IDeast );
+      const Real & H_left  = H[ IDwest ],
+        & H_right = H[ IDeast ];
       
        
       horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id ] ) * ( H_left - H_right ) * .5;
@@ -1658,7 +1658,7 @@ upwind::computeHorizontal ()
 
 
       const Real   H_left  = 0,
-        & H_right = H( Id - i );
+        & H_right = H[ Id - i ];
 
 
       horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id + 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocità interna di fianco
@@ -1673,7 +1673,7 @@ upwind::computeHorizontal ()
 
 
 
-      const Real & H_left  = H( Id - i - 1 ),
+      const Real & H_left  = H[ Id - i - 1 ],
         H_right = 0;
 
 
@@ -1700,8 +1700,8 @@ upwind::computeVertical ()
 
 
 
-      const Real & H_left  = H( IDnorth ),
-        & H_right = H( IDsouth );
+      const Real & H_left  = H[ IDnorth ],
+        & H_right = H[ IDsouth ];
 
 
       vertical[ Id ] = ( H_left + H_right ) * .5 + signum( v[ Id ] ) * ( H_left - H_right ) * .5;
@@ -1714,7 +1714,7 @@ upwind::computeVertical ()
     {
 
       const Real   H_left  = 0,
-        & H_right = H( Id );
+        & H_right = H[ Id ];
 
 
       vertical[ Id ] = ( H_left + H_right ) * .5 + signum( v[ Id + N_cols ] ) * ( H_left - H_right ) * .5;
@@ -1725,7 +1725,7 @@ upwind::computeVertical ()
   for ( const auto & Id : idStaggeredBoundaryVectSouth )
     {
 
-      const Real & H_left  = H( Id - N_cols ),
+      const Real & H_left  = H[ Id - N_cols ],
         H_right = 0;
 
 
@@ -3333,7 +3333,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
              const std::vector<Real>& v_star,
              const std::vector<Real>& u,
              const std::vector<Real>& v,
-             const Eigen::VectorXd&   H,
+             const std::vector<Real>& H,
              const UInt&              N_cols,
              const UInt&              N_rows,
              const UInt&              N,
@@ -3388,7 +3388,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     const auto IDreIndex = idBasinVectReIndex[ Id ];
     
     coefficients.push_back( Eigen::Triplet<Real>( IDreIndex,  IDreIndex,  1. ) );
-    rhs( IDreIndex ) = H( Id ) + precipitation[ Id ] * dt_DSV;
+    rhs( IDreIndex ) = H[ Id ] + precipitation[ Id ] * dt_DSV;
   }
   
   
@@ -3829,8 +3829,8 @@ updateVel (std::vector<Real>& u,
            const Real&              N_cols,
            const Real&              c2,
            const Real&              H_min,
-           const Eigen::VectorXd&   eta,
-           const Eigen::VectorXd&   H,
+           const std::vector<Real>& eta,
+           const std::vector<Real>& H,
            const std::vector<Real>& orography,
            const std::vector<UInt>& idStaggeredInternalVectHorizontal,
            const std::vector<UInt>& idStaggeredInternalVectVertical,
@@ -3854,10 +3854,10 @@ updateVel (std::vector<Real>& u,
 
 
 
-      const auto & H_interface = (H( IDsouth ) + H( IDnorth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (-H( IDsouth ) + H( IDnorth ))*.5;
+      const auto & H_interface = (H[ IDsouth ] + H[ IDnorth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (-H[ IDsouth ] + H[ IDnorth ])*.5;
       if ( H_interface > H_min )
         {
-          v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta( IDsouth ) - eta( IDnorth ) ) );
+          v[ Id ] = alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( eta[ IDsouth ] - eta[ IDnorth ] ) );
         }
       else
         {
@@ -3876,7 +3876,7 @@ updateVel (std::vector<Real>& u,
       const UInt IDsouth = Id + N_cols,
       IDnorth = Id;
       
-      const auto & H_interface = (H( IDnorth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (-H( IDnorth ))*.5;
+      const auto & H_interface = (H[ IDnorth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (-H[ IDnorth ])*.5;
       if ( H_interface > H_min )
         {
 //          v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
@@ -3897,7 +3897,7 @@ updateVel (std::vector<Real>& u,
       const UInt IDsouth = Id - N_cols,
       IDnorth = Id - 2*N_cols;
       
-      const auto & H_interface = (H( IDsouth ))*.5 + signum(-eta(IDsouth)+eta(IDnorth)) * (H( IDsouth ))*.5;
+      const auto & H_interface = (H[ IDsouth ])*.5 + signum(-eta[IDsouth]+eta[IDnorth]) * (H[ IDsouth ])*.5;
       if ( H_interface > H_min )
         {
 //          v[ Id ] = isNonReflectingBC * alfa_y[ Id ] * ( v_star[ Id ] - c2 * ( orography[ IDsouth ] - orography[ IDnorth ] ) );
@@ -3924,10 +3924,10 @@ updateVel (std::vector<Real>& u,
         IDwest  = Id - i - 1;
 
       
-      const auto & H_interface = (H( IDeast ) + H( IDwest ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (-H( IDeast ) + H( IDwest ))*.5;
+      const auto & H_interface = (H[ IDeast ] + H[ IDwest ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (-H[ IDeast ] + H[ IDwest ])*.5;
       if ( H_interface > H_min )
         {
-          u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta( IDeast ) - eta( IDwest ) ) );
+          u[ Id ] = alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( eta[ IDeast ] - eta[ IDwest ] ) );
         }
       else
         {
@@ -3945,7 +3945,7 @@ updateVel (std::vector<Real>& u,
       IDeast = Id - i + 1,
       IDwest = Id - i;
 
-      const auto & H_interface = (H( IDwest ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (-H( IDwest ))*.5;
+      const auto & H_interface = (H[ IDwest ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (-H[ IDwest ])*.5;
       if ( H_interface > H_min )
         {
 //          u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
@@ -3968,7 +3968,7 @@ updateVel (std::vector<Real>& u,
       IDeast = Id - i - 1,
       IDwest = Id - i - 2;
 
-      const auto & H_interface = (H( IDeast ))*.5 + signum(-eta(IDeast)+eta(IDwest)) * (H( IDeast ))*.5;
+      const auto & H_interface = (H[ IDeast ])*.5 + signum(-eta[IDeast]+eta[IDwest]) * (H[ IDeast ])*.5;
       if ( H_interface > H_min )
         {
 //          u[ Id ] = isNonReflectingBC * alfa_x[ Id ] * ( u_star[ Id ] - c2 * ( orography[ IDeast ] - orography[ IDwest ] ) );
@@ -3984,7 +3984,42 @@ updateVel (std::vector<Real>& u,
 }
 
 
+void
+compute_dt_adaptive (const std::vector<Real>& H,
+                     const std::vector<Real>& H_old,
+                     const std::vector<Real>& H_oldold,
+                     const std::vector<UInt>& idBasinVect,
+                     Real& dt,
+                     const Real& local_estimator_time_tolerance,
+                     const Real& time, const Real& timed, const Real& timedd)
+{
+  Real dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
+  for (const auto & Id : idBasinVect)
+  {
+    const Real & hcell      = H       [Id], 
+               & hcell_old  = H_old   [Id], 
+               & hcell_oldd = H_oldold[Id]; 
 
+    dh_t = (hcell - hcell_old)/(time - timed);
+
+    h1 = hcell_oldd/((timedd - timed )*(timedd - time ));
+    h2 = hcell_old /((timed  - timedd)*(timed  - time ));
+    h3 = hcell     /((time   - timedd)*(time   - timed));
+
+    a_coeff = h1+h2+h3;
+    b_coeff = - (h1*(time+timed) + h2*(time+timedd) + h3*(timed+timedd));
+
+    Nu_hmean_cell += (1./3.*a_coeff*a_coeff*(time*time+time*timed+timed*timed) + a_coeff*(b_coeff-dh_t)*(time+timed) + (b_coeff-dh_t)*(b_coeff-dh_t));
+    nu_htot += Nu_hmean_cell*(time-timed)*(time-timed);
+  }
+
+  Real dt_candidate = local_estimator_time_tolerance/std::sqrt(nu_htot)*(time-timed);
+
+  dt_candidate = (nu_htot>0 && dt_candidate<dt) ? dt_candidate : dt;
+
+  dt = dt_candidate;
+
+}
 
 
 
@@ -4048,11 +4083,11 @@ maxCourant (const std::vector<Real>& u,
 
 
 Real
-maxCourant (const Eigen::VectorXd& H,
+maxCourant (const std::vector<Real>& H,
             const Real&            gravity,
             const Real&            c1)
 {
-  const Real Courant_cel = std::sqrt( H.maxCoeff() * gravity );
+  const Real Courant_cel = std::sqrt( *std::max_element( H.begin(), H.end() ) * gravity );
   return( Courant_cel * c1 );
 }
 
