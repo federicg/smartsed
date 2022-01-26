@@ -1759,29 +1759,33 @@ main (int argc, char** argv)
       alfa.f_y ( );
       toc ("alfa");
 
-      tic();
+      
       // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
       if ( std::floor ( time / dt_temp ) > std::floor ( (time - dt_DSV) / dt_temp ) )
         {
+          tic();
           // Compute temperature map
           temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect );
+          toc ("temperature");
         }
-      toc ("temperature");
+      
 
-      tic();
+      
       // ET varies daily
       if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) )
         {
+          tic();
           // Get ET rate at the current time
           ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24 * 3600 ) ), idBasinVect, orography );
+          toc ("ET");
         }
-      toc ("ET");
+      
 
-      tic();
+      
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
-
+          tic();
           // +-----------------------------------------------+
           // |            Gravitational Layer                |
           // +-----------------------------------------------+
@@ -1805,8 +1809,9 @@ main (int argc, char** argv)
                              h_interface_y,
                              Res_x,
                              Res_y );
+          toc ("gravit") ;
         }
-      toc ("gravit") ;
+      
 
       tic();
       //
@@ -1820,11 +1825,11 @@ main (int argc, char** argv)
                                           idBasinVect);
       toc ("precipitation");
 
-      tic();
+      
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
-
+          tic();
           for ( const UInt& k : idBasinVect )
             {
               S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
@@ -1846,9 +1851,9 @@ main (int argc, char** argv)
               const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
               h_sn[ k ] += snow_acc;
             }
-
+          toc ("snow");
         }
-      toc ("snow");
+      
 
 
       // +-----------------------------------------------+
@@ -2073,7 +2078,7 @@ main (int argc, char** argv)
         }*/
       toc ("solve");
 
-      tic();
+      
 
 
       // +-----------------------------------------------+
@@ -2082,6 +2087,7 @@ main (int argc, char** argv)
 
       if (is_sediment_transport)
       {
+        tic();
         const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
         dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
@@ -2311,8 +2317,9 @@ main (int argc, char** argv)
 
 
         }
+        toc ("advance");
       }
-      toc ("advance");
+      
 
       
 
@@ -2330,7 +2337,6 @@ main (int argc, char** argv)
         is_last_step = true;
       }
       
-      //is_last_step = true;
       
       // +-----------------------------------------------+
       // |             Save The Raster Solution          |
@@ -2412,7 +2418,7 @@ main (int argc, char** argv)
 
           const auto & currentDay = iter; // std::floor ( time / (frequency_save * 3600) )
 
-          std::cout << "Saving solution..., current day " << iter << std::endl;
+          std::cout << "Saving solution ..., current day " << iter << std::endl;
 
           saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
