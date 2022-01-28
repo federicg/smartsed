@@ -5,16 +5,81 @@ rm(list=ls())
 
 library(raster) # To handle raster data.
 library(imager) # image processing
+library(viridis)
+library(ggplot2)
+library(ggquiver)
 
 #args<-commandArgs(trailingOnly = TRUE)
 # args[1]   # number of Conditional Simulations
 
-folder = c('../45013.hpc.mate.polimi.it/Outputs/0','../45014.hpc.mate.polimi.it/Outputs/0', 
-           '../45015.hpc.mate.polimi.it/Outputs/0', '../45016.hpc.mate.polimi.it/Outputs/0')
-number_sim_days = 365
+raster2quiver <- function(dem, uu, vv, colours = terrain.colors(6))
+{
+  names(dem) <- "z"
+  dem_df <- as.data.frame(dem, xy=T)
+  quiv <- aggregate(dem, 1)
+  quiv$u <- values(uu) 
+  quiv$v <- values(vv)
+  quiv_df <- as.data.frame(quiv, xy = TRUE)
+  
+  print(ggplot(mapping = aes(x = x, y = y, fill = z)) + 
+          geom_raster(data = dem_df, na.rm = TRUE) + 
+          geom_quiver(data = quiv_df, aes(u = u, v = v), vecsize = 1.5) +
+          scale_fill_gradientn(colours = colours, na.value = "transparent") +
+          theme_bw())
+  
+  return(quiv_df)
+}
+
+
+
 # Load the Digital Elevation Model (DEM). The resolution, extent and coordinate system will be used as reference.
-dem=raster('DEM.tif')
-mask=raster('Mask_bin.tif')
+dem=raster('../visualize/DEM.tif')
+mask=raster('../visualize/Mask_bin.tif')
+
+clay = raster(paste0('clay_0.asc'))
+h = raster(paste0('H_ev.asc'))
+u = raster(paste0('u_ev.asc'))
+v = raster(paste0('v_ev.asc'))
+
+h = resample(h,clay,method="bilinear")
+h[values(mask)==0]=NA
+
+quartz()
+plot(h)
+
+dem_ = aggregate(dem,7)
+#vv=resample(v, dem_, method="bilinear")
+#uu=resample(u, dem_, method="bilinear")
+
+uu = resample(u,dem_,method="bilinear")
+vv = resample(v,dem_,method="bilinear")
+
+
+pal <- c("#B2182B", "#E68469", "#D9E9F1", "#ACD2E5", "#539DC8", "#3C8ABE", "#2E78B5")
+
+#quartz()
+raster2quiver(dem_, uu, vv, colours = pal)
+
+
+u = resample(u,dem,method="bilinear")
+v = resample(v,dem,method="bilinear")
+
+
+
+quartz()
+par(cex.lab=1.5,cex.main=1.5,cex.axis=1.5)
+plot(h,main="water height (m)",xlab='x (m)', ylab='y (m)',col=topo.colors(20))
+quartz.save(paste0('H.png'),type="png")
+
+vel = sqrt(u^2+v^2)
+vel[values(mask)==0]=NA
+quartz()
+par(cex.lab=1.5,cex.main=1.5,cex.axis=1.5)
+plot(vel,main="velocity module (m/sec.)",xlab='x (m)', ylab='y (m)',col=topo.colors(20))
+quartz.save(paste0('vel_abs.png'),type="png")
+
+
+
 
 resolution=res(raster(paste0(folder[1],'/basin_mask.asc')))[[1]]
 
@@ -33,6 +98,15 @@ values(mask_grad_y) = abs(as.vector(mask_grad_cimg))
 values(mask_grad_x)[is_less_than(values(mask_grad_x),.02)] = NA
 values(mask_grad_y)[is_less_than(values(mask_grad_y),.02)] = NA
 
+# via carlo porta
+cord = SpatialPoints(cbind(9.397794, 45.851888 ), proj4string = CRS("+proj=longlat"))
+cord.UTM <- spTransform(cord, crs(dem))
+
+quartz()
+plot(dem)
+plot(cord.UTM,add=T)
+plot(mask_grad_x*10000,add=TRUE,col='black',legend=FALSE)
+plot(mask_grad_y*10000,add=TRUE,col='black',legend=FALSE)
 
 
 
