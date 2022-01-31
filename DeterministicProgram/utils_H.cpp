@@ -2410,7 +2410,9 @@ bilinearInterpolation (const std::vector<Real>& u,
              b = H[ Id_12 ] * w_x2 + H[ Id_22 ] * w_x1;
 
 
-  output = a*w_y2 + b*w_y1;
+  //std::cout << H[ Id_11 ] << " " << w_x2 << " " << a << std::endl;
+
+  Real output = a*w_y2 + b*w_y1;
 
   return(output);
 

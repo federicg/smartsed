@@ -2322,6 +2322,7 @@ main (int argc, char** argv)
           const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
 
           auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
+          XX(1) = -XX(1);
 
           
           auto H_candidate = bilinearInterpolation (u, v, H, N_cols, N_rows, XX);
