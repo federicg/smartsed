@@ -518,24 +518,18 @@ bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<UInt>& idStaggeredBoundaryVectNorth,
                        const std::vector<UInt>& idStaggeredBoundaryVectSouth);
 
-void
+Real
 bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<Real>& v,
-                       const std::vector<Real>& slope_x,
-                       const std::vector<Real>& slope_y,
-                       const Real& slope_thr,
-                       std::vector<Real>& u_star,
-                       std::vector<Real>& v_star,
-                       const UInt&              nrows,
-                       const UInt&              ncols,
-                       const Real&              dt_DSV,
-                       const Real&              pixel_size,
-                       const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                       const std::vector<UInt>& idStaggeredInternalVectVertical,
-                       const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                       const std::vector<UInt>& idStaggeredBoundaryVectEast,
-                       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                       const std::vector<UInt>& idStaggeredBoundaryVectSouth);
+                       const std::vector<Real>& H,
+                       const UInt& ncols,
+                       const UInt& nrows,
+                       const Vector2D& XX_gauges);
+
+Real
+bilinearInterpolation (const std::vector<Real>& H,
+                       const Real& pixel_size,
+                       const Vector2D& XX_gauges);
 
 
 int

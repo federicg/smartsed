@@ -2347,311 +2347,74 @@ bilinearInterpolation (const std::vector<Real>& u,
 }
 
 
-void
+Real
 bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<Real>& v,
-                       const std::vector<Real>& slope_x,
-                       const std::vector<Real>& slope_y,
-                       const Real&              slope_thr,
-                       std::vector<Real>& u_star,
-                       std::vector<Real>& v_star,
-                       const UInt&              nrows,
-                       const UInt&              ncols,
-                       const Real&              dt_DSV,
-                       const Real&              pixel_size,
-                       const std::vector<UInt>& idStaggeredInternalVectHorizontal,
-                       const std::vector<UInt>& idStaggeredInternalVectVertical,
-                       const std::vector<UInt>& idStaggeredBoundaryVectWest,
-                       const std::vector<UInt>& idStaggeredBoundaryVectEast,
-                       const std::vector<UInt>& idStaggeredBoundaryVectNorth,
-                       const std::vector<UInt>& idStaggeredBoundaryVectSouth)
+                       const std::vector<Real>& H,
+                       const UInt& ncols,
+                       const UInt& nrows,
+                       const Vector2D& xx)
 {
-  
-  
-    // +-----------------------------------------------+
-    // |              Horizontal Velocity              |
-    // +-----------------------------------------------+
-  
-  
-  for ( const auto & Id : idStaggeredInternalVectHorizontal )
+
+  auto x = xx( 0 ),
+       y = xx( 1 );
+
+
+  auto x_1 = std::floor( x ),              
+       y_1 = std::floor( y ),              
+       x_2 = x_1 + 1,                      
+       y_2 = y_1 + 1;
+
+  if ( x_1 == ( ncols - 1 ) )
   {
-    
-    
-    const UInt i     = Id / ( ncols + 1 ),
-    j     = Id % ( ncols + 1 ),
-    ID_NE = Id - i,        // v
-    ID_NW = ID_NE - 1,     // v
-    ID_SE = ID_NE + ncols, // v
-    ID_SW = ID_NW + ncols; // v
-    
-    
-    
-    Vector2D vel( std::array<Real,2>{{ u[ Id ], ( v[ ID_NE ] + v[ ID_NW ] + v[ ID_SE ] + v[ ID_SW ] ) / 4. }} );
-    
-    
-    
-    
-    
-    const auto Dx = vel / pixel_size * dt_DSV;
-    
-    
-    
-    
-    Vector2D xx( std::array<Real,2>{{ Real( j ), Real( i ) }} );  // Top-Left reference frame
-    
-    
-    
-    xx = xx - Dx;
-    
-    
-    
-    
-    auto x = xx( 0 ),
-    y = xx( 1 );
-    
-    
-    auto x_1 = std::floor( x ),              //  11    21     ----> x
-    y_1 = std::floor( y ),              //
-    x_2 = x_1 + 1,                      //
-    y_2 = y_1 + 1;                      //  12    22
-      //
-      // |
-      // | y
-    
-    
-    
-    
-    if ( x_1 == ncols )
-    {
-      x_2 -= 1;
-      x_1 -= 1;
-      x   -= 1;
-    }
-    if ( x_2 == 0 )
-    {
-      x_2 += 1;
-      x_1 += 1;
-      x   += 1;
-    }
-    
-    
-    if ( y_1 == ( nrows - 1 ) )
-    {
-      y_2 -= 1;
-      y_1 -= 1;
-      y   -= 1;
-    }
-    if ( y_2 == 0 )
-    {
-      y_2 += 1;
-      y_1 += 1;
-      y   += 1;
-    }
-    
-    
-    
-      // return 0 for target values that are out of bounds
-    if ( x_2 < 0 || x_1 > ncols || y_2 < 0 || y_1 > ( nrows - 1 ) )
-    {
-      u_star[ Id ] = 0.;
-    }
-    else
-    {
-      
-      const auto Id_11 = x_1 + y_1 * ( ncols + 1 ), // u
-      Id_12 = x_1 + y_2 * ( ncols + 1 ), // u
-      Id_21 = x_2 + y_1 * ( ncols + 1 ), // u
-      Id_22 = x_2 + y_2 * ( ncols + 1 ); // u
-      
-      
-      
-      
-        // compute weights
-      const Real w_x2 = x_2 - x,
-      w_x1 = x   - x_1,
-      w_y2 = y_2 - y,
-      w_y1 = y   - y_1;
-      
-      
-      
-      const auto a = u[ Id_11 ] * w_x2 + u[ Id_21 ] * w_x1,
-      b = u[ Id_12 ] * w_x2 + u[ Id_22 ] * w_x1;
-      
-      
-      u_star[ Id ] = ((std::abs(slope_x[ Id ]) < slope_thr) ? (a * w_y2 + b * w_y1) : 0);
-      
-      
-    }
-    
+    x_2 -= 1;
+    x_1 -= 1;
+    x   -= 1;
   }
-  
-  
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectWest )
+  if ( x_2 == 0 )
   {
-    
-    const auto Idd = Id + 1;
-    
-    u_star[ Id ] = ((std::abs(slope_x[ Id ]) < slope_thr) ? (u_star[ Idd ] * ( u[ Idd ] < 0. )) : 0);
-    
+    x_2 += 1;
+    x_1 += 1;
+    x   += 1;
   }
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectEast )
+
+
+  if ( y_1 == ( nrows - 1 ) )
   {
-    
-    const auto Idd = Id - 1;
-    
-    u_star[ Id ] = ((std::abs(slope_x[ Id ]) < slope_thr) ? (u_star[ Idd ] * ( u[ Idd ] > 0. )) : 0);
-    
+    y_2 -= 1;
+    y_1 -= 1;
+    y   -= 1;
   }
-  
-  
-  
-    // +-----------------------------------------------+
-    // |              Vertical Velocity                |
-    // +-----------------------------------------------+
-  
-  
-  for ( const auto & Id : idStaggeredInternalVectVertical )
+  if ( y_2 == 0 )
   {
-    
-    
-    const auto i     = Id / ncols,
-    j     = Id % ncols,
-    ID_SW = Id + i,                // u
-    ID_SE = ID_SW + 1,             // u
-    ID_NW = ID_SW - ( ncols + 1 ), // u
-    ID_NE = ID_NW + 1;             // u
-    
-    
-    
-    
-    Vector2D vel( std::array<Real,2>{{ ( u[ ID_SW ] + u[ ID_SE ] + u[ ID_NW ] + u[ ID_NE ] ) / 4., v[ Id ] }} );
-    
-    
-    
-    const auto Dx = vel / pixel_size * dt_DSV;
-    
-    
-    
-    
-    
-    Vector2D xx( std::array<Real,2>{{ Real( j ), Real( i ) }} );  // Top-Left reference frame
-    
-    
-    
-    xx = xx - Dx;
-    
-    
-    
-    
-    auto x = xx( 0 ),
-    y = xx( 1 );
-    
-    
-    auto x_1 = std::floor( x ),              //  11    21     ----> x
-    y_1 = std::floor( y ),              //
-    x_2 = x_1 + 1,                      //
-    y_2 = y_1 + 1;                      //  12    22
-      //
-      // |
-      // | y
-    
-    
-    
-    
-    if ( x_1 == ( ncols - 1 ) )
-    {
-      x_2 -= 1;
-      x_1 -= 1;
-      x   -= 1;
-    }
-    if ( x_2 == 0 )
-    {
-      x_2 += 1;
-      x_1 += 1;
-      x   += 1;
-    }
-    
-    
-    if ( y_1 == nrows )
-    {
-      y_2 -= 1;
-      y_1 -= 1;
-      y   -= 1;
-    }
-    if ( y_2 == 0 )
-    {
-      y_2 += 1;
-      x_2 += 1;
-      y   += 1;
-    }
-    
-    
-    
-      // return 0 for target values that are out of bounds
-    if ( x_2 < 0 || x_1 > ( ncols - 1 ) || y_2 < 0 || y_1 > nrows )
-    {
-      v_star[ Id ] = 0.;
-    }
-    else
-    {
-      
-      
-      const auto Id_11 = x_1 + y_1 * ncols,
-      Id_12 = x_1 + y_2 * ncols,
-      Id_21 = x_2 + y_1 * ncols,
-      Id_22 = x_2 + y_2 * ncols;
-      
-      
-      
-        // compute weights
-      const Real w_x2 = x_2 - x,
-      w_x1 = x   - x_1,
-      w_y2 = y_2 - y,
-      w_y1 = y   - y_1;
-      
-      
-      const auto a = v[ Id_11 ] * w_x2 + v[ Id_21 ] * w_x1,
-      b = v[ Id_12 ] * w_x2 + v[ Id_22 ] * w_x1;
-      
-      
-      v_star[ Id ] = ((std::abs(slope_y[ Id ]) < slope_thr) ? (a * w_y2 + b * w_y1) : 0);
-      
-    }
-    
-    
-    
-    
+    y_2 += 1;
+    x_2 += 1;
+    y   += 1;
   }
-  
-  
-  
-  
-  for ( const auto & Id : idStaggeredBoundaryVectNorth )
-  {
-    
-    const auto Idd = Id + ncols;
-    
-    v_star[ Id ] = ((std::abs(slope_y[ Id ]) < slope_thr) ? (v_star[ Idd ] * ( v[ Idd ] < 0. )) : 0);
-    
-  }
-  
-  for ( const auto & Id : idStaggeredBoundaryVectSouth )
-  {
-    
-    const auto Idd = Id - ncols;
-    
-    v_star[ Id ] = ((std::abs(slope_y[ Id ]) < slope_thr) ? (v_star[ Idd ] * ( v[ Idd ] > 0. )) : 0);
-    
-  }
-  
-  
+
+  const auto Id_11 = x_1 + y_1 * ncols,
+             Id_12 = x_1 + y_2 * ncols,
+             Id_21 = x_2 + y_1 * ncols,
+             Id_22 = x_2 + y_2 * ncols;
+
+
+
+  // compute weights
+  const Real w_x2 = x_2 - x,
+             w_x1 = x   - x_1,
+             w_y2 = y_2 - y,
+             w_y1 = y   - y_1;
+
+
+  const auto a = H[ Id_11 ] * w_x2 + H[ Id_21 ] * w_x1,
+             b = H[ Id_12 ] * w_x2 + H[ Id_22 ] * w_x1;
+
+
+  output = a*w_y2 + b*w_y1;
+
+  return(output);
+
 }
-
-
 
 
 int

@@ -1298,53 +1298,6 @@ main (int argc, char** argv)
     }
 
   }
-
-/*
-  if ( save_temporal_sequence )
-    {
-
-      const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
-
-      auto XX = ( XX_gauges - XX_O ) / pixel_size; // coordinate in the matrix
-
-      auto XX_east  = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
-      auto XX_west  = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
-
-      auto XX_south = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
-      auto XX_north = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
-
-      XX(1) = -std::round(XX(1));
-      XX(0) =  std::round(XX(0));
-      if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
-      {
-        std::cout << "The gauges in the input file are not good" << std::endl;
-        exit ( 1. );
-      }
-
-
-      int i_1 = -std::round(XX_north(1));
-      int i_2 = -std::round(XX_south(1));
-
-      int j_1 = std::round(XX_west(0));
-      int j_2 = std::round(XX_east(0));
-
-      i_1 = std::min(std::max(i_1, 0), int(N_rows-1));
-      j_1 = std::min(std::max(j_1, 0), int(N_cols-1));
-
-      i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
-      j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
-
-
-      for (int i = i_2; i <= i_1; i++)
-      {
-        for (int j = j_1; j <= j_2; j++)
-        {
-          kk_gauges.push_back(i * N_cols + j);
-        }
-      }
-
-    }*/
-
   toc ("gauges i,j ");
   
 
@@ -2366,11 +2319,17 @@ main (int argc, char** argv)
 
           const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
 
+          const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
+
+          auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
+
+          
+          auto H_candidate = bilinearInterpolation (u, v, H, N_cols, N_rows, XX);
 
 
           double H_current = 0.;
           UInt kk_gauges_max = 0;
-          for (const auto candidate : kk_gauges[number-1])
+          for (const auto & candidate : kk_gauges[number-1])
           {
             const auto & cc = H[ candidate ];
             if (cc > H_current)
@@ -2381,7 +2340,8 @@ main (int argc, char** argv)
           }
           const UInt i = kk_gauges_max/N_cols;
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate );
+          //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
             H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
@@ -2449,7 +2409,7 @@ main (int argc, char** argv)
       dt_DSV = maxdt(u, v, g, maxH, pixel_size);
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
 
-      compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_excluded, dt_DSV, 1.e-3,
+      compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_excluded, dt_DSV, 1.e-5,
         time, timed, timedd);
       
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
