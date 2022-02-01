@@ -2334,9 +2334,9 @@ main (int argc, char** argv)
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
-            H_candidate * vel_abs_candidate );
+            H_candidate * vel_abs_candidate * pixel_size );
           saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
-            h_sd_candidate * vel_abs_candidate );
+            h_sd_candidate * vel_abs_candidate * pixel_size );
 
           /*
           double H_current = 0.;
