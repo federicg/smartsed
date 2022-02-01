@@ -2325,9 +2325,20 @@ main (int argc, char** argv)
           XX(1) = -XX(1);
 
           
-          auto H_candidate = bilinearInterpolation (u, v, H, N_cols, N_rows, XX);
+          auto H_candidate       = bilinearInterpolation (H,    N_cols, N_rows, XX);
+          auto h_sd_candidate    = bilinearInterpolation (h_sd, N_cols, N_rows, XX);
+          auto vel_abs_candidate = bilinearInterpolation (u, v, N_cols, N_rows, XX);
 
 
+          
+
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
+            H_candidate * vel_abs_candidate );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+            h_sd_candidate * vel_abs_candidate );
+
+          /*
           double H_current = 0.;
           UInt kk_gauges_max = 0;
           for (const auto & candidate : kk_gauges[number-1])
@@ -2341,14 +2352,13 @@ main (int argc, char** argv)
           }
           const UInt i = kk_gauges_max/N_cols;
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate );
-          //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H[ kk_gauges_max ] );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
             H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
           saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
             h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );*/
         }
       }
       

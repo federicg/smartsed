@@ -2350,7 +2350,137 @@ bilinearInterpolation (const std::vector<Real>& u,
 Real
 bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<Real>& v,
-                       const std::vector<Real>& H,
+                       const UInt& ncols,
+                       const UInt& nrows,
+                       const Vector2D& xx)
+{
+
+  // horizontal 
+
+  Real output_hor;
+  {
+    auto x = xx( 0 ),
+         y = xx( 1 );
+
+    auto x_1 = std::floor( x ),              
+         y_1 = std::floor( y ),              
+         x_2 = x_1 + 1,                      
+         y_2 = y_1 + 1;
+
+    if ( x_1 == ncols )
+    {
+      x_2 -= 1;
+      x_1 -= 1;
+      x   -= 1;
+    }
+    if ( x_2 == 0 )
+    {
+      x_2 += 1;
+      x_1 += 1;
+      x   += 1;
+    }
+
+
+    if ( y_1 == ( nrows - 1 ) )
+    {
+      y_2 -= 1;
+      y_1 -= 1;
+      y   -= 1;
+    }
+    if ( y_2 == 0 )
+    {
+      y_2 += 1;
+      x_2 += 1;
+      y   += 1;
+    }
+
+    const auto Id_11 = x_1 + y_1 * ( ncols + 1 ),
+    Id_12 = x_1 + y_2 * ( ncols + 1 ),
+    Id_21 = x_2 + y_1 * ( ncols + 1 ),
+    Id_22 = x_2 + y_2 * ( ncols + 1 );
+
+
+
+    // compute weights
+    const Real w_x2 = x_2 - x,
+               w_x1 = x   - x_1,
+               w_y2 = y_2 - y,
+               w_y1 = y   - y_1;
+
+
+    const auto a = u[ Id_11 ]*w_x2 + u[ Id_21 ]*w_x1,
+               b = u[ Id_12 ]*w_x2 + u[ Id_22 ]*w_x1;
+
+
+    output_hor = a*w_y2 + b*w_y1;
+  }
+
+  // vertical
+  Real output_vert;
+  {
+    auto x = xx( 0 ),
+         y = xx( 1 );
+
+    auto x_1 = std::floor( x ),              
+         y_1 = std::floor( y ),              
+         x_2 = x_1 + 1,                      
+         y_2 = y_1 + 1;
+
+    if ( x_1 == (ncols - 1) )
+    {
+      x_2 -= 1;
+      x_1 -= 1;
+      x   -= 1;
+    }
+    if ( x_2 == 0 )
+    {
+      x_2 += 1;
+      x_1 += 1;
+      x   += 1;
+    }
+
+
+    if ( y_1 == nrows )
+    {
+      y_2 -= 1;
+      y_1 -= 1;
+      y   -= 1;
+    }
+    if ( y_2 == 0 )
+    {
+      y_2 += 1;
+      x_2 += 1;
+      y   += 1;
+    }
+
+    const auto Id_11 = x_1 + y_1 * ncols,
+    Id_12 = x_1 + y_2 * ncols,
+    Id_21 = x_2 + y_1 * ncols,
+    Id_22 = x_2 + y_2 * ncols;
+
+
+
+    // compute weights
+    const Real w_x2 = x_2 - x,
+               w_x1 = x   - x_1,
+               w_y2 = y_2 - y,
+               w_y1 = y   - y_1;
+
+
+    const auto a = v[ Id_11 ]*w_x2 + v[ Id_21 ]*w_x1,
+               b = v[ Id_12 ]*w_x2 + v[ Id_22 ]*w_x1;
+
+
+    output_vert = a*w_y2 + b*w_y1;
+  }
+
+  return(std::sqrt(output_hor*output_hor + output_vert*output_vert));
+
+}
+
+
+Real
+bilinearInterpolation (const std::vector<Real>& H,
                        const UInt& ncols,
                        const UInt& nrows,
                        const Vector2D& xx)

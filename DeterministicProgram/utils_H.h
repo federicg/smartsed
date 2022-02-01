@@ -519,16 +519,16 @@ bilinearInterpolation (const std::vector<Real>& u,
                        const std::vector<UInt>& idStaggeredBoundaryVectSouth);
 
 Real
-bilinearInterpolation (const std::vector<Real>& u,
-                       const std::vector<Real>& v,
-                       const std::vector<Real>& H,
+bilinearInterpolation (const std::vector<Real>& H,
                        const UInt& ncols,
                        const UInt& nrows,
                        const Vector2D& XX_gauges);
 
 Real
-bilinearInterpolation (const std::vector<Real>& H,
-                       const Real& pixel_size,
+bilinearInterpolation (const std::vector<Real>& u,
+                       const std::vector<Real>& v,
+                       const UInt& ncols,
+                       const UInt& nrows,
                        const Vector2D& XX_gauges);
 
 
