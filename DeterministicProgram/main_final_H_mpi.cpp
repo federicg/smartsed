@@ -2122,7 +2122,7 @@ main (int argc, char** argv)
           }*/
 
 
-          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0.;
+          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0., solid_flux_candidate = 0.;
           UInt kk_gauges_max = 0;
           for (const auto & candidate : kk_gauges[number-1])
           {
@@ -2136,7 +2136,6 @@ main (int argc, char** argv)
 
               H_candidate += cc;
               mass_flux_candidate += cc*velo;
-
               solid_flux_candidate += h_sd[ candidate ]*velo;
 
               if (cc > H_current)
@@ -2152,10 +2151,13 @@ main (int argc, char** argv)
           mass_flux_candidate  /= kk_gauges[number-1].size();
           solid_flux_candidate /= kk_gauges[number-1].size();
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate         );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_"  + std::to_string(number), mass_flux_candidate );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
-            solid_flux_candidate );
+          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&H_candidate),          1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
           
           //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
           /*
