@@ -452,16 +452,6 @@ private:
 
 bool is_file_exist(const char *fileName);
 
-void
-bilinearInterpolation (const std::vector<Real>& u,
-                       const std::vector<Real>& v,
-                       std::vector<Real>& u_star,
-                       std::vector<Real>& v_star,
-                       const UInt&              nrows,
-                       const UInt&              ncols,
-                       const Real&              dt,
-                       const Real&              pixel_size);
-
 
 void
 bilinearInterpolation (const std::vector<Real>& u,
@@ -600,7 +590,14 @@ updateVel (std::vector<Real>& u,
 
 
 
-
+void
+compute_dt_adaptive (const std::vector<Real>& H,
+                     const std::vector<Real>& H_old,
+                     const std::vector<Real>& H_oldold,
+                     const std::vector<UInt>& idBasinVect,
+                     Real& dt,
+                     const Real& local_estimator_time_tolerance,
+                     const Real& time, const Real& timed, const Real& timedd);
 
 
 Real
@@ -709,13 +706,25 @@ saveTemporalSequence (const Real&        time,
                       const Real&        H);
 
 void
-comunicationStencil(std::vector<MPI_Request>& requests, 
+communicationStencil(std::vector<MPI_Request>& requests_horizontal, 
+                     std::vector<MPI_Request>& requests_vertical, 
                const std::vector<int>& corresponding_rank_given_id, 
                      std::vector<Real>& h,
                const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
                const std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
                const int& rank,
                const UInt& N_cols);
+
+void
+communicationStencil_staggered(std::vector<MPI_Request>& requests_horizontal,
+                               std::vector<MPI_Request>& requests_vertical, 
+                         const std::vector<int>& corresponding_rank_given_id, 
+                               std::vector<Real>& u,
+                               std::vector<Real>& v,
+                         const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
+                         const std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
+                         const int& rank,
+                         const UInt& N_cols);
 
 // For gravitational layer
 void

@@ -1627,307 +1627,6 @@ frictionClass::f_y ()
 }
 
 
-void
-bilinearInterpolation (const std::vector<Real>& u,
-                       const std::vector<Real>& v,
-                       std::vector<Real>& u_star,
-                       std::vector<Real>& v_star,
-                       const UInt&              nrows,
-                       const UInt&              ncols,
-                       const Real&              dt,
-                       const Real&              pixel_size)
-{
-
-
-  // +-----------------------------------------------+
-  // |              Horizontal Velocity              |
-  // +-----------------------------------------------+
-
-
-  for ( UInt i = 0; i < nrows; i++ )
-    {
-
-      for ( UInt j = 1; j < ncols; j++ )
-        {
-
-          const auto Id    = j + i * ( ncols + 1 ), // u
-
-            // ID della velocità
-            ID_NE = Id - i,        // v
-            ID_NW = ID_NE - 1,     // v
-            ID_SE = ID_NE + ncols, // v
-            ID_SW = ID_NW + ncols; // v
-
-
-
-          Vector2D vel( std::array<Real,2>{{ u[ Id ], ( v[ ID_NE ] + v[ ID_NW ] + v[ ID_SE ] + v[ ID_SW ] ) / 4. }} );
-
-          const auto Dx = vel / pixel_size * dt;
-
-          Vector2D xx( std::array<Real,2>{{ Real( j ), Real( i ) }} );  // Top-Left reference frame
-
-          xx = xx - Dx;
-
-          auto x = xx( 0 ),
-            y = xx( 1 );
-
-          auto x_1 = std::floor( x ),           //  11    21     ----> x
-            y_1 = std::floor( y ),              //
-            x_2 = x_1 + 1,                      //
-            y_2 = y_1 + 1;                      //  12    22
-          //
-          // |
-          // | y
-
-          if ( x_1 == ncols )
-            {
-              x_2 -= 1;
-              x_1 -= 1;
-              x   -= 1;
-            }
-          if ( x_2 == 0 )
-            {
-              x_2 += 1;
-              x_1 += 1;
-              x   += 1;
-            }
-
-
-          if ( y_1 == ( nrows - 1 ) )
-            {
-              y_2 -= 1;
-              y_1 -= 1;
-              y   -= 1;
-            }
-          if ( y_2 == 0 )
-            {
-              y_2 += 1;
-              y_1 += 1;
-              y   += 1;
-            }
-
-          // return 0 for target values that are out of bounds
-          if ( x_2 < 0 || x_1 > ncols || y_2 < 0 || y_1 > ( nrows - 1 ) )
-            {
-              u_star[ Id ] = 0.;
-            }
-          else
-            {
-
-              const auto Id_11 = x_1 + y_1 * ( ncols + 1 ), // u
-                Id_12 = x_1 + y_2 * ( ncols + 1 ), // u
-                Id_21 = x_2 + y_1 * ( ncols + 1 ), // u
-                Id_22 = x_2 + y_2 * ( ncols + 1 ); // u
-
-              // compute weights
-              const Real w_x2 = x_2 - x,
-                w_x1 = x   - x_1,
-                w_y2 = y_2 - y,
-                w_y1 = y   - y_1;
-
-              const auto a = u[ Id_11 ] * w_x2 + u[ Id_21 ] * w_x1,
-                b = u[ Id_12 ] * w_x2 + u[ Id_22 ] * w_x1;
-
-              u_star[ Id ] = a * w_y2 + b * w_y1;
-
-            }
-
-        }
-
-    }
-
-  // 1st column
-  {
-    UInt j = 0;
-    for ( UInt i = 0; i < nrows; i++ )
-      {
-
-        const auto Id  = j + i * ( ncols + 1 ),
-          Idd = Id + 1;
-
-        u_star[ Id ] = u_star[ Idd ] * ( u[ Idd ] < 0. );
-        //u_star[ Id ] *= ( u[ Idd ] < 0. );
-
-      }
-  }
-
-
-  // last column
-  {
-    UInt j = ncols;
-    for ( UInt i = 0; i < nrows; i++ )
-      {
-
-        const auto Id  = j + i * ( ncols + 1 ),
-          Idd = Id - 1;
-
-        u_star[ Id ] = u_star[ Idd ] * ( u[ Idd ] > 0. );
-        //u_star[ Id ] *= ( u[ Idd ] > 0. );
-
-      }
-  }
-
-
-
-
-
-
-  // +-----------------------------------------------+
-  // |              Vertical Velocity                |
-  // +-----------------------------------------------+
-
-
-  for ( UInt i = 1; i < nrows; i++ )
-    {
-
-      for ( UInt j = 0; j < ncols; j++ )
-        {
-
-          const auto Id    = j + i * ncols, // v
-
-            // ID della velocitÃ
-            ID_SW = Id + i,                // u
-            ID_SE = ID_SW + 1,             // u
-            ID_NW = ID_SW - ( ncols + 1 ), // u
-            ID_NE = ID_NW + 1;             // u
-
-
-
-
-          Vector2D vel( std::array<Real,2>{{ ( u[ ID_SW ] + u[ ID_SE ] + u[ ID_NW ] + u[ ID_NE ] ) / 4., v[ Id ] }} );
-
-
-
-          const auto Dx = vel / pixel_size * dt;
-
-
-
-
-
-          Vector2D xx( std::array<Real,2>{{ Real( j ), Real( i ) }} );  // Top-Left reference frame
-
-
-
-          xx = xx - Dx;
-
-
-
-
-          auto x = xx( 0 ),
-            y = xx( 1 );
-
-
-          auto x_1 = std::floor( x ),              //  11    21     ----> x
-            y_1 = std::floor( y ),              //
-            x_2 = x_1 + 1,                      //
-            y_2 = y_1 + 1;                      //  12    22
-          //
-          // |
-          // | y
-
-
-
-
-          if ( x_1 == ( ncols - 1 ) )
-            {
-              x_2 -= 1;
-              x_1 -= 1;
-              x   -= 1;
-            }
-          if ( x_2 == 0 )
-            {
-              x_2 += 1;
-              x_1 += 1;
-              x   += 1;
-            }
-
-
-          if ( y_1 == nrows )
-            {
-              y_2 -= 1;
-              y_1 -= 1;
-              y   -= 1;
-            }
-          if ( y_2 == 0 )
-            {
-              y_2 += 1;
-              x_2 += 1;
-              y   += 1;
-            }
-
-
-
-          // return 0 for target values that are out of bounds
-          if ( x_2 < 0 || x_1 > ( ncols - 1 ) || y_2 < 0 || y_1 > nrows )
-            {
-              v_star[ Id ] = 0.;
-            }
-          else
-            {
-
-
-              const auto Id_11 = x_1 + y_1 * ncols,
-                Id_12 = x_1 + y_2 * ncols,
-                Id_21 = x_2 + y_1 * ncols,
-                Id_22 = x_2 + y_2 * ncols;
-
-
-
-              // compute weights
-              const Real w_x2 = x_2 - x,
-                w_x1 = x   - x_1,
-                w_y2 = y_2 - y,
-                w_y1 = y   - y_1;
-
-
-              const auto a = v[ Id_11 ] * w_x2 + v[ Id_21 ] * w_x1,
-                b = v[ Id_12 ] * w_x2 + v[ Id_22 ] * w_x1;
-
-
-              v_star[ Id ] = a * w_y2 + b * w_y1;
-
-            }
-
-
-        }
-
-    }
-
-
-
-  // 1st row
-  {
-    UInt i = 0;
-    for ( UInt j = 0; j < ncols; j++ )
-      {
-
-        const auto Id  = j + i * ncols,
-          Idd = Id + ncols;
-
-        v_star[ Id ] = v_star[ Idd ] * ( v[ Idd ] < 0. );
-        //v_star[ Id ] *= ( v[ Idd ] < 0. );
-
-      }
-  }
-
-
-
-  // last row
-  {
-    UInt i = nrows;
-    for ( UInt j = 0; j < ncols; j++ )
-      {
-
-        const auto Id  = j + i * ncols,
-          Idd = Id - ncols;
-
-        v_star[ Id ] = v_star[ Idd ] * ( v[ Idd ] > 0. );
-        //v_star[ Id ] *= ( v[ Idd ] > 0. );
-
-      }
-  }
-
-}
 
 bool 
 is_file_exist(const char *fileName)
@@ -3276,21 +2975,69 @@ updateVel (std::vector<Real>& u,
 
 
 
+void
+compute_dt_adaptive (const std::vector<Real>& H,
+                     const std::vector<Real>& H_old,
+                     const std::vector<Real>& H_oldold,
+                     const std::vector<UInt>& idBasinVect,
+                     Real& dt,
+                     const Real& local_estimator_time_tolerance,
+                     const Real& time, const Real& timed, const Real& timedd)
+{
+  Real dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
+  for (const auto & Id : idBasinVect)
+  {
+    const Real & hcell      = H       [Id], 
+               & hcell_old  = H_old   [Id], 
+               & hcell_oldd = H_oldold[Id]; 
+
+    dh_t = (hcell - hcell_old)/(time - timed);
+
+    h1 = hcell_oldd/((timedd - timed )*(timedd - time ));
+    h2 = hcell_old /((timed  - timedd)*(timed  - time ));
+    h3 = hcell     /((time   - timedd)*(time   - timed));
+
+    a_coeff = h1+h2+h3;
+    b_coeff = - (h1*(time+timed) + h2*(time+timedd) + h3*(timed+timedd));
+
+    Nu_hmean_cell += (1./3.*a_coeff*a_coeff*(time*time+time*timed+timed*timed) + a_coeff*(b_coeff-dh_t)*(time+timed) + (b_coeff-dh_t)*(b_coeff-dh_t));
+    nu_htot += Nu_hmean_cell*(time-timed)*(time-timed);
+  }
+
+  Real dt_candidate = local_estimator_time_tolerance/std::sqrt(nu_htot)*(time-timed);
+
+  dt_candidate = (nu_htot>0 && dt_candidate<dt) ? dt_candidate : dt;
+
+  dt = dt_candidate;
+
+}
 
 Real
-maxdt (const Real& vel_max_abs_x,
-       const Real& vel_max_abs_y,
+maxdt (const Real& u_abs_max,
+       const Real& v_abs_max,
        const Real& gravity,
        const Real& Hmax,
        const Real& pixel_size)
 {
+  
+    // +-----------------------------------------------+
+    // |      Estimate vertical max Courant number     |
+    // +-----------------------------------------------+
+  
+  const Real& vel_max_y = v_abs_max; //std::max( *std::max_element( v.begin(), v.end() ), std::abs( *std::min_element( v.begin(), v.end() ) ) );
+  
+    // +-----------------------------------------------+
+    // |    Estimate horizontal max Courant number     |
+    // +-----------------------------------------------+
+  
+  const Real& vel_max_x = u_abs_max; //std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
   
   const Real Co = 0.9; // 0.3
   const Real Co_cel = 1e4; // 10
   
   const Real cel = std::sqrt( Hmax * gravity );
   
-  Real dt_candidate = Co * pixel_size / (std::max( vel_max_abs_x, vel_max_abs_y )+std::numeric_limits<double>::epsilon());
+  Real dt_candidate = Co * pixel_size / (std::max( vel_max_x, vel_max_y )+std::numeric_limits<double>::epsilon());
   dt_candidate = std::min(dt_candidate, Co_cel * pixel_size / (cel+std::numeric_limits<double>::epsilon()));
   
   
@@ -4036,7 +3783,8 @@ saveTemporalSequence (const Real&        time,
 }
 
 void
-comunicationStencil(std::vector<MPI_Request>& requests, 
+communicationStencil(std::vector<MPI_Request>& requests_horizontal,
+                     std::vector<MPI_Request>& requests_vertical, 
                const std::vector<int>& corresponding_rank_given_id, 
                      std::vector<Real>& h,
                const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
@@ -4048,7 +3796,7 @@ comunicationStencil(std::vector<MPI_Request>& requests,
   int count_req = 0;
   int current_size_b = idStaggeredBoundaryVectHorizontal_among_ranks.size();
 
-  requests.assign(2*current_size_b, MPI_REQUEST_NULL)
+  requests_horizontal.assign(2*current_size_b, MPI_REQUEST_NULL);
   for ( const UInt & Id : idStaggeredBoundaryVectHorizontal_among_ranks )
   {
     const UInt i       = Id / ( N_cols + 1 ),
@@ -4063,23 +3811,23 @@ comunicationStencil(std::vector<MPI_Request>& requests,
 
     if ( rank_west!=rank )
     {
-      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests[count_req]);
-      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_west, IDeast, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req]);
+      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_west, IDeast, MPI_COMM_WORLD, &requests_horizontal[count_req++ + current_size_b]);
     }
     else
     {
-      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_east, IDeast, MPI_COMM_WORLD, &requests[count_req]);
-      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_east, IDwest, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_east, IDeast, MPI_COMM_WORLD, &requests_horizontal[count_req]);
+      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_east, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req++ + current_size_b]);
     }
 
   }
-  MPI_Waitall(2*current_size_b, requests, MPI_STATUS_IGNORE);
+  MPI_Waitall(2*current_size_b, requests_horizontal.data(), MPI_STATUS_IGNORE);
 
 
   // communication part, vertical
-  requests.assign(2*current_size_b, MPI_REQUEST_NULL);
   count_req = 0;
   current_size_b = idStaggeredBoundaryVectVertical_among_ranks.size();
+  requests_vertical.assign(2*current_size_b, MPI_REQUEST_NULL);
   for ( const UInt & Id : idStaggeredBoundaryVectVertical_among_ranks )
   {
 
@@ -4094,18 +3842,97 @@ comunicationStencil(std::vector<MPI_Request>& requests,
 
     if ( rank_north!=rank )
     {
-      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_north, IDnorth, MPI_COMM_WORLD, &requests[count_req]);
-      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_north, IDsouth, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+      MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_north, IDnorth, MPI_COMM_WORLD, &requests_vertical[count_req]);
+      MPI_Isend(&h_right, 1, MPI_DOUBLE, rank_north, IDsouth, MPI_COMM_WORLD, &requests_vertical[count_req++ + current_size_b]);
     }
     else
     {
-      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_south, IDsouth, MPI_COMM_WORLD, &requests[count_req]);
-      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_south, IDnorth, MPI_COMM_WORLD, &requests[count_req++ + current_size_b]);
+      MPI_Irecv(&h_right, 1, MPI_DOUBLE, rank_south, IDsouth, MPI_COMM_WORLD, &requests_vertical[count_req]);
+      MPI_Isend(&h_left,  1, MPI_DOUBLE, rank_south, IDnorth, MPI_COMM_WORLD, &requests_vertical[count_req++ + current_size_b]);
     }
 
   }
-  MPI_Waitall(2*current_size_b.size(), requests, MPI_STATUS_IGNORE);
+  MPI_Waitall(2*current_size_b, requests_vertical.data(), MPI_STATUS_IGNORE);
 }
+
+
+void
+communicationStencil_staggered(std::vector<MPI_Request>& requests_horizontal,
+                               std::vector<MPI_Request>& requests_vertical, 
+                         const std::vector<int>& corresponding_rank_given_id, 
+                               std::vector<Real>& u,
+                               std::vector<Real>& v,
+                         const std::vector<UInt>& idStaggeredBoundaryVectHorizontal_among_ranks,
+                         const std::vector<UInt>& idStaggeredBoundaryVectVertical_among_ranks,
+                         const int& rank,
+                         const UInt& N_cols)
+{
+  // communication part, horizontal
+  int count_req = 0;
+  int current_size_b = idStaggeredBoundaryVectHorizontal_among_ranks.size();
+
+  requests_horizontal.assign(2*current_size_b, MPI_REQUEST_NULL);
+  for ( const UInt & Id : idStaggeredBoundaryVectHorizontal_among_ranks )
+  {
+    const UInt i       = Id / ( N_cols + 1 ),
+    IDeast  = Id - i,
+    IDwest  = Id - i - 1;
+
+    const auto & rank_west = corresponding_rank_given_id[IDwest];
+    const auto & rank_east = corresponding_rank_given_id[IDeast];
+
+    auto & u_left = u[Id - 1], 
+    & u_right = u[Id + 1];
+
+    if ( rank_west!=rank )
+    {
+      MPI_Irecv(&u_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req]);
+      MPI_Isend(&u_right, 1, MPI_DOUBLE, rank_west, IDeast, MPI_COMM_WORLD, &requests_horizontal[count_req++ + current_size_b]);
+    }
+    else
+    {
+      MPI_Irecv(&u_right, 1, MPI_DOUBLE, rank_east, IDeast, MPI_COMM_WORLD, &requests_horizontal[count_req]);
+      MPI_Isend(&u_left,  1, MPI_DOUBLE, rank_east, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req++ + current_size_b]);
+    }
+
+  }
+  MPI_Waitall(2*current_size_b, requests_horizontal.data(), MPI_STATUS_IGNORE);
+
+
+  // communication part, vertical
+  count_req = 0;
+  current_size_b = idStaggeredBoundaryVectVertical_among_ranks.size();
+  requests_vertical.assign(2*current_size_b, MPI_REQUEST_NULL);
+  for ( const UInt & Id : idStaggeredBoundaryVectVertical_among_ranks )
+  {
+
+    const UInt IDsouth = Id,
+    IDnorth = Id - N_cols;
+
+    const auto & rank_north = corresponding_rank_given_id[IDnorth];
+    const auto & rank_south = corresponding_rank_given_id[IDsouth];
+
+
+    auto & v_left = v[Id - N_cols], 
+    & v_right = v[Id + N_cols];
+
+    if ( rank_north!=rank )
+    {
+      MPI_Irecv(&v_left,  1, MPI_DOUBLE, rank_north, IDnorth, MPI_COMM_WORLD, &requests_vertical[count_req]);
+      MPI_Isend(&v_right, 1, MPI_DOUBLE, rank_north, IDsouth, MPI_COMM_WORLD, &requests_vertical[count_req++ + current_size_b]);
+    }
+    else
+    {
+      MPI_Irecv(&v_right, 1, MPI_DOUBLE, rank_south, IDsouth, MPI_COMM_WORLD, &requests_vertical[count_req]);
+      MPI_Isend(&v_left,  1, MPI_DOUBLE, rank_south, IDnorth, MPI_COMM_WORLD, &requests_vertical[count_req++ + current_size_b]);
+    }
+
+  }
+  MPI_Waitall(2*current_size_b, requests_vertical.data(), MPI_STATUS_IGNORE);
+}
+
+
+
 
 
 

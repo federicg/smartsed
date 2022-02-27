@@ -2345,8 +2345,8 @@ main (int argc, char** argv)
             const auto & cc = H[ candidate ];
 
             H_candidate += cc;
-            mass_flux_candidate += H_candidate*std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                                                           std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+            mass_flux_candidate += cc*std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
+                                                  std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
             if (cc > H_current)
             {

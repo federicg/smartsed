@@ -1520,7 +1520,7 @@ main (int argc, char** argv)
   //lis_vector_get_range(H_basin,&is,&ie);
   lis_vector_set_all(0.,H_basin);
 
-  //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << nnz_basin_mask_Vec_excl << std::endl;
+  //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << std::endl;
 
   lis_vector_create(comm,&rhs);
   lis_vector_set_size(rhs,chunk_length_vec[rank],0); 
@@ -1529,14 +1529,15 @@ main (int argc, char** argv)
 
   lis_matrix_create(comm,&A);
   lis_matrix_set_size(A,chunk_length_vec[rank],0);
-  lis_matrix_malloc(A, 5, nnz_vect);
+  lis_matrix_malloc(A, 5, nnz_vect);  // 5 is the number of non zero elements per row we allocate
   
   
   lis_solver_create(&solver);
   lis_solver_set_option("-i cg -p none",solver);
   lis_solver_set_option("-tol 1.0e-12",solver);
 
-  std::vector<MPI_Request> requests(2*current_size_b, MPI_REQUEST_NULL);  
+  std::vector<MPI_Request> requests_horizontal(2*idStaggeredBoundaryVectHorizontal_among_ranks.size(), MPI_REQUEST_NULL);  
+  std::vector<MPI_Request> requests_vertical  (2*idStaggeredBoundaryVectVertical_among_ranks  .size(), MPI_REQUEST_NULL);  
   
   int iter = 0;
   
@@ -1562,8 +1563,11 @@ main (int argc, char** argv)
 
   LIS_INT nsol;
   char solvername[128];
+
+  auto H_old    = H;
+  auto H_oldold = H;
   
-  double time = 0.; 
+  double time = 0., timed = -dt_DSV, timedd = -2.*dt_DSV; 
   bool is_last_step = false, check_last = false;
   while ( !is_last_step )
     {
@@ -1616,7 +1620,7 @@ main (int argc, char** argv)
           tic();
 
           // communication to make available ghost cells
-          comunicationStencil(requests, corresponding_rank_given_id, 
+          communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
             h_G, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
             rank, N_cols);
 
@@ -1697,6 +1701,13 @@ main (int argc, char** argv)
 
       tic();
       // mettere la comunicazione sulla vel. u, v
+      communicationStencil_staggered(requests_horizontal,
+                               requests_vertical, 
+                               corresponding_rank_given_id, 
+                               u, v,
+                               idStaggeredBoundaryVectHorizontal_among_ranks,
+                               idStaggeredBoundaryVectVertical_among_ranks,
+                               rank, N_cols);
 
       // fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation ( u,
@@ -1833,10 +1844,13 @@ main (int argc, char** argv)
           LIS_SCALAR value;
           lis_vector_get_value(H_basin, IDreIndex, &value);
 
+          H_oldold[ Id ] = H_old[ Id ];
+          H_old[ Id ] = H[ Id ];
+
           H [ Id ] = std::abs(value);
         }
 
-      comunicationStencil(requests, corresponding_rank_given_id, 
+      communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
             H, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
             rank, N_cols);
 
@@ -1930,7 +1944,7 @@ main (int argc, char** argv)
         for ( UInt kk = 0; kk < numberOfSteps; kk++ )
         {
 
-          comunicationStencil(requests, corresponding_rank_given_id, 
+          communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
             h_sd, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
             rank, N_cols);
 
@@ -2050,6 +2064,8 @@ main (int argc, char** argv)
       // |               Update time                     |
       // +-----------------------------------------------+
       
+      timedd = timed;
+      timed = time;
       time += dt_DSV;
 
       if (check_last)
@@ -2080,6 +2096,7 @@ main (int argc, char** argv)
 
           const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
 
+          /*
           if ( basin_mask_Vec_mpi[kk_gauges[number-1]] )
           {
             double H_current = 0.;
@@ -2102,7 +2119,52 @@ main (int argc, char** argv)
             saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
               h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
                 std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+          }*/
+
+
+          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0.;
+          UInt kk_gauges_max = 0;
+          for (const auto & candidate : kk_gauges[number-1])
+          {
+            if ( basin_mask_Vec_mpi[candidate] )
+            {
+              const UInt i = candidate/N_cols;
+              const auto & cc = H[ candidate ];
+
+              const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
+                                            std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+
+              H_candidate += cc;
+              mass_flux_candidate += cc*velo;
+
+              solid_flux_candidate += h_sd[ candidate ]*velo;
+
+              if (cc > H_current)
+              {
+                kk_gauges_max = candidate;
+                H_current = cc;
+              }
+            }
           }
+          const UInt i = kk_gauges_max/N_cols;
+
+          H_candidate          /= kk_gauges[number-1].size();
+          mass_flux_candidate  /= kk_gauges[number-1].size();
+          solid_flux_candidate /= kk_gauges[number-1].size();
+
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate         );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_"  + std::to_string(number), mass_flux_candidate );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+            solid_flux_candidate );
+          
+          //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
+          /*
+    saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
+            H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+             std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+            h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
+              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );*/
         }
       }
       
@@ -2199,10 +2261,17 @@ main (int argc, char** argv)
       }
 
       dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
-      MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+      Real dt_DSV_min = dt_DSV*.5;
 
       dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
-      
+
+      compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_mpi, dt_DSV, 1.e-5,
+        time, timed, timedd);
+
+      dt_DSV = std::max(dt_DSV, dt_DSV_min);
+
+      MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
       c3_DSV_ = c3_DSV (g, c1_DSV_);
