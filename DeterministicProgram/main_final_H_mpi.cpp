@@ -9,7 +9,7 @@
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
+ 
     SMART-SED is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
@@ -70,7 +70,9 @@
 #include "timing.h"
 
 
-
+// Re-Define TIC and TOC to add an MPI_Barrier
+#define TIC()  MPI_Barrier (MPI_COMM_WORLD); if (rank == 0) { tic (); }
+#define TOC(S) MPI_Barrier (MPI_COMM_WORLD); if (rank == 0) { toc (S); }
 
 
 int
@@ -79,25 +81,26 @@ main (int argc, char** argv)
 
   LIS_Comm comm;
 
+  int rank, size;
+
   // Initialize MPI
   lis_initialize (&argc, &argv);
 
   comm = LIS_COMM_WORLD;
   
-  int rank, size;
   MPI_Comm_rank (comm, &rank);
-  MPI_Comm_size (comm, &size);  
+  MPI_Comm_size (comm, &size);
 
   
   
-  tic();
+  TIC();
   // Reading parameters through GetPot
   GetPot command_line (argc, argv);
   const std::string dataFileName = command_line.follow ( "SMARTSED_input", 2, "-f", "--file" );
   GetPot dataFile ( dataFileName );
 
 
-  const Int         currentSimNumber       = command_line.follow ( 2, "-sim" );
+  const Int         totSimNumber           = command_line.follow ( 2, "-sim" );
   const std::string friction_model         = dataFile ( "physics/friction_model", "None" );
   const Real        n_manning              = dataFile ( "physics/n_manning", 0.01 );
 
@@ -145,270 +148,282 @@ main (int argc, char** argv)
     std::cout << "H_min                  = " << H_min                   << std::endl;
     std::cout << "------------------------ "                            << std::endl;
   }
-  toc ("parse command line");
-
-  // +-----------------------------------------------+
-  // |                 Reading Input files           |
-  // +-----------------------------------------------+
-
-  tic();
-  const std::string file_dir       = "../Inputs/";
-  const std::string output_dir     = "../Outputs/" + std::to_string ( currentSimNumber ) + "/";
-
-  const std::string orography_file = dataFile ( "files/orography_file", "DEM.txt" );
-  const std::string mask_file      = dataFile ( "files/mask_file", "Mask_bin.txt" );
+  TOC ("parse command line");
 
 
-  // precipitation files and temperature
-  const std::string temperature_file = dataFile ( "files/meteo_data/temperature_file", "Temperature.txt" );
-
-
-
-  const bool restart_H             = dataFile ( "files/initial_conditions/restart_H",             false );
-  const bool restart_vel           = dataFile ( "files/initial_conditions/restart_vel",           false );
-  const bool restart_snow          = dataFile ( "files/initial_conditions/restart_snow",          false );
-  const bool restart_sediment      = dataFile ( "files/initial_conditions/restart_sediment",      false );
-  const bool restart_gravitational = dataFile ( "files/initial_conditions/restart_gravitational", false );
-  const bool restart_soilMoisture  = dataFile ( "files/initial_conditions/restart_soilMoisture",  false );
-
-  
-  if (rank == 0)
-  {
-    const std::string cmd_str = "mkdir -p " + output_dir;
-    char* chararray_cmd = new char[ cmd_str.length() + 1 ];
-    const char* cmd_bash = strcpy ( chararray_cmd, cmd_str.c_str() );
-
-    std::system ( cmd_bash );
-  }
-
-
-  const std::string ET_model = dataFile ( "files/evapotranspiration/ET_model", "None" );
-  const Real phi_rad         = M_PI/180. * dataFile ( "files/evapotranspiration/latitude_deg", 45. );
-
-  const std::string infiltrationModel = dataFile ( "files/infiltration/infiltration_model", "None" );
-
-
-  //- Static Variables -//
-
-  UInt N_rows,
-       N_cols,
-       N;
-
-  std::vector<UInt> idStaggeredBoundaryVectSouth,
-      idStaggeredBoundaryVectNorth,
-      idStaggeredBoundaryVectWest,
-      idStaggeredBoundaryVectEast,
-      idStaggeredInternalVectHorizontal,
-      idStaggeredInternalVectVertical,
-      idBasinVect,
-      idBasinVectReIndex,
-
-      idStaggeredBoundaryVectSouth_mpi,
-      idStaggeredBoundaryVectNorth_mpi,
-      idStaggeredBoundaryVectWest_mpi,
-      idStaggeredBoundaryVectEast_mpi,
-      idStaggeredInternalVectHorizontal_mpi,
-      idStaggeredInternalVectVertical_mpi,
-      idStaggeredBoundaryVectHorizontal_among_ranks,
-      idStaggeredBoundaryVectVertical_among_ranks,
-      idStaggeredInternalVectHorizontal_in_rank,
-      idStaggeredInternalVectVertical_in_rank,
-      idBasinVect_mpi,
-      idBasinVectReIndex_mpi;
-
-  
-  std::vector<std::array<Real, 2> > Gamma_vect_x,
-      Gamma_vect_y;
-  
-  std::vector<Real> basin_mask_Vec,
-      orography,
-      h_G,
-      h_sd,
-      h_sn,
-      S_coeff,
-      W_Gav,
-      W_Gav_cum,
-      W_Gav_cum_save,
-      hydraulic_conductivity,
-      Z_Gav,
-      d_90,
-      Res_x,
-      Res_y,
-      u,
-      v,
-      n_x,
-      n_y,
-      u_star,
-      v_star,
-      h_interface_x,
-      h_interface_y,
-      slope_x,
-      slope_y,
-      slope_cell,
-      soilMoistureRetention,
-      roughness_vect,
-      H;
-
-
-  LIS_VECTOR H_basin, rhs;
-  LIS_MATRIX A;
-  LIS_SOLVER solver;
-
-  LIS_INT *nnz_vect;
-
-  Real pixel_size, // meter/pixel
-       xllcorner,
-       yllcorner,
-       xllcorner_staggered_u,
-       yllcorner_staggered_u,
-       xllcorner_staggered_v,
-       yllcorner_staggered_v,
-       NODATA_value;
-
-  //-                   -//
-
-
-
-  
-
-  //
-  {
-    Raster orographyMat ( file_dir + orography_file, rank );
-    Raster basin_mask   ( file_dir + mask_file, rank      );
-
-    if ( basin_mask.cellsize != orographyMat.cellsize && rank==0 )
+  // execute R script
+  //Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020.R $nsim $res
+  if ( totSimNumber >= 0 && rank==0 )
     {
-      std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
-      exit ( -1 );
+      const std::string bashCommand = std::string ( "Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020.R " ) + std::to_string( totSimNumber ) + " " + std::to_string ( command_line.follow ( 2, "-scale" ) );
+      std::system ( bashCommand.c_str() );
+    }
+  MPI_Barrier (MPI_COMM_WORLD);  
+
+
+  for (int currentSimNumber=std::min(totSimNumber, 1); currentSimNumber<=totSimNumber; currentSimNumber++)
+  {
+
+    // +-----------------------------------------------+
+    // |                 Reading Input files           |
+    // +-----------------------------------------------+
+
+    TIC();
+    const std::string file_dir       = "../Inputs/";
+    const std::string output_dir     = "../Outputs/" + std::to_string ( currentSimNumber ) + "/";
+
+    const std::string orography_file = dataFile ( "files/orography_file", "DEM.txt" );
+    const std::string mask_file      = dataFile ( "files/mask_file", "Mask_bin.txt" );
+
+
+    // precipitation files and temperature
+    const std::string temperature_file = dataFile ( "files/meteo_data/temperature_file", "Temperature.txt" );
+
+
+
+    const bool restart_H             = dataFile ( "files/initial_conditions/restart_H",             false );
+    const bool restart_vel           = dataFile ( "files/initial_conditions/restart_vel",           false );
+    const bool restart_snow          = dataFile ( "files/initial_conditions/restart_snow",          false );
+    const bool restart_sediment      = dataFile ( "files/initial_conditions/restart_sediment",      false );
+    const bool restart_gravitational = dataFile ( "files/initial_conditions/restart_gravitational", false );
+    const bool restart_soilMoisture  = dataFile ( "files/initial_conditions/restart_soilMoisture",  false );
+
+
+    //if (rank == 0)
+    {
+      const std::string cmd_str = "mkdir -p " + output_dir;
+      char* chararray_cmd = new char[ cmd_str.length() + 1 ];
+      const char* cmd_bash = strcpy ( chararray_cmd, cmd_str.c_str() );
+
+      std::system ( cmd_bash );
     }
 
-    pixel_size = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
 
-    if (rank==0)
-    {
-      std::cout << "cell resolution for the current simulation = " << pixel_size << " meters" << std::endl;
-      std::cout << "-------------------- "                                                    << std::endl;
-    }
+    const std::string ET_model = dataFile ( "files/evapotranspiration/ET_model", "None" );
+    const Real phi_rad         = M_PI/180. * dataFile ( "files/evapotranspiration/latitude_deg", 45. );
 
-    xllcorner    = basin_mask.xllcorner;
-    yllcorner    = basin_mask.yllcorner;
-    NODATA_value = basin_mask.NODATA_value;
-    if (rank==0)
+    const std::string infiltrationModel = dataFile ( "files/infiltration/infiltration_model", "None" );
+
+
+    //- Static Variables -//
+
+    UInt N_rows,
+    N_cols,
+    N;
+
+    std::vector<UInt> idStaggeredBoundaryVectSouth,
+    idStaggeredBoundaryVectNorth,
+    idStaggeredBoundaryVectWest,
+    idStaggeredBoundaryVectEast,
+    idStaggeredInternalVectHorizontal,
+    idStaggeredInternalVectVertical,
+    idBasinVect,
+    idBasinVectReIndex,
+
+    idStaggeredBoundaryVectSouth_mpi,
+    idStaggeredBoundaryVectNorth_mpi,
+    idStaggeredBoundaryVectWest_mpi,
+    idStaggeredBoundaryVectEast_mpi,
+    idStaggeredInternalVectHorizontal_mpi,
+    idStaggeredInternalVectVertical_mpi,
+    idStaggeredBoundaryVectHorizontal_among_ranks,
+    idStaggeredBoundaryVectVertical_among_ranks,
+    idStaggeredInternalVectHorizontal_in_rank,
+    idStaggeredInternalVectVertical_in_rank,
+    idBasinVect_mpi,
+    idBasinVectReIndex_mpi;
+
+
+    std::vector<std::array<Real, 2> > Gamma_vect_x,
+    Gamma_vect_y;
+
+    std::vector<Real> basin_mask_Vec,
+    orography,
+    h_G,
+    h_sd,
+    h_sn,
+    S_coeff,
+    W_Gav,
+    W_Gav_cum,
+    hydraulic_conductivity,
+    Z_Gav,
+    d_90,
+    Res_x,
+    Res_y,
+    u,
+    v,
+    n_x,
+    n_y,
+    u_star,
+    v_star,
+    h_interface_x,
+    h_interface_y,
+    slope_x,
+    slope_y,
+    slope_cell,
+    soilMoistureRetention,
+    roughness_vect,
+    H;
+
+
+    LIS_VECTOR H_basin, rhs;
+    LIS_MATRIX A;
+    LIS_SOLVER solver;
+
+    LIS_INT *nnz_vect;
+
+    Real pixel_size, // meter/pixel
+    xllcorner,
+    yllcorner,
+    xllcorner_staggered_u,
+    yllcorner_staggered_u,
+    xllcorner_staggered_v,
+    yllcorner_staggered_v,
+    NODATA_value;
+
+    //-                   -//
+
+
+
+  
+
+    //
     {
-      if ( basin_mask.cellsize <= pixel_size )
+      Raster orographyMat ( file_dir + orography_file, rank );
+      Raster basin_mask   ( file_dir + mask_file, rank      );
+
+      if ( basin_mask.cellsize != orographyMat.cellsize && rank==0 )
       {
+        std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
+        exit ( -1 );
+      }
 
-        const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-        "dem=raster('" + file_dir + orography_file + "');" +
-        "basin=raster('" + file_dir + mask_file + "');" +
-        "basin=aggregate(basin," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
-        "values(basin)[values(basin)>0]=1;" +
-        "dem=resample(dem,basin,method='bilinear');" +
+      pixel_size = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
+
+      if (rank==0)
+      {
+        std::cout << "cell resolution for the current simulation = " << pixel_size << " meters" << std::endl;
+        std::cout << "-------------------- "                                                    << std::endl;
+      }
+
+      xllcorner    = basin_mask.xllcorner;
+      yllcorner    = basin_mask.yllcorner;
+      NODATA_value = basin_mask.NODATA_value;
+      if (rank==0)
+      {
+        if ( basin_mask.cellsize <= pixel_size )
+        {
+
+          const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + file_dir + orography_file + "');" +
+          "basin=raster('" + file_dir + mask_file + "');" +
+          "basin=aggregate(basin," + std::to_string ( command_line.follow ( 2, "-scale" ) ) + ");" +
+          "values(basin)[values(basin)>0]=1;" +
+          "dem=resample(dem,basin,method='bilinear');" +
                                         //"values(dem)[is.na(values(dem))]=0;" +
-        "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
-        "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
-        std::system ( bashCommand.c_str() );
+          "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
+          "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
+        }
+        else
+        {
+          std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
+          exit ( -1. );
+        }
       }
-      else
+
+      if ( dataFile( "discretization/FillSinks", false ) && rank==0 )
       {
-        std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
-        exit ( -1. );
+
+        std::string bashCommand = std::string( "python3 -c " ) + "\"import os; import sys; import gdal; cwd = os.getcwd();" +
+        "sys.path.append( cwd + '/../DeterministicProgram/include/py' ); import richdem as rd;" +
+        "dem = rd.LoadGDAL( '" + output_dir + "DEM.asc' );" +
+        "rd.FillDepressions( dem, in_place=True, epsilon=True,topology='D4' );" +
+        "rd.SaveGDAL( '" + output_dir + "DEM.tif', dem )\"";
+
+        std::system( bashCommand.c_str() );
+
+        bashCommand = std::string( "Rscript -e " ) + "\"library(raster);" +
+        "dem=raster('" + output_dir + "DEM.tif');" + 
+        "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE )\"";
+
+        std::system( bashCommand.c_str() );
+
       }
+
+
     }
+    MPI_Barrier (MPI_COMM_WORLD);
 
-    if ( dataFile( "discretization/FillSinks", false ) && rank==0 )
-      {
-            
-          std::string bashCommand = std::string( "python3 -c " ) + "\"import os; import sys; import gdal; cwd = os.getcwd();" +
-          "sys.path.append( cwd + '/../DeterministicProgram/include/py' ); import richdem as rd;" +
-          "dem = rd.LoadGDAL( '" + output_dir + "DEM.asc' );" +
-          "rd.FillDepressions( dem, in_place=True, epsilon=True,topology='D4' );" +
-          "rd.SaveGDAL( '" + output_dir + "DEM.tif', dem )\"";
-            
-          std::system( bashCommand.c_str() );
-            
-          bashCommand = std::string( "Rscript -e " ) + "\"library(raster);" +
-          "dem=raster('" + output_dir + "DEM.tif');" + 
-          "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE )\"";
-            
-          std::system( bashCommand.c_str() );
+    {
 
-      }
+      Raster orographyMat ( output_dir + "DEM.asc", rank );
+      Raster basin_mask   ( output_dir + "basin_mask.asc", rank );
 
 
-  }
-  MPI_Barrier (MPI_COMM_WORLD);
-
-  {
-
-    Raster orographyMat ( output_dir + "DEM.asc", rank );
-    Raster basin_mask   ( output_dir + "basin_mask.asc", rank );
+      N_rows = basin_mask.Coords.rows();
+      N_cols = basin_mask.Coords.cols();
+      N      = N_rows * N_cols;
 
 
-    N_rows = basin_mask.Coords.rows();
-    N_cols = basin_mask.Coords.cols();
-    N      = N_rows * N_cols;
+      H                     .resize ( N );
+      orography             .resize ( N );
+      basin_mask_Vec        .resize ( N );
+      h_G                   .resize ( N );
+      h_sd                  .resize ( N );
+      h_sn                  .resize ( N );
+      S_coeff               .resize ( N );
+      W_Gav                 .resize ( N );
+      W_Gav_cum             .resize ( N );
+      Res_x                 .resize ( N );
+      Res_y                 .resize ( N );
+      Z_Gav                 .resize ( N );
+      d_90                  .resize ( N );
+      soilMoistureRetention .resize ( N );
+      hydraulic_conductivity.resize ( N );
+      roughness_vect        .resize ( N );
+      slope_cell            .resize ( N );
 
+      u             .resize ( ( N_cols + 1 ) * N_rows );
+      v             .resize ( ( N_rows + 1 ) * N_cols );
+      n_x           .resize ( u.size( ) );
+      n_y           .resize ( v.size( ) );
+      u_star        .resize ( u.size( ) );
+      v_star        .resize ( v.size( ) );
 
-    H                     .resize ( N );
-    orography             .resize ( N );
-    basin_mask_Vec        .resize ( N );
-    h_G                   .resize ( N );
-    h_sd                  .resize ( N );
-    h_sn                  .resize ( N );
-    S_coeff               .resize ( N );
-    W_Gav                 .resize ( N );
-    W_Gav_cum             .resize ( N );
-    W_Gav_cum_save        .resize ( N );
-    Res_x                 .resize ( N );
-    Res_y                 .resize ( N );
-    Z_Gav                 .resize ( N );
-    d_90                  .resize ( N );
-    soilMoistureRetention .resize ( N );
-    hydraulic_conductivity.resize ( N );
-    roughness_vect        .resize ( N );
-    slope_cell            .resize ( N );
+      Gamma_vect_x         .resize ( u.size( ) );
+      Gamma_vect_y         .resize ( v.size( ) );
 
-    u             .resize ( ( N_cols + 1 ) * N_rows );
-    v             .resize ( ( N_rows + 1 ) * N_cols );
-    n_x           .resize ( u.size( ) );
-    n_y           .resize ( v.size( ) );
-    u_star        .resize ( u.size( ) );
-    v_star        .resize ( v.size( ) );
+      h_interface_x .resize ( u.size( ) );
+      h_interface_y .resize ( v.size( ) );
 
-    Gamma_vect_x         .resize ( u.size( ) );
-    Gamma_vect_y         .resize ( v.size( ) );
-
-    h_interface_x .resize ( u.size( ) );
-    h_interface_y .resize ( v.size( ) );
-
-    slope_x   .resize ( u.size( ) );
-    slope_y   .resize ( v.size( ) );
+      slope_x   .resize ( u.size( ) );
+      slope_y   .resize ( v.size( ) );
 
 
 
 
-    for ( UInt i = 0; i < N_rows; i++ )
+      for ( UInt i = 0; i < N_rows; i++ )
       {
         for ( UInt j = 0; j < N_cols; j++ )
-          {
-            const auto k = j + i * N_cols;
-            basin_mask_Vec[ k ] = basin_mask.Coords.coeff ( i, j ) > 0;
-            orography[ k ]      = orographyMat.Coords.coeff ( i, j );
-          }
+        {
+          const auto k = j + i * N_cols;
+          basin_mask_Vec[ k ] = basin_mask.Coords.coeff ( i, j ) > 0;
+          orography[ k ]      = orographyMat.Coords.coeff ( i, j );
+        }
       }
 
-  }
+    }
 
-  if ( restart_H )
+    if ( restart_H )
     {
       if (rank==0)
       {
         const std::string H_file = dataFile ( "files/initial_conditions/H_file", "H.txt" );
         Raster HMat ( file_dir + H_file, rank );
 
-        
-        
+
+
         if ( HMat.cellsize <= pixel_size )
         {
           const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
@@ -425,7 +440,7 @@ main (int argc, char** argv)
           std::cout << "Error! resolution of surface water is greater than simulation resolution, i.e. " << pixel_size << std::endl;
           exit ( -1. );
         }
-        
+
       }
       MPI_Barrier (MPI_COMM_WORLD);
 
@@ -433,16 +448,16 @@ main (int argc, char** argv)
 
 
       for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
         {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              H [ k ]   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-            }
+          const auto k = j + i * N_cols;
+          H [ k ]   = HMat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
         }
+      }
 
     }
-  else
+    else
     {
       for ( UInt i = 0; i < N; i++ )
       {
@@ -453,7 +468,7 @@ main (int argc, char** argv)
     }
 
 
-  if ( restart_vel )
+    if ( restart_vel )
     {
       if (rank==0)
       {
@@ -483,20 +498,20 @@ main (int argc, char** argv)
           std::cout << "Error! resolution of horizontal velocity is greater than simulation resolution i.e. " << pixel_size << std::endl;
           exit ( -1. );
         }
-        
+
       }
       MPI_Barrier (MPI_COMM_WORLD);
 
       Raster vel_u_Mat ( output_dir + "u_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j <= N_cols; j++ )
         {
-          for ( UInt j = 0; j <= N_cols; j++ )
-            {
-              const auto Id = j + ( N_cols + 1 ) * i; // u
-              u[ Id ] = vel_u_Mat.Coords.coeff ( i, j );
-            }
+          const auto Id = j + ( N_cols + 1 ) * i; // u
+          u[ Id ] = vel_u_Mat.Coords.coeff ( i, j );
         }
+      }
 
       xllcorner_staggered_u = vel_u_Mat.xllcorner;
       yllcorner_staggered_u = vel_u_Mat.yllcorner;
@@ -537,20 +552,20 @@ main (int argc, char** argv)
       yllcorner_staggered_v = vel_v_Mat.yllcorner;
 
       for ( UInt i = 0; i <= N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
         {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto Id = j + i * N_cols;
-              v[ Id ] = vel_v_Mat.Coords.coeff ( i, j );
-            }
+          const auto Id = j + i * N_cols;
+          v[ Id ] = vel_v_Mat.Coords.coeff ( i, j );
         }
+      }
 
     }
-  else
+    else
     {
       xllcorner_staggered_u = xllcorner - pixel_size / 2.;
       yllcorner_staggered_u = yllcorner;
-      
+
       u.assign (u.size (), 0.0);
 
       if (rank==0) saveSolution ( output_dir + "u_0", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, u );
@@ -565,7 +580,7 @@ main (int argc, char** argv)
     }
 
 
-  if ( restart_snow )
+    if ( restart_snow )
     {
       if (rank==0)
       {
@@ -573,44 +588,44 @@ main (int argc, char** argv)
         Raster snow_Mat ( file_dir + restart_snow_file, rank );
 
         if ( snow_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "hsn=raster('" + file_dir + restart_snow_file + "');" +
-                                            "hsn=resample(hsn,dem,method='bilinear');" +
-                                            "values(hsn)[is.na(values(hsn))]=0;" +
-                                            "writeRaster( hsn, file=paste0('" + output_dir + "hsn_0.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
+        {
+          const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.asc" + "');" +
+          "hsn=raster('" + file_dir + restart_snow_file + "');" +
+          "hsn=resample(hsn,dem,method='bilinear');" +
+          "values(hsn)[is.na(values(hsn))]=0;" +
+          "writeRaster( hsn, file=paste0('" + output_dir + "hsn_0.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
 
-          }
+        }
         else
-          {
-            std::cout << "Error! resolution of snow file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
+        {
+          std::cout << "Error! resolution of snow file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+          exit ( -1. );
+        }
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
       Raster snow_Mat ( output_dir + "hsn_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
         {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              h_sn[ k ] = snow_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-            }
+          const auto k = j + i * N_cols;
+          h_sn[ k ] = snow_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
         }
+      }
 
 
     }
-  else
+    else
     {
       h_sn.assign (h_sn.size (), 0.0);
       if (rank==0) saveSolution ( output_dir + "hsn_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sn );
     }
 
-  if ( restart_sediment )
+    if ( restart_sediment )
     {
       if (rank==0)
       {
@@ -618,21 +633,21 @@ main (int argc, char** argv)
         Raster sediment_Mat ( file_dir + restart_sediment_file, rank );
 
         if ( sediment_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "hsd=raster('" + file_dir + restart_sediment_file + "');" +
-                                            "hsd=resample(hsd,dem,method='bilinear');" +
-                                            "values(hsd)[is.na(values(hsd))]=0;" +
-                                            "writeRaster( hsd, file=paste0('" + output_dir + "hsd_0.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
+        {
+          const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.asc" + "');" +
+          "hsd=raster('" + file_dir + restart_sediment_file + "');" +
+          "hsd=resample(hsd,dem,method='bilinear');" +
+          "values(hsd)[is.na(values(hsd))]=0;" +
+          "writeRaster( hsd, file=paste0('" + output_dir + "hsd_0.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
 
-          }
+        }
         else
-          {
-            std::cout << "Error! resolution of sediment file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
+        {
+          std::cout << "Error! resolution of sediment file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+          exit ( -1. );
+        }
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
@@ -640,15 +655,15 @@ main (int argc, char** argv)
 
 
       for ( UInt i = 0; i < N_rows; i++ )
+      {
+        for ( UInt j = 0; j < N_cols; j++ )
         {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i * N_cols;
-              h_sd[ k ] = sediment_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-            }
+          const auto k = j + i * N_cols;
+          h_sd[ k ] = sediment_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
         }
+      }
     }
-  else
+    else
     {
       h_sd.assign (h_sd.size (), 0.0);
       if (rank==0) saveSolution ( output_dir + "hsd_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sd );
@@ -656,7 +671,7 @@ main (int argc, char** argv)
     }
 
 
-  if ( restart_gravitational )
+    if ( restart_gravitational )
     {
       if (rank==0)
       {
@@ -664,201 +679,201 @@ main (int argc, char** argv)
         Raster gravitational_Mat ( file_dir + restart_gravitational_file, rank );
 
         if ( gravitational_Mat.cellsize <= pixel_size )
-          {
-            const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-                                            "dem=raster('" + output_dir + "DEM.asc" + "');" +
-                                            "hG=raster('" + file_dir + restart_gravitational_file + "');" +
-                                            "hG=resample(hG,dem,method='bilinear');" +
-                                            "values(hG)[is.na(values(hG))]=0;" +
-                                            "writeRaster( hG, file=paste0('" + output_dir + "hG_0.asc'), overwrite=TRUE )\"";
-            std::system ( bashCommand.c_str() );
+        {
+          const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.asc" + "');" +
+          "hG=raster('" + file_dir + restart_gravitational_file + "');" +
+          "hG=resample(hG,dem,method='bilinear');" +
+          "values(hG)[is.na(values(hG))]=0;" +
+          "writeRaster( hG, file=paste0('" + output_dir + "hG_0.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
 
-          }
+        }
         else
-          {
-            std::cout << "Error! resolution of gravitational file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
-            exit ( -1. );
-          }
+        {
+          std::cout << "Error! resolution of gravitational file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+          exit ( -1. );
+        }
       }
       MPI_Barrier(MPI_COMM_WORLD);
 
       Raster gravitational_Mat ( output_dir + "hG_0.asc", rank );
 
       for ( UInt i = 0; i < N_rows; i++ )
-        {
-          for ( UInt j = 0; j < N_cols; j++ )
-            {
-              const auto k = j + i*N_cols;
-              h_G[ k ] = gravitational_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
-            }
-        }
-
-    }
-  else
-    {
-      h_G.assign (h_G.size (), 0.0);
-      if (rank==0) saveSolution ( output_dir + "hG_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_G );
-    }
-  toc ("read input files");
-
-
-  // +-----------------------------------------------+
-  // |    Construct soilMoistureRetention vector     |
-  // +-----------------------------------------------+
-
-  tic();
-  
-  std::vector<Int> corineCode_Vec ( N ); 
-  std::vector<Real> X_Gav ( N ), Y_Gav ( N );
-  
-  {
-    const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
-    
-    const std::string check_presence_string = file_dir + corineCode_file; 
-
-    if (!is_file_exist(check_presence_string.c_str()) && rank==0)
-    {
-      std::cout << check_presence_string << " is not present!" << std::endl;
-      exit ( -1. );
-    }
-
-    // interpolate CLC to make sure to match correct dimensions
-    if (rank==0)
-    {
-      const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-      "dem=raster('" + output_dir + "DEM.asc" + "');" +
-      "clc=raster('" + file_dir + corineCode_file + "');" +
-      "clc=resample(clc,dem,method='ngb');" +
-      "values(clc)[is.na(values(clc))]=0;" +
-      "writeRaster( clc, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
-      std::system ( bashCommand.c_str() );
-      
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-    
-    Raster corineCode ( output_dir + "CLC.asc", rank );
-    
-    
-    if ( corineCode.cellsize != pixel_size )
-    {
-      std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with " << mask_file << " and "     << orography_file  << " ones" << std::endl;
-      exit ( -1. );
-    }
-    
-    
-    
-    for ( UInt i = 0; i < N_rows; i++ )
-    {
-      for ( UInt j = 0; j < N_cols; j++ )
-      {
-        const auto k = j + i * N_cols;
-        corineCode_Vec[ k ] = corineCode.Coords.coeff ( i, j );
-      }
-    }
-    
-  }
-  
-  
-  
-  {
-    
-    std::vector<Int>  HSG ( N );
-    std::vector<Real> clayPercentage_Vec ( N ), sandPercentage_Vec ( N );
-    
-    
-    std::string str1, str2;
-    if ( restart_soilMoisture )
-    {
-      const std::string restart_clay_file = dataFile ( "files/initial_conditions/clay_file", "clay.asc" ),
-                        restart_sand_file = dataFile ( "files/initial_conditions/sand_file", "sand.asc" );
-      
-      str1 = file_dir + restart_clay_file;
-      str2 = file_dir + restart_sand_file;
-    }
-    else
-    {
-      str1 = output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc";
-      str2 = output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc";
-
-      if (!is_file_exist(str1.c_str()) && rank==0)
-      {
-        std::cout << str1 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
-        exit ( -1. );
-      }
-
-      if (!is_file_exist(str2.c_str()) && rank==0)
-      {
-        std::cout << str2 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
-        exit ( -1. );
-      }      
-    }
-    
-    double cellsize_psf = 0;
-    if (infiltrationModel != "None" || friction_model == "Rickenmann")
-    {
-
-      // interpolate psfs to make sure to match correct dimensions
-      if ( restart_soilMoisture && rank==0 )
-      {
-        std::string bashCommand;
-
-        bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-        "dem=raster('" + output_dir + "DEM.asc" + "');" +
-        "clay=raster('" + str1 + "');" +
-        "clay=resample(clay,dem,method='ngb');" +
-        "values(clay)[is.na(values(clay))]=0;" +
-        "writeRaster( clay, file=paste0('" + output_dir + "clay.asc'), overwrite=TRUE )\"";
-        std::system ( bashCommand.c_str() );
-
-        bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
-        "dem=raster('" + output_dir + "DEM.asc" + "');" +
-        "sand=raster('" + str1 + "');" +
-        "sand=resample(sand,dem,method='ngb');" +
-        "values(sand)[is.na(values(sand))]=0;" +
-        "writeRaster( sand, file=paste0('" + output_dir + "sand.asc'), overwrite=TRUE )\"";
-        std::system ( bashCommand.c_str() );
-      }
-      MPI_Barrier(MPI_COMM_WORLD);
-
-
-      Raster clayPercentage ( str1, rank ),
-             sandPercentage ( str2, rank );
-      
-      cellsize_psf = clayPercentage.cellsize;
-      if ( cellsize_psf != sandPercentage.cellsize && rank==0 )
-      {
-        std::cerr << "Please check that the soil texture files have the same resolution" << std::endl;
-        exit ( -1. );
-      }
-      
-      for ( UInt i = 0; i < N_rows; i++ )
       {
         for ( UInt j = 0; j < N_cols; j++ )
         {
           const auto k = j + i*N_cols;
-          
-          clayPercentage_Vec[ k ] = clayPercentage.Coords.coeff ( i, j );
-          sandPercentage_Vec[ k ] = sandPercentage.Coords.coeff ( i, j );
+          h_G[ k ] = gravitational_Mat.Coords.coeff ( i, j ) * basin_mask_Vec[ k ];
         }
       }
-      
+
     }
-    
-    
-    if (infiltrationModel != "None" || friction_model == "Rickenmann")
+    else
     {
+      h_G.assign (h_G.size (), 0.0);
+      if (rank==0) saveSolution ( output_dir + "hG_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_G );
+    }
+    TOC ("read input files");
+
+
+    // +-----------------------------------------------+
+    // |    Construct soilMoistureRetention vector     |
+    // +-----------------------------------------------+
+
+    TIC();
+
+    std::vector<Int> corineCode_Vec ( N ); 
+    std::vector<Real> X_Gav ( N ), Y_Gav ( N );
+
+    {
+      const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
+
+      const std::string check_presence_string = file_dir + corineCode_file; 
+
+      if (!is_file_exist(check_presence_string.c_str()) && rank==0)
+      {
+        std::cout << check_presence_string << " is not present!" << std::endl;
+        exit ( -1. );
+      }
+
+    // interpolate CLC to make sure to match correct dimensions
+      if (rank==0)
+      {
+        const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+        "dem=raster('" + output_dir + "DEM.asc" + "');" +
+        "clc=raster('" + file_dir + corineCode_file + "');" +
+        "clc=resample(clc,dem,method='ngb');" +
+        "values(clc)[is.na(values(clc))]=0;" +
+        "writeRaster( clc, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
+        std::system ( bashCommand.c_str() );
+
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+
+      Raster corineCode ( output_dir + "CLC.asc", rank );
+
+
+      if ( corineCode.cellsize != pixel_size )
+      {
+        std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with " << mask_file << " and "     << orography_file  << " ones" << std::endl;
+        exit ( -1. );
+      }
+
 
 
       for ( UInt i = 0; i < N_rows; i++ )
       {
         for ( UInt j = 0; j < N_cols; j++ )
         {
-
-
           const auto k = j + i * N_cols;
+          corineCode_Vec[ k ] = corineCode.Coords.coeff ( i, j );
+        }
+      }
 
-          const auto & clay = clayPercentage_Vec[ k ],
-          & sand = sandPercentage_Vec[ k ];
+    }
+
+
+
+    {
+
+      std::vector<Int>  HSG ( N );
+      std::vector<Real> clayPercentage_Vec ( N ), sandPercentage_Vec ( N );
+
+
+      std::string str1, str2;
+      if ( restart_soilMoisture )
+      {
+        const std::string restart_clay_file = dataFile ( "files/initial_conditions/clay_file", "clay.asc" ),
+        restart_sand_file = dataFile ( "files/initial_conditions/sand_file", "sand.asc" );
+
+        str1 = file_dir + restart_clay_file;
+        str2 = file_dir + restart_sand_file;
+      }
+      else
+      {
+        str1 = output_dir + "clay_sim_" + std::to_string ( currentSimNumber ) + ".asc";
+        str2 = output_dir + "sand_sim_" + std::to_string ( currentSimNumber ) + ".asc";
+
+        if (!is_file_exist(str1.c_str()) && rank==0)
+        {
+          std::cout << str1 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+          exit ( -1. );
+        }
+
+        if (!is_file_exist(str2.c_str()) && rank==0)
+        {
+          std::cout << str2 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+          exit ( -1. );
+        }      
+      }
+
+      double cellsize_psf = 0;
+      if (infiltrationModel != "None" || friction_model == "Rickenmann")
+      {
+
+      // interpolate psfs to make sure to match correct dimensions
+        if ( restart_soilMoisture && rank==0 )
+        {
+          std::string bashCommand;
+
+          bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.asc" + "');" +
+          "clay=raster('" + str1 + "');" +
+          "clay=resample(clay,dem,method='ngb');" +
+          "values(clay)[is.na(values(clay))]=0;" +
+          "writeRaster( clay, file=paste0('" + output_dir + "clay.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
+
+          bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
+          "dem=raster('" + output_dir + "DEM.asc" + "');" +
+          "sand=raster('" + str1 + "');" +
+          "sand=resample(sand,dem,method='ngb');" +
+          "values(sand)[is.na(values(sand))]=0;" +
+          "writeRaster( sand, file=paste0('" + output_dir + "sand.asc'), overwrite=TRUE )\"";
+          std::system ( bashCommand.c_str() );
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+
+        Raster clayPercentage ( str1, rank ),
+        sandPercentage ( str2, rank );
+
+        cellsize_psf = clayPercentage.cellsize;
+        if ( cellsize_psf != sandPercentage.cellsize && rank==0 )
+        {
+          std::cerr << "Please check that the soil texture files have the same resolution" << std::endl;
+          exit ( -1. );
+        }
+
+        for ( UInt i = 0; i < N_rows; i++ )
+        {
+          for ( UInt j = 0; j < N_cols; j++ )
+          {
+            const auto k = j + i*N_cols;
+
+            clayPercentage_Vec[ k ] = clayPercentage.Coords.coeff ( i, j );
+            sandPercentage_Vec[ k ] = sandPercentage.Coords.coeff ( i, j );
+          }
+        }
+
+      }
+
+
+      if (infiltrationModel != "None" || friction_model == "Rickenmann")
+      {
+
+
+        for ( UInt i = 0; i < N_rows; i++ )
+        {
+          for ( UInt j = 0; j < N_cols; j++ )
+          {
+
+
+            const auto k = j + i * N_cols;
+
+            const auto & clay = clayPercentage_Vec[ k ],
+            & sand = sandPercentage_Vec[ k ];
 
 
             if ( sand > .9 && sand <= 1 && clay < .1 && clay >= 0 ) // A
@@ -988,114 +1003,109 @@ main (int argc, char** argv)
             
           }
         }
-    }
-    
-    
-    const Real S_0 = .254;  // 254 mm
-    
-    const auto CN_map = createCN_map( );
-    
-    for ( UInt k = 0; k < N; k++ )
-    {
-      const auto key = std::array<Int, 2> {{ corineCode_Vec[ k ], HSG[ k ] }};
-      
-      const auto it = CN_map.find ( key );
-      
-      
-      if ( it != CN_map.end( ) && infiltrationModel != "None" )
-      {
-        soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
       }
-      else
+
+      const Real S_0 = .254;  // 254 mm
+
+      const auto CN_map = createCN_map( );
+
+      for ( UInt k = 0; k < N; k++ )
       {
-        soilMoistureRetention[ k ] = 0.;
+        const auto key = std::array<Int, 2> {{ corineCode_Vec[ k ], HSG[ k ] }};
+
+        const auto it = CN_map.find ( key );
+
+
+        if ( it != CN_map.end( ) && infiltrationModel != "None" )
+        {
+          soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
+        }
+        else
+        {
+          soilMoistureRetention[ k ] = 0.;
+        }
       }
-    }
     
-    
+
     // build X_Gav and Y_Gav
-    const auto CN_Gav_map = createCN_map_Gav( );
-    
-    for ( UInt k = 0; k < N; k++ )
-    {
-      const auto key = corineCode_Vec[ k ];
-      
-      const auto it = CN_Gav_map.find ( key );
-      
-      
-      if ( it != CN_Gav_map.end( ) ) // remains zero else
+      const auto CN_Gav_map = createCN_map_Gav( );
+
+      for ( UInt k = 0; k < N; k++ )
       {
-        X_Gav[ k ] = it->second[ 0 ];
-        Y_Gav[ k ] = it->second[ 1 ];
-      }
-      
-      Z_Gav[ k ] = X_Gav[ k ]*Y_Gav[ k ];
-      
-    }
-    
-    
-    if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
-    {
-      std::cerr << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
+        const auto key = corineCode_Vec[ k ];
 
-      MPI_Barrier (MPI_COMM_WORLD);
-      MPI_Finalize ();
-      return 0;
-    }
-    
-    // build d_10 (for k_c) and d_90 (frictionClass)
-    auto d_10 = d_90;
-    if (infiltrationModel != "None")
-    {
-      d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
+        const auto it = CN_Gav_map.find ( key );
+
+        if ( it != CN_Gav_map.end( ) ) // remains zero else
+        {
+          X_Gav[ k ] = it->second[ 0 ];
+          Y_Gav[ k ] = it->second[ 1 ];
+        }
       
-      // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
-      // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
-      const Real C_H = 6.54e-4;
-      const Real gravity = 9.81;
-      const Real kin_visc = 0.89e-6;
-      for ( UInt i = 0; i < N; i++ )
+        Z_Gav[ k ] = X_Gav[ k ]*Y_Gav[ k ];
+      }
+    
+    
+      if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
       {
-        hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
+        std::cerr << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
+
+        MPI_Barrier (MPI_COMM_WORLD);
+        MPI_Finalize ();
+        return 0;
+      }
+
+      // build d_10 (for k_c) and d_90 (frictionClass)
+      auto d_10 = d_90;
+      if (infiltrationModel != "None")
+      {
+        d_10 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 10 );
+
+        // Equations for hydraulic conductivity estimation from particle size distribution: A dimensional analysis
+        // Ji-Peng Wang1, Bertrand François, and Pierre Lambert
+        const Real C_H = 6.54e-4;
+        const Real gravity = 9.81;
+        const Real kin_visc = 0.89e-6;
+        for ( UInt i = 0; i < N; i++ )
+        {
+          hydraulic_conductivity[ i ] = C_H * gravity / kin_visc * std::pow ( d_10[ i ], 2. );
+        }
+      }
+
+      if (infiltrationModel != "None" || friction_model == "Rickenmann") d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
+
+      if (rank==0)
+      {
+        saveSolution ( output_dir + "soilMoistureRetention",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, soilMoistureRetention );
+        saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
+        saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
+        saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
       }
     }
-    
-    if (infiltrationModel != "None" || friction_model == "Rickenmann") d_90 = compute_d_perc ( clayPercentage_Vec, sandPercentage_Vec, 90 );
-    
-    if (rank==0)
-    {
-      saveSolution ( output_dir + "soilMoistureRetention",  " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, soilMoistureRetention );
-      saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
-      saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
-      saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
-    }
-    
-  }
 
-  
-  if (rank==0) std::cout << "maximum and minimum hydraulic_conductivity  " << *std::max_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << " " << *std::min_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << std::endl;
-  toc ("build soil moisture vector");
+    if (rank==0) std::cout << "maximum and minimum hydraulic_conductivity  " << *std::max_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << " " << *std::min_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << std::endl;
+    TOC ("build soil moisture vector");
 
-  // +-----------------------------------------------+
-  // |                Compute Slopes                 |
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |                Compute Slopes                 |
+    // +-----------------------------------------------+
 
 
-  tic();
-  for ( UInt i = 0; i < N_rows; i++ )
+    TIC();
+    for ( UInt i = 0; i < N_rows; i++ )
     {
       for ( UInt j = 1; j < N_cols; j++ )
-        {
-          const auto Id = j + i*( N_cols + 1 );
+      {
+        const auto Id = j + i*( N_cols + 1 );
 
-          slope_x[ Id ] = ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / pixel_size;
-          n_x    [ Id ] = - ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / std::abs ( ( orography[ Id - i ] - orography[ Id - 1 - i ] ) );
+        slope_x[ Id ] = ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / pixel_size;
+        n_x    [ Id ] = - ( orography[ Id - i ] - orography[ Id - 1 - i ] ) / std::abs ( ( orography[ Id - i ] - orography[ Id - 1 - i ] ) );
 
-          if ( std::isnan ( n_x[ Id ] ) ) n_x[ Id ] = 0;
-        }
+        if ( std::isnan ( n_x[ Id ] ) ) n_x[ Id ] = 0;
+      }
     }
 
-  for ( UInt i = 0, j = 0; i < N_rows; i++ )
+    for ( UInt i = 0, j = 0; i < N_rows; i++ )
     {
       const auto Id = j + i*( N_cols + 1 );
 
@@ -1103,7 +1113,7 @@ main (int argc, char** argv)
       n_x    [ Id ] = n_x    [ Id + 1 ];
     }
 
-  for ( UInt i = 0, j = N_cols; i < N_rows; i++ )
+    for ( UInt i = 0, j = N_cols; i < N_rows; i++ )
     {
       const auto Id = j + i*( N_cols + 1 );
 
@@ -1114,20 +1124,20 @@ main (int argc, char** argv)
 
 
 
-  for ( UInt i = 1; i < N_rows; i++ )
+    for ( UInt i = 1; i < N_rows; i++ )
     {
       for ( UInt j = 0; j < N_cols; j++ )
-        {
-          const auto Id = j + i*N_cols;
+      {
+        const auto Id = j + i*N_cols;
 
-          slope_y[ Id ] = ( orography[ Id ] - orography[ Id - N_cols ] ) / pixel_size;
-          n_y    [ Id ] = - ( orography[ Id ] - orography[ Id - N_cols ] ) / std::abs ( ( orography[ Id ] - orography[ Id - N_cols ] ) );
+        slope_y[ Id ] = ( orography[ Id ] - orography[ Id - N_cols ] ) / pixel_size;
+        n_y    [ Id ] = - ( orography[ Id ] - orography[ Id - N_cols ] ) / std::abs ( ( orography[ Id ] - orography[ Id - N_cols ] ) );
 
-          if ( std::isnan ( n_y[ Id ] ) ) n_y[ Id ] = 0;
-        }
+        if ( std::isnan ( n_y[ Id ] ) ) n_y[ Id ] = 0;
+      }
     }
 
-  for ( UInt j = 0, i = 0; j < N_cols; j++ )
+    for ( UInt j = 0, i = 0; j < N_cols; j++ )
     {
       const auto Id = j + i*N_cols;
 
@@ -1135,7 +1145,7 @@ main (int argc, char** argv)
       n_y    [ Id ] = n_y    [ Id + N_cols ];
     }
 
-  for ( UInt j = 0, i = N_rows; j < N_cols; j++ )
+    for ( UInt j = 0, i = N_rows; j < N_cols; j++ )
     {
       const auto Id = j + i*N_cols;
 
@@ -1144,35 +1154,34 @@ main (int argc, char** argv)
     }
 
 
-  if (rank==0)
-  {
-    saveSolution ( output_dir + "slope_x", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_x );
-    saveSolution ( output_dir + "slope_y", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_y );
-  }
-  toc ("compute slopes");
+    if (rank==0)
+    {
+      saveSolution ( output_dir + "slope_x", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_x );
+      saveSolution ( output_dir + "slope_y", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_y );
+    }
+    TOC ("compute slopes");
 
 
-  tic();
-  computeAdjacencies ( basin_mask_Vec,
-                       idStaggeredBoundaryVectSouth,
-                       idStaggeredBoundaryVectNorth,
-                       idStaggeredBoundaryVectWest,
-                       idStaggeredBoundaryVectEast,
-                       idStaggeredInternalVectHorizontal,
-                       idStaggeredInternalVectVertical,
-                       idBasinVect,
-                       idBasinVectReIndex,
-                       N_rows,
-                       N_cols );
-  toc ("compute basin boundaries");
+    TIC();
+    computeAdjacencies ( basin_mask_Vec,
+     idStaggeredBoundaryVectSouth,
+     idStaggeredBoundaryVectNorth,
+     idStaggeredBoundaryVectWest,
+     idStaggeredBoundaryVectEast,
+     idStaggeredInternalVectHorizontal,
+     idStaggeredInternalVectVertical,
+     idBasinVect,
+     idBasinVectReIndex,
+     N_rows,
+     N_cols );
+    TOC ("compute basin boundaries");
 
+    // +-----------------------------------------------+
+    // |                Gavrilovic Coeff.              |
+    // +-----------------------------------------------+
 
-  // +-----------------------------------------------+
-  // |                Gavrilovic Coeff.              |
-  // +-----------------------------------------------+
-
-  tic();
-  for ( const auto & k : idBasinVect )
+    TIC();
+    for ( const auto & k : idBasinVect )
     {
       const UInt i = k/N_cols;
       slope_cell[ k ] = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
@@ -1180,99 +1189,97 @@ main (int argc, char** argv)
       Z_Gav[ k ] *= ( .5 + std::sqrt ( slope_cell[ k ] ) );
       Z_Gav[ k ] = std::pow ( Z_Gav[ k ], 1.5 );
     }
-  toc ("gavrilovic coeff");
+    TOC ("gavrilovic coeff");
 
-  // +-----------------------------------------------+
-  // |                    Gauges i,j                 |
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |                    Gauges i,j                 |
+    // +-----------------------------------------------+
 
-  tic();
+    TIC();
 
-  std::vector<std::vector<UInt> > kk_gauges;
+    std::vector<std::vector<UInt> > kk_gauges;
 
-  const Int    number_gauges = dataFile ( "discretization/number_gauges", 1 );
-  const double delta_gauges  = dataFile ( "discretization/delta_gauges",  0 );
+    const Int    number_gauges = dataFile ( "discretization/number_gauges", 1 );
+    const double delta_gauges  = dataFile ( "discretization/delta_gauges",  0 );
 
-  kk_gauges.resize(number_gauges);
+    kk_gauges.resize(number_gauges);
 
-  for (Int number=1; number<=number_gauges; number++)
-  {
-    std::string filename_x = "discretization/X_gauges_", 
-                filename_y = "discretization/Y_gauges_";
-
-    filename_x += std::to_string(number); 
-    filename_y += std::to_string(number);
-
-    const Real X_gauges = dataFile ( filename_x.c_str(), 0.);
-    const Real Y_gauges = dataFile ( filename_y.c_str(), 0.);
-
-    const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
-
-
-    if ( save_temporal_sequence )
+    for (Int number=1; number<=number_gauges; number++)
     {
+      std::string filename_x = "discretization/X_gauges_", 
+      filename_y = "discretization/Y_gauges_";
 
-      const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
+      filename_x += std::to_string(number); 
+      filename_y += std::to_string(number);
 
-      auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
+      const Real X_gauges = dataFile ( filename_x.c_str(), 0.);
+      const Real Y_gauges = dataFile ( filename_y.c_str(), 0.);
 
-      auto XX_east  = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
-      auto XX_west  = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+      const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
 
-      auto XX_south = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
-      auto XX_north = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
 
-      XX(1) = -std::round(XX(1));
-      XX(0) =  std::round(XX(0));
-      if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
+      if ( save_temporal_sequence )
       {
-        std::cout << "The gauges in the input file are not good" << std::endl;
-        exit ( 1. );
-      }
 
+        const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
 
-      int i_1 = -std::round(XX_north(1));
-      int i_2 = -std::round(XX_south(1));
+        auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
 
-      int j_1 = std::round(XX_west(0));
-      int j_2 = std::round(XX_east(0));
+        auto XX_east  = XX + Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
+        auto XX_west  = XX - Vector2D(std::array<Real,2>{{delta_gauges/pixel_size,0}});
 
-      i_1 = std::min(std::max(i_1, 0), int(N_rows-1));
-      j_1 = std::min(std::max(j_1, 0), int(N_cols-1));
+        auto XX_south = XX + Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
+        auto XX_north = XX - Vector2D(std::array<Real,2>{{0,delta_gauges/pixel_size}});
 
-      i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
-      j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
-
-
-      for (int i = i_2; i <= i_1; i++)
-      {
-        for (int j = j_1; j <= j_2; j++)
+        XX(1) = -std::round(XX(1));
+        XX(0) =  std::round(XX(0));
+        if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
         {
-          kk_gauges[number-1].push_back(i*N_cols + j);
+          std::cout << "The gauges in the input file are not good" << std::endl;
+          exit ( 1. );
         }
+
+
+        int i_1 = -std::round(XX_north(1));
+        int i_2 = -std::round(XX_south(1));
+
+        int j_1 = std::round(XX_west(0));
+        int j_2 = std::round(XX_east(0));
+
+        i_1 = std::min(std::max(i_1, 0), int(N_rows-1));
+        j_1 = std::min(std::max(j_1, 0), int(N_cols-1));
+
+        i_2 = std::min(std::max(i_2, 0), int(N_rows-1));
+        j_2 = std::min(std::max(j_2, 0), int(N_cols-1));
+
+
+        for (int i = i_2; i <= i_1; i++)
+        {
+          for (int j = j_1; j <= j_2; j++)
+          {
+            kk_gauges[number-1].push_back(i*N_cols + j);
+          }
+        }
+
       }
 
     }
+    TOC ("gauges i,j ");
 
-  }
+    // +-----------------------------------------------+
+    // |                    Rain                       |
+    // +-----------------------------------------------+
 
-  toc ("gauges i,j ");
-  
-
-  // +-----------------------------------------------+
-  // |                    Rain                       |
-  // +-----------------------------------------------+
-
-  tic();
-  const bool is_precipitation = dataFile ( "files/meteo_data/precipitation", true );
-  const bool constant_precipitation = dataFile ( "files/meteo_data/constant_precipitation", true );
+    TIC();
+    const bool is_precipitation = dataFile ( "files/meteo_data/precipitation", true );
+    const bool constant_precipitation = dataFile ( "files/meteo_data/constant_precipitation", true );
 
 
-  Real dt_rain = 0;
+    Real dt_rain = 0;
 
-  Rain precipitation ( infiltrationModel, N, dataFile ( "files/infiltration/isInitialLoss", false ), dataFile ( "files/infiltration/perc_initialLoss", 0.05 ) );
+    Rain precipitation ( infiltrationModel, N, dataFile ( "files/infiltration/isInitialLoss", false ), dataFile ( "files/infiltration/perc_initialLoss", 0.05 ) );
 
-  if ( constant_precipitation || !is_precipitation )
+    if ( constant_precipitation || !is_precipitation )
     {
       const std::string precipitation_file = dataFile ( "files/meteo_data/rain_file", " " );
 
@@ -1284,7 +1291,7 @@ main (int argc, char** argv)
 
       precipitation.constant_precipitation ( file_dir + precipitation_file, ndata_rain, is_precipitation, time_spacing_rain );
     }
-  else // IDW
+    else // IDW
     {
       std::vector<std::string> precipitation_file;
       std::vector<Real>        time_spacing_rain, X, Y;
@@ -1296,7 +1303,7 @@ main (int argc, char** argv)
         std::string filename = "files/meteo_data/rain_file_";
         filename += std::to_string(number);
         const std::string precipitation_file_current = dataFile ( filename.c_str(), " " );
-        
+
         filename = "files/meteo_data/time_spacing_rain_";
         filename += std::to_string(number);
         const Real time_spacing_rain_current  = dataFile ( filename.c_str(),  1. );
@@ -1304,7 +1311,7 @@ main (int argc, char** argv)
         filename = "files/meteo_data/X_";
         filename += std::to_string(number); 
         const Real X_current = dataFile ( filename.c_str(), 1. );
-        
+
         filename = "files/meteo_data/Y_";
         filename += std::to_string(number);
         const Real Y_current = dataFile ( filename.c_str(), 1. );
@@ -1323,98 +1330,97 @@ main (int argc, char** argv)
 
       precipitation.IDW_precipitation ( precipitation_file, ndata_rain, time_spacing_rain, X, Y, xllcorner, yllcorner, pixel_size, N_rows, N_cols, idBasinVect );
     }
-  toc ("rain");
+    TOC ("rain");
 
-  // +-----------------------------------------------+
-  // |                 Temperature                   |
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |                 Temperature                   |
+    // +-----------------------------------------------+
 
-  tic();
-  const Real        time_spacing_temp = dataFile ( "files/meteo_data/time_spacing_temp", 1. );
-  const std::string format_temp       = dataFile ( "files/meteo_data/format_temp", "arpa" );
-  const Real        dt_temp           = time_spacing_temp * 3600;
+    TIC();
+    const Real        time_spacing_temp = dataFile ( "files/meteo_data/time_spacing_temp", 1. );
+    const std::string format_temp       = dataFile ( "files/meteo_data/format_temp", "arpa" );
+    const Real        dt_temp           = time_spacing_temp * 3600;
 
-  Temperature temp ( file_dir + temperature_file,
-                     N,
-                     max_Days,
-                     T_thr,
-                     orography,
-                     std::round ( max_Days * 24 / time_spacing_temp ),
-                     steps_per_hour,
-                     time_spacing_temp,
-                     height_thermometer,
-                     format_temp );
+    Temperature temp ( file_dir + temperature_file,
+     N,
+     max_Days,
+     T_thr,
+     orography,
+     std::round ( max_Days * 24 / time_spacing_temp ),
+     steps_per_hour,
+     time_spacing_temp,
+     height_thermometer,
+     format_temp );
 
-  toc ("temperature");
+    TOC ("temperature");
 
-  // +-----------------------------------------------+
-  // |              Evapotranspiration               |
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |              Evapotranspiration               |
+    // +-----------------------------------------------+
 
-  tic();
-  evapoTranspiration ET ( ET_model, N, orography, temp.J, max_Days, phi_rad, height_thermometer );
-  toc ("evapotranspiration");
-
-
-  // +-----------------------------------------------+
-  // |                   Core Part                   |
-  // +-----------------------------------------------+
+    TIC();
+    evapoTranspiration ET ( ET_model, N, orography, temp.J, max_Days, phi_rad, height_thermometer );
+    TOC ("evapotranspiration");
 
 
-  tic();
-  
-  for (int ii = 0; ii < N; ii++)
-  {
-    const auto r1 =  dataFile ( "files/infiltration/roughness_scale_factor1", 100. );
-    const auto r2 =  dataFile ( "files/infiltration/roughness_scale_factor2", 100. );
-    const auto r3 =  dataFile ( "files/infiltration/roughness_scale_factor3", 100. );
-    
-    
-    if (slope_cell[ ii ] <= 0.2)
+    // +-----------------------------------------------+
+    // |                   Core Part                   |
+    // +-----------------------------------------------+
+
+
+    TIC();
+
+    for (int ii = 0; ii < N; ii++)
     {
-      roughness_vect[ ii ] = r1;
+      const auto r1 =  dataFile ( "files/infiltration/roughness_scale_factor1", 100. );
+      const auto r2 =  dataFile ( "files/infiltration/roughness_scale_factor2", 100. );
+      const auto r3 =  dataFile ( "files/infiltration/roughness_scale_factor3", 100. );
+
+
+      if (slope_cell[ ii ] <= 0.2)
+      {
+        roughness_vect[ ii ] = r1;
+      }
+      else if (slope_cell[ ii ] <= 0.6)
+      {
+        roughness_vect[ ii ] = r2;
+      }
+      else
+      {
+        roughness_vect[ ii ] = r3;
+      }
     }
-    else if (slope_cell[ ii ] <= 0.6)
-    {
-      roughness_vect[ ii ] = r2;
-    }
-    else
-    {
-      roughness_vect[ ii ] = r3;
-    }
-  }
 
 
 
-  const Real dt_min = std::min ( dt_rain, dt_temp );
-  for ( const auto & kk : hydraulic_conductivity )
+    const Real dt_min = std::min ( dt_rain, dt_temp );
+    for ( const auto & kk : hydraulic_conductivity )
     {
       if ( kk * ( dt_min / pixel_size ) > 1. )
-        {
-          std::cout << "Error! Courant number for gravitational layer is greater than 1!" << std::endl;
-          exit ( -1. );
-        }
+      {
+        std::cout << "Error! Courant number for gravitational layer is greater than 1!" << std::endl;
+        exit ( -1. );
+      }
     }
 
-  const Real c1_min = dt_min / pixel_size;
+    const Real c1_min = dt_min / pixel_size;
 
 
 
 
-  const Real g = 9.81;
-  std::function<Real(Real const&, Real const&)> c1_DSV = [](Real const& dt_DSV, Real const& pixel_size){return dt_DSV / pixel_size;};
-  std::function<Real(Real const&, Real const&)> c2_DSV = [](Real const& g,      Real const& c1        ){return g * c1;             };
-  std::function<Real(Real const&, Real const&)> c3_DSV = [](Real const& g,      Real const& c1        ){return g * c1 * c1;        };
-  
+    const Real g = 9.81;
+    std::function<Real(Real const&, Real const&)> c1_DSV = [](Real const& dt_DSV, Real const& pixel_size){return dt_DSV / pixel_size;};
+    std::function<Real(Real const&, Real const&)> c2_DSV = [](Real const& g,      Real const& c1        ){return g * c1;             };
+    std::function<Real(Real const&, Real const&)> c3_DSV = [](Real const& g,      Real const& c1        ){return g * c1 * c1;        };
 
-  const Real area = std::pow ( pixel_size, 2 ) * 1.e-6; // km^2
+    const Real area = std::pow ( pixel_size, 2 ) * 1.e-6; // km^2
 
 //  std::cout << "c1_DSV " << c1_DSV(dt_DSV, pixel_size) << "   c2_DSV " << c2_DSV(g, c1_DSV(dt_DSV, pixel_size)) << "   c3_DSV " << c3_DSV(g, c1_DSV(dt_DSV, pixel_size)) << std::endl;
 
 
-  Real slope_y_max = 0.;
-  Real slope_x_max = 0.;  
-  for ( const auto & k : idBasinVect )
+    Real slope_y_max = 0.;
+    Real slope_x_max = 0.;  
+    for ( const auto & k : idBasinVect )
     {
       const UInt i = k/N_cols;
 
@@ -1430,268 +1436,340 @@ main (int argc, char** argv)
     }
 
 
-  Real dt_sed,
-       c1_sed;
+    Real dt_sed,
+    c1_sed;
 
-  UInt numberOfSteps = 1;
+    UInt numberOfSteps = 1;
 
-  bool isHNegative =  false;
+    bool isHNegative =  false;
+
+
+
+    TOC ("prepare loop");
+
   
   
-
-  toc ("prepare loop");
-  
-  
-  
-  // +-----------------------------------------------+
-  // |      Subdivision among available cores        |
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |      Subdivision among available cores        |
+    // +-----------------------------------------------+
 
 
-  const int nnz_basin_mask_Vec = idBasinVect.size();
-  const int chunk_length = nnz_basin_mask_Vec/size;
-  const int residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
+    const int nnz_basin_mask_Vec = idBasinVect.size();
+    const int chunk_length = nnz_basin_mask_Vec/size;
+    const int residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
 
-  std::vector<int> chunk_length_vec(size);
-  chunk_length_vec.assign(size, chunk_length);
+    std::vector<int> chunk_length_vec(size);
+    chunk_length_vec.assign(size, chunk_length);
 
-  for (UInt i = 0; i < residual; i++)
-  {
-    chunk_length_vec[i] += 1;
-  }
+    for (UInt i = 0; i < residual; i++)
+    {
+      chunk_length_vec[i] += 1;
+    }
 
-  std::vector<int> corresponding_rank_given_id(N);
-  corresponding_rank_given_id.assign(N, -1);
+    std::vector<int> corresponding_rank_given_id(N);
+    corresponding_rank_given_id.assign(N, -1);
 
-  std::vector<Real> basin_mask_Vec_mpi(N);
-  basin_mask_Vec_mpi.assign (N, 0);
-  for ( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
-  {
-    basin_mask_Vec_mpi[idBasinVect[i]] = 1;
-    corresponding_rank_given_id[idBasinVect[i]] = rank;
-  }
-  MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    // 1415 2830, 0 1415
+
+    std::array<int,3> give_try = {1415, 1415, 2830};
+
+    //std::cout << give_try[rank] << " " << rank << std::endl;
+
+    std::vector<Real> basin_mask_Vec_mpi(N);
+    basin_mask_Vec_mpi.assign (N, 0);
+    if (rank==1)
+    for ( UInt i = current_start_chunk(1, chunk_length_vec); i < current_start_chunk(1+1, chunk_length_vec); i++ ) //( UInt i = give_try[rank]; i < give_try[rank+1]; i++ )//( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
+    {
+      std::cout << idBasinVect[i] << " " << basin_mask_Vec_mpi.size() << " " << N << std::endl;
+      //std::cout << rank << " rankkkkkkkkkkk  " << give_try[rank] << " aaaaaa " << give_try[rank+1] << std::endl;
+      basin_mask_Vec_mpi[idBasinVect[i]] = 1.;
+      corresponding_rank_given_id[idBasinVect[i]] = rank;
+    }
+    MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+    //std::cout << rank << " " << nnz_basin_mask_Vec << " " << current_start_chunk(rank, chunk_length_vec) << " " << current_start_chunk(rank+1, chunk_length_vec) << std::endl;
+
+    saveSolution ( output_dir + "basin_mask_Vec_mpi_" + std::to_string(rank), " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, basin_mask_Vec_mpi );
+
+    for (const auto & it : basin_mask_Vec_mpi)
+    {
+      if(rank==0 && it!=0)
+      std::cout << rank << " " << it << std::endl;
+    }
+
+    MPI_Barrier (MPI_COMM_WORLD); 
+      if (rank == 0) { print_timing_report (); }
+      lis_finalize ();
+      return ( EXIT_SUCCESS );
+
+    // for each processor
+    computeAdjacencies ( basin_mask_Vec,
+      basin_mask_Vec_mpi,
+      idStaggeredBoundaryVectSouth_mpi,
+      idStaggeredBoundaryVectNorth_mpi,
+      idStaggeredBoundaryVectWest_mpi,
+      idStaggeredBoundaryVectEast_mpi,
+      idStaggeredInternalVectHorizontal_mpi,
+      idStaggeredInternalVectVertical_mpi,
+      idStaggeredBoundaryVectHorizontal_among_ranks,
+      idStaggeredBoundaryVectVertical_among_ranks,
+      idStaggeredInternalVectHorizontal_in_rank,
+      idStaggeredInternalVectVertical_in_rank,
+      idBasinVect_mpi,
+      idBasinVectReIndex_mpi,
+      N_rows,
+      N_cols );
+
+    /*
+    // it is not necessary but please save the basin subdivison
+    for ( const auto & k : basin_mask_Vec )
+    {
+      if ( !basin_mask_Vec_mpi[k] )
+      {
+        H   [k] = 0.;
+        h_G [k] = 0.; 
+        h_sd[k] = 0.;
+        h_sn[k] = 0.;
+      }
+    }*/
 
 
-  // for each processor
-  computeAdjacencies ( basin_mask_Vec,
-                      basin_mask_Vec_mpi,
-                      idStaggeredBoundaryVectSouth_mpi,
-                      idStaggeredBoundaryVectNorth_mpi,
-                      idStaggeredBoundaryVectWest_mpi,
-                      idStaggeredBoundaryVectEast_mpi,
-                      idStaggeredInternalVectHorizontal_mpi,
-                      idStaggeredInternalVectVertical_mpi,
-                      idStaggeredBoundaryVectHorizontal_among_ranks,
-                      idStaggeredBoundaryVectVertical_among_ranks,
-                      idStaggeredInternalVectHorizontal_in_rank,
-                      idStaggeredInternalVectVertical_in_rank,
-                      idBasinVect_mpi,
-                      idBasinVectReIndex_mpi,
-                      N_rows,
-                      N_cols );
-
-
-  // +-----------------------------------------------+
+    // +-----------------------------------------------+
 
 
 
-  upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_mpi,
-                                idStaggeredBoundaryVectWest_mpi,
-                                idStaggeredBoundaryVectEast_mpi, 
-                                idStaggeredInternalVectVertical_mpi,
-                                idStaggeredBoundaryVectNorth_mpi,
-                                idStaggeredBoundaryVectSouth_mpi, N_rows, N_cols );
+    upwind H_interface ( H, u, v, idStaggeredInternalVectHorizontal_mpi,
+      idStaggeredBoundaryVectWest_mpi,
+      idStaggeredBoundaryVectEast_mpi, 
+      idStaggeredInternalVectVertical_mpi,
+      idStaggeredBoundaryVectNorth_mpi,
+      idStaggeredBoundaryVectSouth_mpi, N_rows, N_cols );
 
-  frictionClass alfa ( H_interface.horizontal, H_interface.vertical, u, v, 
-                       idStaggeredInternalVectHorizontal_mpi,
-                       idStaggeredBoundaryVectWest_mpi,
-                       idStaggeredBoundaryVectEast_mpi,
-                       idStaggeredInternalVectVertical_mpi,
-                       idStaggeredBoundaryVectNorth_mpi,
-                       idStaggeredBoundaryVectSouth_mpi, friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
-  
+    frictionClass alfa ( H_interface.horizontal, H_interface.vertical, u, v, 
+     idStaggeredInternalVectHorizontal_mpi,
+     idStaggeredBoundaryVectWest_mpi,
+     idStaggeredBoundaryVectEast_mpi,
+     idStaggeredInternalVectVertical_mpi,
+     idStaggeredBoundaryVectNorth_mpi,
+     idStaggeredBoundaryVectSouth_mpi, friction_model, n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows, N_cols, slope_x, slope_y );
+
 
 
   //LIS_INT is,ie;
 
-  lis_vector_create(comm,&H_basin);
-  lis_vector_set_size(H_basin,chunk_length_vec[rank],0); 
+    lis_vector_create(comm,&H_basin);
+    lis_vector_set_size(H_basin,chunk_length_vec[rank],0); 
   //lis_vector_get_range(H_basin,&is,&ie);
-  lis_vector_set_all(0.,H_basin);
+    lis_vector_set_all(0.,H_basin);
 
   //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << std::endl;
 
-  lis_vector_create(comm,&rhs);
-  lis_vector_set_size(rhs,chunk_length_vec[rank],0); 
+    lis_vector_create(comm,&rhs);
+    lis_vector_set_size(rhs,chunk_length_vec[rank],0); 
   //lis_vector_get_range(rhs,&is,&ie);
-  lis_vector_set_all(0.,rhs);
+    lis_vector_set_all(0.,rhs);
 
-  lis_matrix_create(comm,&A);
-  lis_matrix_set_size(A,chunk_length_vec[rank],0);
-  lis_matrix_malloc(A, 5, nnz_vect);  // 5 is the number of non zero elements per row we allocate
+    lis_matrix_create(comm,&A);
+    lis_matrix_set_size(A,chunk_length_vec[rank],0);
+    lis_matrix_malloc(A, 5, nnz_vect);  // 5 is the number of non zero elements per row we allocate
   
   
-  lis_solver_create(&solver);
-  lis_solver_set_option("-i cg -p none",solver);
-  lis_solver_set_option("-tol 1.0e-12",solver);
+    lis_solver_create(&solver);
+    lis_solver_set_option("-i cg -p none",solver);
+    lis_solver_set_option("-tol 1.0e-12",solver);
 
-  std::vector<MPI_Request> requests_horizontal(2*idStaggeredBoundaryVectHorizontal_among_ranks.size(), MPI_REQUEST_NULL);  
-  std::vector<MPI_Request> requests_vertical  (2*idStaggeredBoundaryVectVertical_among_ranks  .size(), MPI_REQUEST_NULL);  
+    std::vector<MPI_Request> requests_horizontal(2*idStaggeredBoundaryVectHorizontal_among_ranks.size(), MPI_REQUEST_NULL);  
+    std::vector<MPI_Request> requests_vertical  (2*idStaggeredBoundaryVectVertical_among_ranks  .size(), MPI_REQUEST_NULL);  
   
-  int iter = 0;
+    int iter = 0;
+
   
-  
-  double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, u_abs_max, v_abs_max;
 
-  for (const auto & Id : idBasinVect_mpi)
-  {
-    maxH = std::max(maxH, H[Id]);
-  }
-  MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&maxH), 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, u_abs_max, v_abs_max;
 
-   
-  dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
-  MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+    for (const auto & Id : idBasinVect_mpi)
+    {
+      maxH = std::max(maxH, H[Id]);
+    }
+    MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&maxH), 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 
-  dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
-  dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
-      
-  c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
-  c2_DSV_ = c2_DSV (g, c1_DSV_);
-  c3_DSV_ = c3_DSV (g, c1_DSV_);
+    u_abs_max = 0.;
+    for (const auto & Id : idStaggeredInternalVectHorizontal_mpi)
+    {
+      u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+    }
+    for (const auto & Id : idStaggeredBoundaryVectWest_mpi)
+    {
+      u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+    }
+    for (const auto & Id : idStaggeredBoundaryVectEast_mpi)
+    {
+      u_abs_max = std::max(u_abs_max, std::abs(u[Id]));
+    }
 
-  LIS_INT nsol;
-  char solvername[128];
+    v_abs_max = 0.;
+    for (const auto & Id : idStaggeredInternalVectVertical_mpi)
+    {
+      v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+    }
+    for (const auto & Id : idStaggeredBoundaryVectNorth_mpi)
+    {
+      v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+    }
+    for (const auto & Id : idStaggeredBoundaryVectSouth_mpi)
+    {
+      v_abs_max = std::max(v_abs_max, std::abs(v[Id]));
+    }
 
-  auto H_old    = H;
-  auto H_oldold = H;
-  
-  double time = 0., timed = -dt_DSV, timedd = -2.*dt_DSV; 
-  bool is_last_step = false, check_last = false;
-  while ( !is_last_step )
+    dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
+    MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+
+    dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
+    dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
+
+    c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
+    c2_DSV_ = c2_DSV (g, c1_DSV_);
+    c3_DSV_ = c3_DSV (g, c1_DSV_);
+
+    LIS_INT nsol;
+    char solvername[128];
+
+    auto H_old    = H;
+    auto H_oldold = H;
+
+    double time = 0., timed = -dt_DSV, timedd = -2.*dt_DSV; 
+    bool is_last_step = false, check_last = false;
+    while ( !is_last_step )
     {
       if (rank==0)
       {
-        std::cout << "Simulation progress: " << time/t_final*100 << " %" << " max surface run-off vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface run-off cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
+        std::cout << "Simulation progress: " << time/t_final*100 << " %" << " max surface run-off cel. based Courant: " << std::sqrt(maxH*g)*c1_DSV_ << std::endl;
         std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
       }
 
-      tic();
-      // Compute interface fluxes via upwind method
+      TIC();
+    // Compute interface fluxes via upwind method
       H_interface.computeHorizontal ( );
       H_interface.computeVertical   ( );
-      toc ("H_interface");
+      TOC ("H_interface");
 
-      tic();
-      // Compute alfa coefficients
+      TIC();
+    // Compute alfa coefficients
       alfa.f_x ( );
       alfa.f_y ( );
-      toc ("alfa");
+      TOC ("alfa");
 
-      
-      // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
+
+    // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
       if ( std::floor ( time / dt_temp ) > std::floor ( (time - dt_DSV) / dt_temp ) )
-        {
-          tic();
-          // Compute temperature map
-          temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect_mpi );
-          toc ("temperature");
-        }
+      {
+        TIC();
+      // Compute temperature map
+        temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect_mpi );
+        TOC ("temperature");
+      }
 
 
-      // ET varies daily
+    // ET varies daily
       if ( std::floor ( time / (24.*3600) ) > std::floor ( (time - dt_DSV) / (24.*3600) ) )
-        {
-          tic();
-          // Get ET rate at the current time
-          ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24.*3600 ) ), idBasinVect_mpi, orography );
-          toc ("ET");
-        }
+      {
+        TIC();
+      // Get ET rate at the current time
+        ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24.*3600 ) ), idBasinVect_mpi, orography );
+        TOC ("ET");
+      }
+
 
       // +-----------------------------------------------+
       // |            Gravitational Layer                |
       // +-----------------------------------------------+
 
-      // update only if necessary
+    // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
-        {
+      {
 
-          tic();
+        TIC();
 
-          // communication to make available ghost cells
-          communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
-            h_G, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
-            rank, N_cols);
+        if (rank==0) std::cout << "<<<<<<<<< 11" << std::endl;
+        MPI_Barrier (MPI_COMM_WORLD); 
+
+      // communication to make available ghost cells
+        communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
+          h_G, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
+          rank, N_cols);
+
+        if (rank==0) std::cout << "<<<<<<<<<" << std::endl;
+        MPI_Barrier (MPI_COMM_WORLD); 
+      if (rank == 0) { print_timing_report (); }
+      lis_finalize ();
+      return ( EXIT_SUCCESS );
 
 
-          // h_G
-          // vertical and horizontal residuals for Gravitational Layer
-          computeResiduals ( n_x,
-                             n_y,
-                             N_cols,
-                             N_rows,
-                             h_G,
-                             hydraulic_conductivity,
-                             idStaggeredInternalVectHorizontal_mpi,
-                             idStaggeredInternalVectVertical_mpi,
-                             idStaggeredBoundaryVectWest_mpi,
-                             idStaggeredBoundaryVectEast_mpi,
-                             idStaggeredBoundaryVectNorth_mpi,
-                             idStaggeredBoundaryVectSouth_mpi,
-                             idBasinVect_mpi,
-                             h_interface_x,
-                             h_interface_y,
-                             Res_x,
-                             Res_y );
-          toc ("gravit") ;
-        }
-      
+      // h_G
+      // vertical and horizontal residuals for Gravitational Layer
+        computeResiduals ( n_x,
+         n_y,
+         N_cols,
+         N_rows,
+         h_G,
+         hydraulic_conductivity,
+         idStaggeredInternalVectHorizontal_mpi,
+         idStaggeredInternalVectVertical_mpi,
+         idStaggeredBoundaryVectWest_mpi,
+         idStaggeredBoundaryVectEast_mpi,
+         idStaggeredBoundaryVectNorth_mpi,
+         idStaggeredBoundaryVectSouth_mpi,
+         idBasinVect_mpi,
+         h_interface_x,
+         h_interface_y,
+         Res_x,
+         Res_y );
+        TOC ("gravit") ;
+      }
 
-      tic();
+
+      TIC();
       precipitation.computePrecipitation (time,
-                                          soilMoistureRetention,
-                                          temp.melt_mask,
-                                          h_G,
-                                          H,
-                                          N_rows,
-                                          N_cols,
-                                          idBasinVect_mpi);
-      toc ("precipitation");
+        soilMoistureRetention,
+        temp.melt_mask,
+        h_G,
+        H,
+        N_rows,
+        N_cols,
+        idBasinVect_mpi);
+      TOC ("precipitation");
 
-      
+
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
+      {
+
+        TIC();
+
+        for ( const UInt & k : idBasinVect_mpi )
         {
-
-          tic();
-
-          for ( const UInt & k : idBasinVect_mpi )
-            {
-              S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
-            }
-
-          for ( const UInt & k : idBasinVect_mpi )
-            {
-              h_G[ k ] += ( S_coeff[ k ] - ET.ET_vec[ k ] ) * dt_min + precipitation.DP_infiltrated[ k ] * dt_min - c1_min * ( Res_x[ k ] + Res_y[ k ] );
-              h_G[ k ] *= ( h_G[ k ] >= 0 ); // to account for evapotranspiration
-            }
-
-          // +-----------------------------------------------+
-          // |              Snow Accumulation                |
-          // +-----------------------------------------------+
-
-
-          for ( const UInt & k : idBasinVect_mpi )
-            {
-              const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
-              h_sn[ k ] += snow_acc;
-            }
-
-          toc ("snow");
-
+          S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
         }
-      
+
+        for ( const UInt & k : idBasinVect_mpi )
+        {
+          h_G[ k ] += ( S_coeff[ k ] - ET.ET_vec[ k ] ) * dt_min + precipitation.DP_infiltrated[ k ] * dt_min - c1_min * ( Res_x[ k ] + Res_y[ k ] );
+          h_G[ k ] *= ( h_G[ k ] >= 0 ); // to account for evapotranspiration
+        }
+
+        // +-----------------------------------------------+
+        // |              Snow Accumulation                |
+        // +-----------------------------------------------+
+
+        for ( const UInt & k : idBasinVect_mpi )
+        {
+          const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
+          h_sn[ k ] += snow_acc;
+        }
+        TOC ("snow");
+
+      }
+
 
 
       // +-----------------------------------------------+
@@ -1699,79 +1777,77 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
 
 
-      tic();
-      // mettere la comunicazione sulla vel. u, v
+      TIC();
+    // mettere la comunicazione sulla vel. u, v
       communicationStencil_staggered(requests_horizontal,
-                               requests_vertical, 
-                               corresponding_rank_given_id, 
-                               u, v,
-                               idStaggeredBoundaryVectHorizontal_among_ranks,
-                               idStaggeredBoundaryVectVertical_among_ranks,
-                               rank, N_cols);
+        requests_vertical, 
+        corresponding_rank_given_id,
+        u, v,
+        idStaggeredBoundaryVectHorizontal_among_ranks,
+        idStaggeredBoundaryVectVertical_among_ranks,
+        rank, N_cols);
 
-      // fill u_star and v_star with a Bilinear Interpolation
+    // fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation ( u,
-                              v,
-                              u_star,
-                              v_star,
-                              N_rows,
-                              N_cols,
-                              dt_DSV,
-                              pixel_size,
-                              idStaggeredInternalVectHorizontal_mpi,
-                              idStaggeredInternalVectVertical_mpi,
-                              idStaggeredBoundaryVectWest_mpi,
-                              idStaggeredBoundaryVectEast_mpi,
-                              idStaggeredBoundaryVectNorth_mpi,
-                              idStaggeredBoundaryVectSouth_mpi );
-
-      
-      toc ("bilinearInterpolation");
+        v,
+        u_star,
+        v_star,
+        N_rows,
+        N_cols,
+        dt_DSV,
+        pixel_size,
+        idStaggeredInternalVectHorizontal_mpi,
+        idStaggeredInternalVectVertical_mpi,
+        idStaggeredBoundaryVectWest_mpi,
+        idStaggeredBoundaryVectEast_mpi,
+        idStaggeredBoundaryVectNorth_mpi,
+        idStaggeredBoundaryVectSouth_mpi );
+      TOC ("bilinearInterpolation");
 
 
 
-      tic();
-      
+
+      TIC();
       buildMatrix ( H_interface.horizontal,
-                   H_interface.vertical,
-                   orography,
-                   u_star,
-                   v_star,
-                   u,
-                   v,
-                   H,
-                   N_cols,
-                   N_rows,
-                   N,
-                   c1_DSV_,
-                   c3_DSV_,
-                   0., 
-                   precipitation.DP_cumulative,
-                   dt_DSV,  
-                   alfa.alfa_x,
-                   alfa.alfa_y,
-                   idStaggeredInternalVectHorizontal_mpi,
-                   idStaggeredInternalVectVertical_mpi,
-                   idStaggeredBoundaryVectWest_mpi,
-                   idStaggeredBoundaryVectEast_mpi,
-                   idStaggeredBoundaryVectNorth_mpi,
-                   idStaggeredBoundaryVectSouth_mpi,
-                   idBasinVect_mpi,
+        H_interface.vertical,
+        orography,
+        u_star,
+        v_star,
+        u,
+        v,
+        H,
+        N_cols,
+        N_rows,
+        N,
+        c1_DSV_,
+        c3_DSV_,
+        0., 
+        precipitation.DP_cumulative,
+        dt_DSV,  
+        alfa.alfa_x,
+        alfa.alfa_y,
+        idStaggeredInternalVectHorizontal_mpi,
+        idStaggeredInternalVectVertical_mpi,
+        idStaggeredBoundaryVectWest_mpi,
+        idStaggeredBoundaryVectEast_mpi,
+        idStaggeredBoundaryVectNorth_mpi,
+        idStaggeredBoundaryVectSouth_mpi,
+        idBasinVect_mpi,
 
-                   basin_mask_Vec_mpi,
+        basin_mask_Vec_mpi,
 
-                   idBasinVectReIndex,
-                   isNonReflectingBC,
-                   true,
-                   A,
-                   rhs );
-      
+        idBasinVectReIndex,
+        isNonReflectingBC,
+        true,
+        A,
+        rhs );
+
       lis_matrix_set_type(A,LIS_MATRIX_CSR);
-      //lis_matrix_set_csr(nnz,ptr,index,value,A);
+    //lis_matrix_set_csr(nnz,ptr,index,value,A);
       lis_matrix_assemble(A);
-      toc ("assemble matrix");
+      TOC ("assemble matrix");
 
-      // tic();
+      // TIC();
       //
       // if (spit_out_matrix)
       //   {
@@ -1783,10 +1859,10 @@ main (int argc, char** argv)
       //     Eigen::saveMarketVector_lis (rhs, tmpname);
       //   }
       //
-      // toc ("spit out matrix for debug");
+      // TOC ("spit out matrix for debug");
 
 
-      tic();
+      TIC();
 
       lis_solve(A, rhs, H_basin, solver);
       lis_solver_get_iter(solver, &iter);
@@ -1794,7 +1870,7 @@ main (int argc, char** argv)
       lis_solver_get_solvername(nsol, solvername);
       lis_printf(comm, "%s: number of iterations = %D\n",solvername,iter);
 
-      // lis_vector_print(H_basin);
+    // lis_vector_print(H_basin);
 
       lis_matrix_unset(A);
 
@@ -1811,16 +1887,16 @@ main (int argc, char** argv)
       }
       MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&maxH), 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&minH), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
-      
+
 
       if (rank==0) std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
-      
-      
+
+
       if (minH < -H_min) 
       {
-        
+
         dt_DSV = dt_DSV/10.;
-        
+
         if (dt_DSV == 0 && rank==0)
         {
           std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
@@ -1834,73 +1910,73 @@ main (int argc, char** argv)
         continue;
 
       }
-      
+
 
 
       for ( const UInt & Id : idBasinVect_mpi )
-        {
-          const UInt & IDreIndex = idBasinVectReIndex[ Id ];
+      {
+        const UInt & IDreIndex = idBasinVectReIndex[ Id ];
 
-          LIS_SCALAR value;
-          lis_vector_get_value(H_basin, IDreIndex, &value);
+        LIS_SCALAR value;
+        lis_vector_get_value(H_basin, IDreIndex, &value);
 
-          H_oldold[ Id ] = H_old[ Id ];
-          H_old[ Id ] = H[ Id ];
+        H_oldold[ Id ] = H_old[ Id ];
+        H_old[ Id ] = H[ Id ];
 
-          H [ Id ] = std::abs(value);
-        }
+        H [ Id ] = std::abs(value);
+      }
 
       communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
-            H, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
-            rank, N_cols);
+        H, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
+        rank, N_cols);
 
 
-      // +-----------------------------------------------+
-      // |                  Update u, v                  |
-      // +-----------------------------------------------+
-      
-      
+    // +-----------------------------------------------+
+    // |                  Update u, v                  |
+    // +-----------------------------------------------+
+
+
       updateVel ( u,
-                  v,
-                  u_star,
-                  v_star,
-                  alfa.alfa_x,
-                  alfa.alfa_y,
-                  N_rows,
-                  N_cols,
-                  c2_DSV_,
-                  0., // 0
-                  H,
-                  orography,
-                  idStaggeredInternalVectHorizontal_mpi,
-                  idStaggeredInternalVectVertical_mpi,
-                  idStaggeredBoundaryVectWest_mpi,
-                  idStaggeredBoundaryVectEast_mpi,
-                  idStaggeredBoundaryVectNorth_mpi,
-                  idStaggeredBoundaryVectSouth_mpi,
-                  isNonReflectingBC );
-      
-      toc ("solve");
+        v,
+        u_star,
+        v_star,
+        alfa.alfa_x,
+        alfa.alfa_y,
+        N_rows,
+        N_cols,
+        c2_DSV_,
+        0., // 0
+        H,
+        orography,
+        idStaggeredInternalVectHorizontal_mpi,
+        idStaggeredInternalVectVertical_mpi,
+        idStaggeredBoundaryVectWest_mpi,
+        idStaggeredBoundaryVectEast_mpi,
+        idStaggeredBoundaryVectNorth_mpi,
+        idStaggeredBoundaryVectSouth_mpi,
+        isNonReflectingBC );
+  
+      TOC ("solve");
 
-      tic();
+      TIC();
 
 
-      // +-----------------------------------------------+
-      // |             Sediment Transport                |
-      // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |             Sediment Transport                |
+    // +-----------------------------------------------+
 
       if (is_sediment_transport)
       {
         const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
-        // make an Allreduce here to get global dt_sed
+      // make an Allreduce here to get global dt_sed
         dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x, slope_y, u, v, pixel_size, dt_DSV, 
-                                    idStaggeredInternalVectHorizontal_mpi,
-                                    idStaggeredInternalVectVertical_mpi,
-                                    idStaggeredBoundaryVectWest_mpi,
-                                    idStaggeredBoundaryVectEast_mpi,
-                                    idStaggeredBoundaryVectNorth_mpi,
-                                    idStaggeredBoundaryVectSouth_mpi );
+          idStaggeredInternalVectHorizontal_mpi,
+          idStaggeredInternalVectVertical_mpi,
+          idStaggeredBoundaryVectWest_mpi,
+          idStaggeredBoundaryVectEast_mpi,
+          idStaggeredBoundaryVectNorth_mpi,
+          idStaggeredBoundaryVectSouth_mpi );
 
         MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_sed), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 
@@ -1908,34 +1984,33 @@ main (int argc, char** argv)
         numberOfSteps = std::floor( dt_DSV / dt_sed );
 
 
-        // vertical and horizontal residuals truncated for Sediment Transport
+      // vertical and horizontal residuals truncated for Sediment Transport
         computeResidualsTruncated ( u,
-                                    v,
-                                    N_cols,
-                                    N_rows,
-                                    N,
-                                    c1_sed,
-                                    slope_x,
-                                    slope_y,
-                                    alfa_coeff,   // alfa
-                                    beta_coeff,   // beta
-                                    gamma_coeff,  // gamma
-                                    idStaggeredInternalVectHorizontal_mpi,
-                                    idStaggeredInternalVectVertical_mpi,
-                                    idStaggeredBoundaryVectWest_mpi,
-                                    idStaggeredBoundaryVectEast_mpi,
-                                    idStaggeredBoundaryVectNorth_mpi,
-                                    idStaggeredBoundaryVectSouth_mpi,
-                                    Gamma_vect_x,
-                                    Gamma_vect_y
-                                    );
+          v,
+          N_cols,
+          N_rows,
+          N,
+          c1_sed,
+          slope_x,
+          slope_y,
+          alfa_coeff,   // alfa
+          beta_coeff,   // beta
+          gamma_coeff,  // gamma
+          idStaggeredInternalVectHorizontal_mpi,
+          idStaggeredInternalVectVertical_mpi,
+          idStaggeredBoundaryVectWest_mpi,
+          idStaggeredBoundaryVectEast_mpi,
+          idStaggeredBoundaryVectNorth_mpi,
+          idStaggeredBoundaryVectSouth_mpi,
+          Gamma_vect_x,
+          Gamma_vect_y);
 
 
 
 
         for ( const UInt & k : idBasinVect_mpi )
         {
-          // 1.e-3 is the conversion factor, look at EPM theory
+        // 1.e-3 is the conversion factor, look at EPM theory
           W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed;
         }
 
@@ -1949,7 +2024,7 @@ main (int argc, char** argv)
             rank, N_cols);
 
 
-          // horizontal
+        // horizontal
           for ( const UInt & Id : idStaggeredInternalVectHorizontal_mpi )
           {
             const UInt i       = Id / ( N_cols + 1 ),
@@ -1961,7 +2036,7 @@ main (int argc, char** argv)
 
 
             h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+            Gamma_vect_x[ Id ][ 1 ] * h_left;
           }
 
 
@@ -1974,7 +2049,7 @@ main (int argc, char** argv)
 
 
             h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+            Gamma_vect_x[ Id ][ 1 ] * h_left;
           }
 
 
@@ -1985,11 +2060,11 @@ main (int argc, char** argv)
 
 
             const Real & h_left  = h_sd[ Id - i - 1 ],
-                         h_right = 0;
+            h_right = 0;
 
 
             h_interface_x[ Id ] = Gamma_vect_x[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_x[ Id ][ 1 ] * h_left;
+            Gamma_vect_x[ Id ][ 1 ] * h_left;
           }
 
           for ( const UInt & Id : idBasinVect_mpi )
@@ -2001,31 +2076,28 @@ main (int argc, char** argv)
 
 
 
-          // vertical
+        // vertical
           for ( const UInt & Id : idStaggeredInternalVectVertical_mpi )
           {
             const UInt IDsouth = Id,
-                       IDnorth = Id - N_cols;
+            IDnorth = Id - N_cols;
 
             const Real & h_left  = h_sd[ IDnorth ],
-                       & h_right = h_sd[ IDsouth ];
+            & h_right = h_sd[ IDsouth ];
 
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
+            Gamma_vect_y[ Id ][ 1 ] * h_left;
           }
 
 
           for ( const UInt & Id : idStaggeredBoundaryVectNorth_mpi )
           {
-
             const Real h_left  = 0., // 0
-                     & h_right = h_sd[ Id ];
-
+            & h_right = h_sd[ Id ];
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
-
+            Gamma_vect_y[ Id ][ 1 ] * h_left;
           }
 
 
@@ -2034,10 +2106,10 @@ main (int argc, char** argv)
           {
 
             const Real & h_left  = h_sd[ Id - N_cols ],
-                         h_right = 0.;
+            h_right = 0.;
 
             h_interface_y[ Id ] = Gamma_vect_y[ Id ][ 0 ] * h_right +
-                                  Gamma_vect_y[ Id ][ 1 ] * h_left;
+            Gamma_vect_y[ Id ][ 1 ] * h_left;
           }
 
           for ( const UInt & Id : idBasinVect_mpi )
@@ -2054,16 +2126,16 @@ main (int argc, char** argv)
 
         }
       }
-      toc ("advance");
+      TOC ("advance");
 
-      
 
-      tic();
 
-      // +-----------------------------------------------+
-      // |               Update time                     |
-      // +-----------------------------------------------+
-      
+      TIC();
+
+    // +-----------------------------------------------+
+    // |               Update time                     |
+    // +-----------------------------------------------+
+
       timedd = timed;
       timed = time;
       time += dt_DSV;
@@ -2073,11 +2145,11 @@ main (int argc, char** argv)
         time = t_final;
         is_last_step = true;
       }
+
       
-      
-      // +-----------------------------------------------+
-      // |             Save The Raster Solution          |
-      // +-----------------------------------------------+
+    // +-----------------------------------------------+
+    // |             Save The Raster Solution          |
+    // +-----------------------------------------------+
 
       
       if ( save_temporal_sequence )
@@ -2086,7 +2158,7 @@ main (int argc, char** argv)
         for (Int number=1; number<=number_gauges; number++)
         {
           std::string filename_x = "discretization/X_gauges_", 
-                      filename_y = "discretization/Y_gauges_";
+          filename_y = "discretization/Y_gauges_";
 
           filename_x += std::to_string(number);
           filename_y += std::to_string(number);
@@ -2132,7 +2204,7 @@ main (int argc, char** argv)
               const auto & cc = H[ candidate ];
 
               const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                                            std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+                std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
               H_candidate += cc;
               mass_flux_candidate += cc*velo;
@@ -2151,14 +2223,21 @@ main (int argc, char** argv)
           mass_flux_candidate  /= kk_gauges[number-1].size();
           solid_flux_candidate /= kk_gauges[number-1].size();
 
-          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&H_candidate),          1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-          MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          //MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&H_candidate),          1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          //MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+          //MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
-          
+          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&H_candidate),          1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+          if (rank==0)
+          {
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
+          }
+
           //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
           /*
     saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
@@ -2171,32 +2250,30 @@ main (int argc, char** argv)
       }
       
       
-      // sediment production zones,
+    // sediment production zones,
       for ( const UInt & k : idBasinVect_mpi )
-        {
-          W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );
-        }
+      {
+        W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );
+      }
 
-      
+      // il savlataggio non scala così
       if ( spit_out_solutions_each_time_step )
       {
-        MPI_Reduce(W_Gav_cum.data(), W_Gav_cum_save.data(), N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-        if (rank==0)
         {
           iter++;
 
-          saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
-          saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
-          saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
-          saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
-          saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum_save               );
-          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
-          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
-          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
-          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
-          saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
-          saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
+          saveSolution ( output_dir + "u_"    +std::to_string(rank)+"_", "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "v_"    +std::to_string(rank)+"_", "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "H_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
+          saveSolution ( output_dir + "hsd_"  +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
+          saveSolution ( output_dir + "w_cum_"+std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum                    );
+          saveSolution ( output_dir + "ET_"   +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
+          saveSolution ( output_dir + "q_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
+          saveSolution ( output_dir + "p_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
+          saveSolution ( output_dir + "f_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
+          saveSolution ( output_dir + "hG_"   +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
+          saveSolution ( output_dir + "hsn_"  +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
         }
       }
       else
@@ -2205,31 +2282,32 @@ main (int argc, char** argv)
         if ( std::floor ( time / (frequency_save * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save * 3600) ) )
         {
 
-          MPI_Reduce(W_Gav_cum.data(), W_Gav_cum_save.data(), N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-          if (rank==0)
           {
             iter++;
 
             const auto & currentDay = iter; 
 
-            std::cout << "Saving solution ..., current day " << iter << std::endl;
+            if (rank==0)
+            {
+              std::cout << "Saving solution ..., current day " << iter << std::endl;
+            }
 
-            saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
-            saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
-            saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
-            saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
-            saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum_save               );
-            saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
-            saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
-            saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
-            saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
-            saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
-            saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
+            saveSolution ( output_dir + "u_"    +std::to_string(rank)+"_", "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "v_"    +std::to_string(rank)+"_", "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "H_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
+            saveSolution ( output_dir + "hsd_"  +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
+            saveSolution ( output_dir + "w_cum_"+std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
+            saveSolution ( output_dir + "ET_"   +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
+            saveSolution ( output_dir + "q_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
+            saveSolution ( output_dir + "p_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
+            saveSolution ( output_dir + "f_"    +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+            saveSolution ( output_dir + "hG_"   +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
+            saveSolution ( output_dir + "hsn_"  +std::to_string(rank)+"_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
           }
         }
       }
-      
+        
       // +-----------------------------------------------+
       // |               Update time step                |
       // +-----------------------------------------------+
@@ -2277,30 +2355,28 @@ main (int argc, char** argv)
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_);
       c3_DSV_ = c3_DSV (g, c1_DSV_);
-      
-      
+
+
       if ((time+dt_DSV) > t_final)
       {
         dt_DSV = t_final - time;
         check_last = true;
       }
-      
-      
-      toc ("file output");
-      
-      
-      
-      
+        
+        
+      TOC ("file output");
+
+
     } // End Time Loop
+    lis_solver_destroy(solver);
+    lis_vector_destroy(H_basin);
+    lis_vector_destroy(rhs);
+    lis_matrix_destroy(A);
 
-  lis_solver_destroy(solver);
-  lis_vector_destroy(H_basin);
-  lis_vector_destroy(rhs);
-  lis_matrix_destroy(A);
+  }
 
 
-
-  // Close MPI and print report
+// Close MPI and print report
   MPI_Barrier (MPI_COMM_WORLD); 
   if (rank == 0) { print_timing_report (); }
   lis_finalize ();

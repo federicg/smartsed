@@ -3169,6 +3169,11 @@ current_start_chunk(const int& rank, const std::vector<int>& chunk_length_vec)
 
 }
 
+
+
+
+
+
 void
 saveVector (const std::vector<Real>& b,
             const std::string& Name)
@@ -3809,6 +3814,8 @@ communicationStencil(std::vector<MPI_Request>& requests_horizontal,
     auto & h_left  = h[ IDwest ],
     & h_right = h[ IDeast ];
 
+    std::cout << rank << " " << rank_west << " " << rank_east << std::endl;
+
     if ( rank_west!=rank )
     {
       MPI_Irecv(&h_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req]);
@@ -3884,8 +3891,9 @@ communicationStencil_staggered(std::vector<MPI_Request>& requests_horizontal,
     auto & u_left = u[Id - 1], 
     & u_right = u[Id + 1];
 
+
     if ( rank_west!=rank )
-    {
+    {  
       MPI_Irecv(&u_left,  1, MPI_DOUBLE, rank_west, IDwest, MPI_COMM_WORLD, &requests_horizontal[count_req]);
       MPI_Isend(&u_right, 1, MPI_DOUBLE, rank_west, IDeast, MPI_COMM_WORLD, &requests_horizontal[count_req++ + current_size_b]);
     }
