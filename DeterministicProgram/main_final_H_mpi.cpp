@@ -91,6 +91,66 @@ main (int argc, char** argv)
   MPI_Comm_rank (comm, &rank);
   MPI_Comm_size (comm, &size);
 
+  /*
+  int count = 0;
+  std::vector<UInt> idBasinVect(2830);
+  for (auto & it : idBasinVect)
+  {
+    it = count++;
+  }
+
+  const int nnz_basin_mask_Vec = idBasinVect.size();
+    const int chunk_length = nnz_basin_mask_Vec/size;
+    const int residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
+
+    std::vector<int> chunk_length_vec(size);
+    chunk_length_vec.assign(size, chunk_length);
+
+    for (UInt i = 0; i < residual; i++)
+    {
+      chunk_length_vec[i] += 1;
+    }
+
+    const auto N = 9200;
+
+    std::vector<int> corresponding_rank_given_id(N);
+    corresponding_rank_given_id.assign(N, -1);
+
+    // 1415 2830, 0 1415
+
+    std::array<int,3> give_try = {1415, 1415, 2830};
+
+    //std::cout << give_try[rank] << " " << rank << std::endl;
+
+    std::vector<Real> basin_mask_Vec_mpi(N);
+    basin_mask_Vec_mpi.assign (N, 0);
+    for ( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ ) //( UInt i = give_try[rank]; i < give_try[rank+1]; i++ )//( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
+    {
+      std::cout << idBasinVect[i] << " " << basin_mask_Vec_mpi.size() << " " << N << std::endl;
+      //std::cout << rank << " rankkkkkkkkkkk  " << give_try[rank] << " aaaaaa " << give_try[rank+1] << std::endl;
+      basin_mask_Vec_mpi[idBasinVect[i]] = 1.;
+      //corresponding_rank_given_id[idBasinVect[i]] = rank;
+    }
+    //MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+    //std::cout << rank << " " << nnz_basin_mask_Vec << " " << current_start_chunk(rank, chunk_length_vec) << " " << current_start_chunk(rank+1, chunk_length_vec) << std::endl;
+
+    saveSolution ( "basin_mask_Vec_mpi_" + std::to_string(rank), " ", 92, 100, 528670, 5.07688e+06, 100, -9999, basin_mask_Vec_mpi );
+
+    for (const auto & it : basin_mask_Vec_mpi)
+    {
+      if(rank==0 && it!=0)
+      std::cout << rank << " " << it << std::endl;
+    }
+
+    MPI_Barrier (MPI_COMM_WORLD); 
+      if (rank == 0) { print_timing_report (); }
+      lis_finalize ();
+      return ( EXIT_SUCCESS );
+
+  */
+
+
   
   
   TIC();
@@ -1176,6 +1236,59 @@ main (int argc, char** argv)
      N_cols );
     TOC ("compute basin boundaries");
 
+/*
+    // +-----------------------------------------------+
+    // |      Subdivision among available cores        |
+    // +-----------------------------------------------+
+
+    const int nnz_basin_mask_Vec = idBasinVect.size();
+    const int chunk_length = nnz_basin_mask_Vec/size;
+    const int residual = std::round((double(nnz_basin_mask_Vec)/size - chunk_length)*size);
+
+    std::vector<int> chunk_length_vec(size);
+    chunk_length_vec.assign(size, chunk_length);
+
+    for (UInt i = 0; i < residual; i++)
+    {
+      chunk_length_vec[i] += 1;
+    }
+
+    std::vector<int> corresponding_rank_given_id(N);
+    //corresponding_rank_given_id.assign(N, -1);
+
+    // 1415 2830, 0 1415
+
+    //std::array<int,3> give_try = {1415, 1415, 2830};
+
+    //std::cout << give_try[rank] << " " << rank << std::endl;
+
+    std::vector<Real> basin_mask_Vec_mpi(N);
+    basin_mask_Vec_mpi.assign (N, 0);
+    if (rank==1)
+    for ( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ ) //( UInt i = give_try[rank]; i < give_try[rank+1]; i++ )//( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
+    {
+      std::cout << idBasinVect[i] << " " << basin_mask_Vec_mpi.size() << " " << N << std::endl;
+      //std::cout << rank << " rankkkkkkkkkkk  " << give_try[rank] << " aaaaaa " << give_try[rank+1] << std::endl;
+      basin_mask_Vec_mpi[idBasinVect[i]] = 1.;
+      //corresponding_rank_given_id[idBasinVect[i]] = rank;
+    }
+    //MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+
+    //std::cout << rank << " " << nnz_basin_mask_Vec << " " << current_start_chunk(rank, chunk_length_vec) << " " << current_start_chunk(rank+1, chunk_length_vec) << std::endl;
+
+    saveSolution ( output_dir + "basin_mask_Vec_mpi_" + std::to_string(rank), " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, basin_mask_Vec_mpi );
+
+    for (const auto & it : basin_mask_Vec_mpi)
+    {
+      if(rank==0 && it!=0)
+      std::cout << rank << " " << it << std::endl;
+    }
+
+    MPI_Barrier (MPI_COMM_WORLD); 
+      if (rank == 0) { print_timing_report (); }
+      lis_finalize ();
+      return ( EXIT_SUCCESS );*/
+
     // +-----------------------------------------------+
     // |                Gavrilovic Coeff.              |
     // +-----------------------------------------------+
@@ -1469,38 +1582,20 @@ main (int argc, char** argv)
     std::vector<int> corresponding_rank_given_id(N);
     corresponding_rank_given_id.assign(N, -1);
 
-    // 1415 2830, 0 1415
 
-    std::array<int,3> give_try = {1415, 1415, 2830};
-
-    //std::cout << give_try[rank] << " " << rank << std::endl;
 
     std::vector<Real> basin_mask_Vec_mpi(N);
     basin_mask_Vec_mpi.assign (N, 0);
-    if (rank==1)
-    for ( UInt i = current_start_chunk(1, chunk_length_vec); i < current_start_chunk(1+1, chunk_length_vec); i++ ) //( UInt i = give_try[rank]; i < give_try[rank+1]; i++ )//( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
+    for ( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ ) //( UInt i = give_try[rank]; i < give_try[rank+1]; i++ )//( UInt i = current_start_chunk(rank, chunk_length_vec); i < current_start_chunk(rank+1, chunk_length_vec); i++ )
     {
-      std::cout << idBasinVect[i] << " " << basin_mask_Vec_mpi.size() << " " << N << std::endl;
-      //std::cout << rank << " rankkkkkkkkkkk  " << give_try[rank] << " aaaaaa " << give_try[rank+1] << std::endl;
       basin_mask_Vec_mpi[idBasinVect[i]] = 1.;
       corresponding_rank_given_id[idBasinVect[i]] = rank;
     }
-    MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-
-    //std::cout << rank << " " << nnz_basin_mask_Vec << " " << current_start_chunk(rank, chunk_length_vec) << " " << current_start_chunk(rank+1, chunk_length_vec) << std::endl;
+    MPI_Allreduce (MPI_IN_PLACE, corresponding_rank_given_id.data(), N, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
     saveSolution ( output_dir + "basin_mask_Vec_mpi_" + std::to_string(rank), " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, basin_mask_Vec_mpi );
 
-    for (const auto & it : basin_mask_Vec_mpi)
-    {
-      if(rank==0 && it!=0)
-      std::cout << rank << " " << it << std::endl;
-    }
 
-    MPI_Barrier (MPI_COMM_WORLD); 
-      if (rank == 0) { print_timing_report (); }
-      lis_finalize ();
-      return ( EXIT_SUCCESS );
 
     // for each processor
     computeAdjacencies ( basin_mask_Vec,
@@ -1519,19 +1614,6 @@ main (int argc, char** argv)
       idBasinVectReIndex_mpi,
       N_rows,
       N_cols );
-
-    /*
-    // it is not necessary but please save the basin subdivison
-    for ( const auto & k : basin_mask_Vec )
-    {
-      if ( !basin_mask_Vec_mpi[k] )
-      {
-        H   [k] = 0.;
-        h_G [k] = 0.; 
-        h_sd[k] = 0.;
-        h_sn[k] = 0.;
-      }
-    }*/
 
 
     // +-----------------------------------------------+
@@ -1555,19 +1637,21 @@ main (int argc, char** argv)
 
 
 
-  //LIS_INT is,ie;
+    //LIS_INT is,ie;
 
     lis_vector_create(comm,&H_basin);
     lis_vector_set_size(H_basin,chunk_length_vec[rank],0); 
-  //lis_vector_get_range(H_basin,&is,&ie);
+    //lis_vector_get_range(H_basin,&is,&ie);
     lis_vector_set_all(0.,H_basin);
 
-  //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << std::endl;
+    //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " " << std::endl;
 
     lis_vector_create(comm,&rhs);
     lis_vector_set_size(rhs,chunk_length_vec[rank],0); 
-  //lis_vector_get_range(rhs,&is,&ie);
+    //lis_vector_get_range(rhs,&is,&ie);
     lis_vector_set_all(0.,rhs);
+
+    //std::cout << is << " " << ie << " " << rank << " " << chunk_length_vec[rank] << " aaaaa" << std::endl;
 
     lis_matrix_create(comm,&A);
     lis_matrix_set_size(A,chunk_length_vec[rank],0);
@@ -1690,19 +1774,11 @@ main (int argc, char** argv)
 
         TIC();
 
-        if (rank==0) std::cout << "<<<<<<<<< 11" << std::endl;
-        MPI_Barrier (MPI_COMM_WORLD); 
 
       // communication to make available ghost cells
         communicationStencil(requests_horizontal, requests_vertical, corresponding_rank_given_id, 
           h_G, idStaggeredBoundaryVectHorizontal_among_ranks, idStaggeredBoundaryVectVertical_among_ranks,
           rank, N_cols);
-
-        if (rank==0) std::cout << "<<<<<<<<<" << std::endl;
-        MPI_Barrier (MPI_COMM_WORLD); 
-      if (rank == 0) { print_timing_report (); }
-      lis_finalize ();
-      return ( EXIT_SUCCESS );
 
 
       // h_G
@@ -2227,15 +2303,17 @@ main (int argc, char** argv)
           //MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
           //MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&H_candidate),          1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&mass_flux_candidate),  1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-          MPI_Reduce (MPI_IN_PLACE, static_cast<void*> (&solid_flux_candidate), 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          double H_candidate_global = 0., mass_flux_candidate_global = 0., solid_flux_candidate_global = 0.;
+
+          MPI_Reduce(&H_candidate_global,          &H_candidate,          1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce(&mass_flux_candidate_global,  &mass_flux_candidate,  1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+          MPI_Reduce(&solid_flux_candidate_global, &solid_flux_candidate, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
           if (rank==0)
           {
-            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
-            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
-            saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate_global          );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate_global  );
+            saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate_global );
           }
 
           //saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );

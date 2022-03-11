@@ -2580,6 +2580,8 @@ buildMatrix (const std::vector<Real>& H_int_x,
              LIS_VECTOR&    rhs)
 {
 
+  //LIS_INT is,ie;
+  //lis_vector_get_range(rhs,&is,&ie);
   
   for ( const auto & Id : idBasinVect )
   {
@@ -2606,19 +2608,20 @@ buildMatrix (const std::vector<Real>& H_int_x,
     const auto & H_interface = H_int_x[ Id ];
     const Real coeff_m = H_interface * alfa_x[ Id ];
     
+    //std::cout << is << " " << ie << " " << IDleftReIndex << " " << IDrightReIndex << std::endl;
     
     
     if ( H_interface > H_min )
     {
       
-      if ( basin_mask_Vec_mpi[ IDleftReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDleft ] )
       {
         lis_matrix_set_value(LIS_INS_VALUE, IDleftReIndex, IDrightReIndex, - c3 * coeff_m, A);
         lis_matrix_set_value(LIS_ADD_VALUE, IDleftReIndex, IDleftReIndex,    c3 * coeff_m, A);
         lis_vector_set_value(LIS_ADD_VALUE, IDleftReIndex , - c1 * ( + coeff_m  * u_star[ Id ] ) - ( orography[ IDleft ] - orography[ IDright ] ) * c3 * coeff_m * isH, rhs);
       }
 
-      if ( basin_mask_Vec_mpi[ IDrightReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDright ] )
       {
         lis_matrix_set_value(LIS_INS_VALUE, IDrightReIndex, IDleftReIndex, - c3 * coeff_m, A);
         lis_matrix_set_value(LIS_ADD_VALUE, IDrightReIndex, IDrightReIndex,  c3 * coeff_m, A);
@@ -2628,6 +2631,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     }
     
   }
+
 
   for ( const auto & Id : idStaggeredInternalVectVertical )
   {
@@ -2644,12 +2648,12 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     const Real coeff_m = H_interface * alfa_y[ Id ];
     
-    
+    //std::cout << is << " " << ie << " " << IDleftReIndex << " " << IDrightReIndex << std::endl;
     
     if ( H_interface > H_min )
     {
 
-      if ( basin_mask_Vec_mpi[ IDleftReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDleft ] )
       {
         lis_matrix_set_value(LIS_INS_VALUE, IDleftReIndex, IDrightReIndex, - c3 * coeff_m, A);
         lis_matrix_set_value(LIS_ADD_VALUE, IDleftReIndex, IDleftReIndex,    c3 * coeff_m, A);
@@ -2657,7 +2661,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
       }
       
 
-      if ( basin_mask_Vec_mpi[ IDrightReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDright ] )
       {
         lis_matrix_set_value(LIS_INS_VALUE, IDrightReIndex, IDleftReIndex, - c3 * coeff_m, A);
         lis_matrix_set_value(LIS_ADD_VALUE, IDrightReIndex, IDrightReIndex,  c3 * coeff_m, A);
@@ -2691,7 +2695,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     if ( H_interface > H_min )
     {
-      if ( basin_mask_Vec_mpi[ IDrightReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDright ] )
       {
         lis_vector_set_value(LIS_ADD_VALUE, IDrightReIndex , isNonReflectingBC * ( - c1 * ( - coeff_m  * u_star[ Id ] ) ), rhs);
       }
@@ -2723,7 +2727,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     if ( H_interface > H_min )
     {
-      if ( basin_mask_Vec_mpi[ IDleftReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDleft ] )
       {
         lis_vector_set_value(LIS_ADD_VALUE, IDleftReIndex , isNonReflectingBC * ( - c1 * ( + coeff_m  * u_star[ Id ] ) ), rhs);
       }
@@ -2752,7 +2756,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     if ( H_interface > H_min )
     {
-      if ( basin_mask_Vec_mpi[ IDrightReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDright ] )
       {
         lis_vector_set_value(LIS_ADD_VALUE, IDrightReIndex , isNonReflectingBC * ( - c1 * ( - coeff_m  * v_star[ Id ] ) ), rhs);
       }
@@ -2779,7 +2783,7 @@ buildMatrix (const std::vector<Real>& H_int_x,
     
     if ( H_interface > H_min )
     {
-      if ( basin_mask_Vec_mpi[ IDleftReIndex ] )
+      if ( basin_mask_Vec_mpi[ IDleft ] )
       {
         lis_vector_set_value(LIS_ADD_VALUE, IDleftReIndex , isNonReflectingBC * ( - c1 * ( + coeff_m  * v_star[ Id ] ) ), rhs);
       }
@@ -3814,7 +3818,7 @@ communicationStencil(std::vector<MPI_Request>& requests_horizontal,
     auto & h_left  = h[ IDwest ],
     & h_right = h[ IDeast ];
 
-    std::cout << rank << " " << rank_west << " " << rank_east << std::endl;
+    //std::cout << idStaggeredBoundaryVectVertical_among_ranks.size() << " " << rank << " " << rank_west << " " << rank_east << std::endl;
 
     if ( rank_west!=rank )
     {
