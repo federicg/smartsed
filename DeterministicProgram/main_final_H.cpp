@@ -196,7 +196,7 @@ main (int argc, char** argv)
   for (UInt i = 0; i < residual; i++)
   {
     chunk_sim_vec[i] += 1;
-  }
+  } 
   toc ("parse command line");
 
   // execute R script
@@ -332,14 +332,14 @@ main (int argc, char** argv)
 
     Eigen::VectorXd H_basin, rhs;
 
-  Real pixel_size, // meter/pixel
-  xllcorner,
-  yllcorner,
-  xllcorner_staggered_u,
-  yllcorner_staggered_u,
-  xllcorner_staggered_v,
-  yllcorner_staggered_v,
-  NODATA_value;
+    Real pixel_size, // meter/pixel
+    xllcorner,
+    yllcorner,
+    xllcorner_staggered_u,
+    yllcorner_staggered_u,
+    xllcorner_staggered_v,
+    yllcorner_staggered_v,
+    NODATA_value;
 
   /*                   */
 
@@ -832,13 +832,13 @@ main (int argc, char** argv)
 
             if (!is_file_exist(str1.c_str()))
             {
-              std::cout << str1 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+              std::cout << str1 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
               exit ( -1. );
             }
 
             if (!is_file_exist(str2.c_str()))
             {
-              std::cout << str2 << " is not present! Make sure you have put nsim>0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+              std::cout << str2 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
               exit ( -1. );
             }      
           }
@@ -2337,7 +2337,7 @@ main (int argc, char** argv)
             h_sd_candidate * vel_abs_candidate * pixel_size );*/
 
           
-          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0.;
+          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0., solid_flux_candidate = 0.;
           UInt kk_gauges_max = 0;
           for (const auto & candidate : kk_gauges[number-1])
           {
@@ -2348,6 +2348,13 @@ main (int argc, char** argv)
             mass_flux_candidate += cc*std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
                                                   std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
+            const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
+                std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+
+            H_candidate += cc;
+            mass_flux_candidate += cc*velo;
+            solid_flux_candidate += h_sd[ candidate ]*velo;
+
             if (cc > H_current)
             {
               kk_gauges_max = candidate;
@@ -2356,18 +2363,21 @@ main (int argc, char** argv)
           }
           const UInt i = kk_gauges_max/N_cols;
 
-          H_candidate         /= kk_gauges[number-1].size();
-          mass_flux_candidate /= kk_gauges[number-1].size();
+          H_candidate          /= kk_gauges[number-1].size();
+          mass_flux_candidate  /= kk_gauges[number-1].size();
+          solid_flux_candidate /= kk_gauges[number-1].size();
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate         );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_"  + std::to_string(number), mass_flux_candidate );
-          
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
+
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
-          /*
-	  saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
+          
+	        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFluxmax_" + std::to_string(number),
             H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-             std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );*/
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
+              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+
+          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFluxmax_" + std::to_string(number),
             h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
               std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
         }
@@ -2429,14 +2439,14 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
 
       dt_DSV = maxdt(u, v, g, maxH, pixel_size);
+      //dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
       Real dt_DSV_min = dt_DSV*.5;
-      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
 
 
       compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_excluded, dt_DSV, 1.e-5,
         time, timed, timedd);
-
-      dt_DSV = std::max(dt_DSV, dt_DSV_min);
+      
+      dt_DSV = std::min(std::max(dt_DSV, dt_DSV_min), dt_DSV_given);
     
       c1_DSV_ = c1_DSV (dt_DSV, pixel_size);
       c2_DSV_ = c2_DSV (g, c1_DSV_); 

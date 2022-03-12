@@ -2419,14 +2419,13 @@ main (int argc, char** argv)
       }
 
       dt_DSV = maxdt(u_abs_max, v_abs_max, g, maxH, pixel_size);
+      //dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
       Real dt_DSV_min = dt_DSV*.5;
-
-      dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
 
       compute_dt_adaptive (H, H_old, H_oldold, idBasinVect_mpi, dt_DSV, 1.e-5,
         time, timed, timedd);
 
-      dt_DSV = std::max(dt_DSV, dt_DSV_min);
+      dt_DSV = std::min(std::max(dt_DSV, dt_DSV_min), dt_DSV_given);
 
       MPI_Allreduce (MPI_IN_PLACE, static_cast<void*> (&dt_DSV), 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 
