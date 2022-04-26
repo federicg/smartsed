@@ -14,6 +14,10 @@
 ### - A directory 'SoilGrids' containing SoilGrids' maps of the variable in exam covering the area of interest
 ### - A raster (.tif or .tiff) file of the Digital Elevation Model for the area in exam.
 
+packages = c('raster','gstat','compositions', 'dissever', 'fields', 'soiltexture', 'viridis','psych','latex2exp')
+for (pck in packages) {
+  if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) 
+}
 
 library(raster) # To handle raster data.
 
