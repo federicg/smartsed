@@ -8,7 +8,7 @@
 # gigat: parallelo
 # gigatlong: parallelo
 
-#PBS -l nodes=1:ppn=1,walltime=100:00:00 -q cerbero
+#PBS -l nodes=1:ppn=50,walltime=120:00:00 -q gigatlong
 
 
 # Set the job name (dai un nome al lavoro che visualizzerai quando run)
@@ -48,7 +48,7 @@ cp ${PBS_O_WORKDIR}/../Outputs/*.R ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
 cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
 cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
-cp ${PBS_O_WORKDIR}/SMARTSED_input_id ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
+cp ${PBS_O_WORKDIR}/SMARTSED_input_long_ev_2020 ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
 cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram/main.exe
 
 
@@ -103,12 +103,12 @@ export PYTHONPATH=
 # completo di redirezione di input e/o output se necessario
 #  YOUR LAUNCH COMMAND BELOW completed with I/O redirection if needed
 
-nsim=0
-res=10
+nsim=50
+res=4
 
 
 cd ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
-mpirun -np 1 ../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
+mpirun -np 50 ../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
 
 
 
