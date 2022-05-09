@@ -24,7 +24,7 @@
     constant_precipitation      = true  # false: IDW
 
     # comune lecco files
-    rain_file                   = rain/event/pioggia_id.txt 
+    rain_file                   = rain/PioggeIdealized.txt 
     time_spacing_rain           = 1
 
     # arpa files
