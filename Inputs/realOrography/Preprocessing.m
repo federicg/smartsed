@@ -16,8 +16,8 @@ dx = 5;
 dy = dx;
 
 
-Nx = 1998;
-Ny = 1829; %1829
+Nx = 2000;
+Ny = 2000; %1829
 
 
 Lx = Nx*dx;
@@ -36,10 +36,14 @@ i = 1:Ny;
 XX = (jj-1).*dx;
 YY = - (ii-1) .* dy + (Ny-1).*dy;
 r = sqrt(( YY - Ly*0.5 ).^2 + ( XX - Lx*0.5 ).^2 );
-H = 1.e-3.*ones(size(XX));%(0.02.*(cos(r * pi * 0.5 ./ radius)).^3).*(r<=radius);
-%oro = (200 + .0005 .* XX + .0005 .* YY);
-oro = 15-80*((XX-Lx*0.5).^2 +(YY-Ly*0.5).^2)./Lx^2 +300*((XX-Lx*0.5).^4 +(YY-Ly*0.5).^4)./Lx^4;
-
+% H = 1.e-3.*ones(size(XX));
+% H = (0.02.*(cos(r * pi * 0.5 ./ radius)).^3).*(r<=radius);
+H = 1 + 1*exp(-0.5*( (XX-Lx/2).^2+(YY-Ly/2).^2 )/(0.2*Lx)^2);
+% H = 0.02.*(r<=radius);
+% H = 0.02.*(XX<=Lx/2);
+oro = (2 + Ly*.0005+ .0005 .* XX - .0005 .* YY);
+%oro = 15-80*((XX-Lx*0.5).^2 +(YY-Ly*0.5).^2)./Lx^2 +300*((XX-Lx*0.5).^4 +(YY-Ly*0.5).^4)./Lx^4;
+%oro = oro*0;
 
 
 if ( sum(sum(H < 0)) ~= 0 )
@@ -51,10 +55,10 @@ end
 
 
 
-
+%%
 figure()
 colormap(winter)
-contourf(XX/1000,YY/1000,H)
+mesh(XX/1000,YY/1000,H)
 xlabel('south')
 ylabel('west')
 colorbar
@@ -85,7 +89,6 @@ axis equal
 % colormap(jet)
 % xlabel('south')
 % ylabel('west')
-
 
 
 %% Print output files
@@ -226,13 +229,13 @@ for i = 1:Ny
         if ( i > a && i < Ny-a+1 && j > a && j < Nx-a+1 )
             fprintf(file_id, '%12.8f ', 1);
         else
-            fprintf(file_id, '%12.8f ', 0);
+            fprintf(file_id, '%12.8f ', 1);
         end
     end
     fprintf(file_id, '\n');
 end
 fclose(file_id);
-
+return
 %%
 basin = geotiffread('Mask_bin.tif');
 

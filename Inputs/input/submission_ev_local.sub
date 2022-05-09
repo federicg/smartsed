@@ -1,0 +1,98 @@
+#!/bin/bash
+#PBS -S /bin/bash
+
+# Put here the requests for the desired hardware
+# number of nodes (nodes), cores per node (ppn), maximum time of execution (HH:MM:SS) queue (name_of_the_queue)
+# node: 1 se sequenziale
+# cerbero: seriale
+# gigat: parallelo
+
+
+
+NPROCS=1 #$(wc -l < $PBS_NODEFILE)
+JOBID=caldone2018 #${PBS_JOBID}
+OUTFILE=out.$NPROCS
+ERRFILE=err.$NPROCS
+
+PBS_O_WORKDIR=$PWD
+# Start the job in the current directory (PBS starts in the home folder)
+# Così lancio nella cartella corrente
+rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
+mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID
+mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram
+mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
+mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
+#cd ${PBS_O_WORKDIR}/$JOBID
+
+#cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond_H ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
+cp ${PBS_O_WORKDIR}/../Outputs/*.m ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
+
+cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
+cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
+cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
+cp ${PBS_O_WORKDIR}/runAll.sh ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/runAll.sh
+cp ${PBS_O_WORKDIR}/SMARTSED_input_ev ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
+cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram/main.exe
+
+
+
+
+# Echo the PBS input file (this file)
+#cat qsub_script.sub
+#echo
+#echo
+#echo "#><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><><>#"
+#echo
+#echo
+
+# Qui vanno le definizioni e esportazioni di variabili d'ambiente, 
+# eventualmente anche tramite il caricamento di moduli ambientali
+#export VARIABILE
+#module load modulname
+
+
+
+
+
+#export PYTHONPATH=
+#export mkPrefix=/u/sw
+#source ${mkPrefix}/etc/profile
+#module load gcc-glibc
+#module load scipy
+#export PYTHONPATH=
+
+#
+#
+#ulimit -s unlimited # make sure we can put big arrays on the stack
+#date
+
+#---------------------------------------------------------------------#
+# Now run the executable
+# Nella riga successiva si deve scrivere il/i comando/i di lancio
+# completo di redirezione di input e/o output se necessario
+#  YOUR LAUNCH COMMAND BELOW completed with I/O redirection if needed
+
+nsim=0
+res=10
+
+
+cd ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
+./runAll.sh $nsim $res >>$OUTFILE 2>$ERRFILE
+
+
+
+#export mkPrefix=/u/sw
+#source ${mkPrefix}/etc/profile
+#module load gcc-glibc/
+#module load python/3.7.2
+
+
+
+
+#./../runDeterministic.sh $nsim $res >>$OUTFILE 2>$ERRFILE
+#Rscript ../DownscalingSimulationSoilGrids.R >>$OUTFILE 2>$ERRFILE
+
+#python3 simulazione.py >output_simul_50.txt 2>&1
+
+#---------------------------------------------------------------------#
+
