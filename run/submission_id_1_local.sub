@@ -8,7 +8,7 @@
 # gigat: parallelo
 # gigatlong: parallelo
 
-#PBS -l nodes=1:ppn=1,walltime=120:00:00 -q cerbero
+#PBS -l nodes=1:ppn=1,walltime=100:00:00 -q cerbero
 
 
 # Set the job name (dai un nome al lavoro che visualizzerai quando run)
@@ -24,7 +24,7 @@
 
 
 NPROCS=1 #$(wc -l < $PBS_NODEFILE)
-JOBID=sim_ev #${PBS_JOBID}
+JOBID=sim_id_1 #${PBS_JOBID}
 OUTFILE=out.$NPROCS
 ERRFILE=err.$NPROCS
 
@@ -48,7 +48,7 @@ cp ${PBS_O_WORKDIR}/../Outputs/*.R ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
 cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
 cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
-cp ${PBS_O_WORKDIR}/SMARTSED_input_ev ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
+cp ${PBS_O_WORKDIR}/SMARTSED_input_id_1 ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
 cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram/main.exe
 
 
@@ -103,7 +103,7 @@ cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs
 # completo di redirezione di input e/o output se necessario
 #  YOUR LAUNCH COMMAND BELOW completed with I/O redirection if needed
 
-nsim=0
+nsim=-1
 res=10
 
 

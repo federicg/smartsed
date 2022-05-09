@@ -7,16 +7,6 @@
 # the initial condition is done with constant rain and no initial loss
 
 
-# X = 532714.4289
-# Y = 5081673.379
-
-# steps_per_hour
-# 100 metri --> 1500
-# 50 metri --> 2700
-# 40 metri --> 3000
-# 30 metri --> 3900
-# 25 metri --> 4200
-# 10 metri --> 8400
 
 
       
@@ -38,6 +28,7 @@
     time_spacing_rain           = 1
 
     # arpa files
+    number_stations             = 9
     # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
     rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_ev.txt
     X_1                         = 539709.2
@@ -136,21 +127,30 @@
     friction_model = Rickenmann  # Manning or Rickenmann or None (no friction model)
     n_manning      = 1.e-2  #.01       # value used if Manning
     
+    is_sediment_transport = true
+    
 [../] 
 
 [discretization]
 
+   FillSinks = false
 
    # per ora time_spacing deve essere un numero intero
    steps_per_hour    = 50    # number of time steps per hour
    max_Days          = 365   # maximum number of simulated days
-   H_min             = 0.e-3 #lasciamolo a zero!!  # threshold under which there is no mass flux [ meters ]
+   H_min             = 0.e-3  # threshold under which there is no mass flux [ meters ]
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
    # for H
-   X_gauges          = 530850.173
-   Y_gauges          = 5077721.741
+   number_gauges       = 1
 
+   X_gauges_1          = 530850.173
+   Y_gauges_1          = 5077721.741
+
+   X_gauges_2          = 531640.745
+   Y_gauges_2          = 5078711.930
+
+   delta_gauges      = 25
 
    save_temporal_sequence = false # if true the value of the gauges are considered
 
@@ -169,6 +169,7 @@
 
 
 [debug]
+    frequency_save = 24.
     spit_out_solutions_each_time_step = false
     spit_out_matrix = false
     matrix_name = matrice_passo_

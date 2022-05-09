@@ -17,7 +17,7 @@
     mask_file                   = realOrography/Mask_bin.asc #mask.asc copre tutto il bacino
 
     [./meteo_data]
-    temperature_file            = DatiMeteo_ARPA_LOMBARDIA/lecco/temperature_lecco_ev0.txt
+    temperature_file            = DatiMeteo_ARPA_LOMBARDIA/lecco/temperature_lecco_1.txt
     height_thermometer          = 272
     time_spacing_temp           = 0.1667
     format_temp                 = arpa # comune, arpa
@@ -32,47 +32,47 @@
     # arpa files
     number_stations             = 9
     # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
-    rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_ev0.txt
+    rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_1.txt
     X_1                         = 539709.2
     Y_1                         = 5076380.39
     time_spacing_rain_1         = 0.1667
 
-    rain_file_2                 = DatiMeteo_ARPA_LOMBARDIA/cortenova/rain_cortenova_ev0.txt
+    rain_file_2                 = DatiMeteo_ARPA_LOMBARDIA/cortenova/rain_cortenova_1.txt
     X_2                         = 529451.7
     Y_2                         = 5094947.19
     time_spacing_rain_2         = 0.1667
 
-    rain_file_3                 = DatiMeteo_ARPA_LOMBARDIA/barzio_PDB/rain_barzioPDB_ev0.txt
+    rain_file_3                 = DatiMeteo_ARPA_LOMBARDIA/barzio_PDB/rain_barzioPDB_1.txt
     X_3                         = 538832.65
     Y_3                         = 5089669.44
     time_spacing_rain_3         = 0.1667
 
-    rain_file_4                 = DatiMeteo_ARPA_LOMBARDIA/carenno/rain_carenno_ev0.txt
+    rain_file_4                 = DatiMeteo_ARPA_LOMBARDIA/carenno/rain_carenno_1.txt
     X_4                         = 536210.2
     Y_4                         = 5072042.5
     time_spacing_rain_4         = 0.1667
 
-    rain_file_5                 = DatiMeteo_ARPA_LOMBARDIA/canzo/rain_canzo_ev0.txt
+    rain_file_5                 = DatiMeteo_ARPA_LOMBARDIA/canzo/rain_canzo_1.txt
     X_5                         = 524701.49
     Y_5                         = 5077224.59
     time_spacing_rain_5         = 0.1667
 
-    rain_file_6                 = DatiMeteo_ARPA_LOMBARDIA/cassina/rain_cassina_ev0.txt
+    rain_file_6                 = DatiMeteo_ARPA_LOMBARDIA/cassina/rain_cassina_1.txt
     X_6                         = 538583.36
     Y_6                         = 5084512.25
     time_spacing_rain_6         = 0.1667
 
-    rain_file_7                 = DatiMeteo_ARPA_LOMBARDIA/lecco/rain_lecco_ev0.txt
+    rain_file_7                 = DatiMeteo_ARPA_LOMBARDIA/lecco/rain_lecco_1.txt
     X_7                         = 531045.41
     Y_7                         = 5078987.45
     time_spacing_rain_7         = 0.1667
 
-    rain_file_8                 = DatiMeteo_ARPA_LOMBARDIA/sormano/rain_sormano_ev0.txt
+    rain_file_8                 = DatiMeteo_ARPA_LOMBARDIA/sormano/rain_sormano_1.txt
     X_8                         = 518233
     Y_8                         = 5083535
     time_spacing_rain_8         = 0.1667
 
-    rain_file_9                 = DatiMeteo_ARPA_LOMBARDIA/valmadrera/rain_valmadrera_ev0.txt
+    rain_file_9                 = DatiMeteo_ARPA_LOMBARDIA/valmadrera/rain_valmadrera_1.txt
     X_9                         = 527307.44
     Y_9                         = 5076576.55
     time_spacing_rain_9         = 1.
@@ -82,11 +82,11 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_ev_5.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/initial_cond_evento_intensivo/H_35.asc #../Outputs/initial_cond/H_ev_5.asc   #realOrography/H.asc
     
     restart_vel                 = true
-    vel_file_u                  = ../Outputs/initial_cond/u_ev_5.asc
-    vel_file_v                  = ../Outputs/initial_cond/v_ev_5.asc
+    vel_file_u                  = ../Outputs/initial_cond/initial_cond_evento_intensivo/u_35.asc #../Outputs/initial_cond/u_ev_5.asc
+    vel_file_v                  = ../Outputs/initial_cond/initial_cond_evento_intensivo/v_35.asc #../Outputs/initial_cond/v_ev_5.asc
     
     restart_snow                = false
     snow_file                   = ../Outputs/restart/hsn_1.asc
@@ -139,7 +139,7 @@
 
    # per ora time_spacing deve essere un numero intero
    steps_per_hour    = 50    # number of time steps per hour
-   max_Days          = 35   # maximum number of simulated days
+   max_Days          = 365   # maximum number of simulated days
    H_min             = 1.e-3 # threshold for max mass loss
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    
@@ -173,7 +173,7 @@
 
 
 [debug]
-    frequency_save = 24.
+    frequency_save = 72.
     spit_out_solutions_each_time_step = false
     spit_out_matrix = false
     matrix_name = matrice_passo_
