@@ -24,7 +24,7 @@
 
 
 NPROCS=1 #$(wc -l < $PBS_NODEFILE)
-JOBID=sim_1 #${PBS_JOBID}
+JOBID=sim_ev #${PBS_JOBID}
 OUTFILE=out.$NPROCS
 ERRFILE=err.$NPROCS
 
