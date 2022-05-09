@@ -1,12 +1,12 @@
-## Start from the official Ubuntu 18.04 image
-FROM ubuntu:19.04
+## Start from the official Ubuntu 
+FROM ubuntu:20.04
 
 WORKDIR /smartsed
 
 RUN apt-get update 
 
 # -y means that the answer to the question is yes!
-RUN apt-get install -y gdal-bin python-gdal python3-gdal
+RUN apt-get install -y gdal-bin python3-gdal
 
 
 RUN apt-get install -y g++
@@ -33,86 +33,49 @@ RUN apt-get install -y gpg
 RUN apt-get install -y r-base
 
 
+RUN apt-get update
+ 
+RUN Rscript -e "packages = c('raster','gstat','compositions', 'dissever', 'fields', 'soiltexture', 'viridis','psych','latex2exp'); for (pck in packages) {if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) }"
 
 
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/tensorA_0.36.1.tar.gz"
-RUN R CMD INSTALL tensorA_0.36.1.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/DEoptimR_1.0-8.tar.gz"
-RUN R CMD INSTALL DEoptimR_1.0-8.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/robustbase_0.93-5.tar.gz"
-RUN R CMD INSTALL robustbase_0.93-5.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/sp_1.3-2.tar.gz"
-RUN R CMD INSTALL sp_1.3-2.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/Rcpp_1.0.3.tar.gz"
-RUN R CMD INSTALL Rcpp_1.0.3.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/raster_3.0-12.tar.gz"
-RUN R CMD INSTALL raster_3.0-12.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/RcppArmadillo_0.9.850.1.0.tar.gz"
-RUN R CMD INSTALL RcppArmadillo_0.9.850.1.0.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/bayesm_3.1-4.tar.gz"
-RUN R CMD INSTALL bayesm_3.1-4.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/compositions_1.40-3.tar.gz"
-RUN R CMD INSTALL compositions_1.40-3.tar.gz
-
-RUN apt-get install -y libgdal-dev
-
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/rgdal_1.4-8.tar.gz"
-RUN R CMD INSTALL rgdal_1.4-8.tar.gz
-
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/zoo_1.8-7.tar.gz"
-RUN R CMD INSTALL zoo_1.8-7.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/xts_0.12-0.tar.gz"
-RUN R CMD INSTALL xts_0.12-0.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/intervals_0.15.1.tar.gz"
-RUN R CMD INSTALL intervals_0.15.1.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/spacetime_1.2-3.tar.gz"
-RUN R CMD INSTALL spacetime_1.2-3.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/FNN_1.1.3.tar.gz"
-RUN R CMD INSTALL FNN_1.1.3.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/gstat_2.0-4.tar.gz"
-RUN R CMD INSTALL gstat_2.0-4.tar.gz
-
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/dotCall64_1.0-0.tar.gz"
-RUN R CMD INSTALL dotCall64_1.0-0.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/spam_2.5-1.tar.gz"
-RUN R CMD INSTALL spam_2.5-1.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/maps_3.3.0.tar.gz"
-RUN R CMD INSTALL maps_3.3.0.tar.gz
-
-RUN wget -P /smartsed "https://cran.r-project.org/src/contrib/fields_10.3.tar.gz"
-RUN R CMD INSTALL fields_10.3.tar.gz
-
+RUN apt-get update
 RUN apt-get install -y python3-pip
 
 RUN pip3 install richdem
 
+RUN apt-get install -y libopenmpi-dev
+
+
+RUN apt-get install -y libgdal-dev
+
+RUN Rscript -e "packages = c('raster','dissever'); for (pck in packages) {if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) }"
+
+RUN Rscript -e "packages = c('rgdal'); for (pck in packages) {if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) }"
 
 
 
+#RUN wget http://tau.uoregon.edu/tau.tgz
+#RUN tar xzvf tau.tgz
+#RUN cd tau
+#RUN ./configure -cc=gcc -c++=g++ -openmp -mpi
+#RUN make -j install
+#RUN ./configure -cc=nvc -c++=nvc++ -openmp -mpi
+
+#RUN rm -r *.tar.gz
 
 
 
+#RUN apt-get update
+#RUN apt-get install -y libboost-all-dev
 
-RUN rm -r *.tar.gz
+RUN apt-get install -y vim
+
+ENV OMPI_ALLOW_RUN_AS_ROOT=1
+ENV OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+ENV LD_LIBRARY_PATH=/smartsed/DeterministicProgram/include/lib:$LD_LIBRARY_PATH
+
+
+
 
 # To build the Docker container
 #docker build -t smartsed_env -f ./Dockerfile ./
