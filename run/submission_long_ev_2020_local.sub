@@ -23,8 +23,8 @@
 
 
 
-NPROCS=$(wc -l < $PBS_NODEFILE)
-JOBID=${PBS_JOBID}
+NPROCS=50 #$(wc -l < $PBS_NODEFILE)
+JOBID=sim_stoc #${PBS_JOBID}
 OUTFILE=out.$NPROCS
 ERRFILE=err.$NPROCS
 
@@ -34,7 +34,7 @@ ERRFILE=err.$NPROCS
 #PBS_O_WORKDIR=$PWD
 #echo ${PBS_O_WORKDIR}
 # Start the job in the current directory (PBS starts in the home folder) Così lancio nella cartella corrente
-#rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
+rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
@@ -53,14 +53,14 @@ cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs
 
 
 ## Print information
-cat > $OUTFILE << EOF
-Script host:        ${PBS_O_HOST}
-Allocated nodes:    $(cat ${PBS_NODEFILE} -)
-Working dir:        $PBS_O_WORKDIR
-job id:             $JOBID
-Running on:         $(hostname)
-Time:               $(date)
-EOF
+#cat > $OUTFILE << EOF
+#Script host:        ${PBS_O_HOST}
+#Allocated nodes:    $(cat ${PBS_NODEFILE} -)
+#Working dir:        $PBS_O_WORKDIR
+#job id:             $JOBID
+#Running on:         $(hostname)
+#Time:               $(date)
+#EOF
 
 
 
@@ -81,13 +81,13 @@ EOF
 
 
 
-export mkPrefix=/u/sw
-source ${mkPrefix}/etc/profile
-module load gcc-glibc/7
-module load R
-module load gdal
-module unload python
-export PYTHONPATH=
+#export mkPrefix=/u/sw
+#source ${mkPrefix}/etc/profile
+#module load gcc-glibc/7
+#module load R
+#module load gdal
+#module unload python
+#export PYTHONPATH=
 
 #module load scipy
 #export PYTHONPATH=
@@ -108,7 +108,7 @@ res=4
 
 
 cd ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
-mpirun -np 50 ../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
+mpirun -np $NPROCS ../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
 
 
 
