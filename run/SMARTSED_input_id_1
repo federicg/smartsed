@@ -11,8 +11,8 @@
 
       
 [files]
-    orography_file              = realOrography/DEMIdeal.asc  #DEM_tanks.asc
-    mask_file                   = realOrography/mask.asc #mask.asc copre tutto il bacino
+    orography_file              = ideal/DEMIdeal.asc  #DEM_tanks.asc
+    mask_file                   = ideal/mask.asc #mask.asc copre tutto il bacino
 
     [./meteo_data]
     temperature_file            = temperature/event/temperature.txt #DatiMeteo_ARPA_LOMBARDIA/lecco/temperature_lecco_ev.txt
