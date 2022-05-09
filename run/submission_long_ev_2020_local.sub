@@ -31,7 +31,7 @@ ERRFILE=err.$NPROCS
 
 #echo ${PBS_O_WORKDIR}
 
-#PBS_O_WORKDIR=$PWD
+PBS_O_WORKDIR=$PWD
 #echo ${PBS_O_WORKDIR}
 # Start the job in the current directory (PBS starts in the home folder) Così lancio nella cartella corrente
 rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
