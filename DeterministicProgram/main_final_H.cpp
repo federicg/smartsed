@@ -213,6 +213,7 @@ main (int argc, char** argv)
   for (int currentSimNumber = std::min(totSimNumber, current_start_chunk(rank, chunk_sim_vec)+1); 
     currentSimNumber <= std::min(totSimNumber,current_start_chunk(rank+1, chunk_sim_vec)); currentSimNumber++)
   {
+    //std::cout << currentSimNumber << " " << rank << std::endl;
 
     if (rank==0)
     {
@@ -368,7 +369,6 @@ main (int argc, char** argv)
     NODATA_value = basin_mask.NODATA_value;
     if ( basin_mask.cellsize <= pixel_size )
     {
-
       const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
       "dem=raster('" + file_dir + orography_file + "');" +
       "basin=raster('" + file_dir + mask_file + "');" +
@@ -378,7 +378,7 @@ main (int argc, char** argv)
                                         //"values(dem)[is.na(values(dem))]=0;" +
       "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
       "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
-      std::system ( bashCommand.c_str() );
+      std::system ( bashCommand.c_str() ); 
     }
     else
     {
@@ -773,7 +773,7 @@ main (int argc, char** argv)
             exit ( -1. );
           }
 
-    // interpolate CLC to make sure to match correct dimensions
+          // interpolate CLC to make sure to match correct dimensions
           {
             const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
             "dem=raster('" + output_dir + "DEM.asc" + "');" +
@@ -805,7 +805,7 @@ main (int argc, char** argv)
             }
           }
 
-    //saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
+          //saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
         }
 
 
@@ -847,7 +847,7 @@ main (int argc, char** argv)
           if (infiltrationModel != "None" || friction_model == "Rickenmann")
           {
 
-      // interpolate psfs to make sure to match correct dimensions
+            // interpolate psfs to make sure to match correct dimensions
             if ( restart_soilMoisture )
             {
               std::string bashCommand;
@@ -1060,7 +1060,8 @@ main (int argc, char** argv)
     
     
     // build X_Gav and Y_Gav
-    const auto CN_Gav_map = createCN_map_Gav( );
+    const std::string Gavrilovic_file_input = dataFile ( "physics/Gavrilovic_txt", "Gav.txt" );
+    const auto CN_Gav_map = createCN_map_Gav( file_dir + Gavrilovic_file_input );
     
     for ( UInt k = 0; k < N; k++ )
     {
@@ -2308,7 +2309,7 @@ main (int argc, char** argv)
 
         for (Int number=1; number<=number_gauges; number++)
         {
-          std::string filename_x = "discretization/X_gauges_", 
+          std::string filename_x = "discretization/X_gauges_",
                       filename_y = "discretization/Y_gauges_";
 
           filename_x += std::to_string(number); 
@@ -2349,7 +2350,7 @@ main (int argc, char** argv)
                                                   std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
             const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+                                          std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
             H_candidate += cc;
             mass_flux_candidate += cc*velo;
