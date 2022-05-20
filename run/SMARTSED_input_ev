@@ -129,6 +129,8 @@
     friction_model = Rickenmann  # Manning or Rickenmann or None (no friction model)
     n_manning      = 1.e-2  #.01       # value used if Manning
 
+    Gavrilovic_txt = coeff_Gav.txt
+
     is_sediment_transport = true
     
 [../] 
