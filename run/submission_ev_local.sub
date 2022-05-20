@@ -1,14 +1,39 @@
 #!/bin/bash
+#PBS -S /bin/bash
+
+# Put here the requests for the desired hardware
+# number of nodes (nodes), cores per node (ppn), maximum time of execution (HH:MM:SS) queue (name_of_the_queue)
+# node: 1 se sequenziale
+# cerbero: seriale
+# gigat: parallelo
+# gigatlong: parallelo
+
+#PBS -l nodes=1:ppn=1,walltime=120:00:00 -q cerbero
 
 
-#NPROCS=1 #$(wc -l < $PBS_NODEFILE)
-JOBID=caldone_event #${PBS_JOBID}
-OUTFILE=out.1
-ERRFILE=err.1
+# Set the job name (dai un nome al lavoro che visualizzerai quando run)
+#PBS -N Simulation20
+
+# Set the output file and merge it to the sterr
+# file di output and input se desideri nominarli in un modo specifico, altrimenti li salva in un unico file che definisci dopo.
+#PBS -o idra.steam.out
+#PBS -e idra.steam.err
+
+
+
+
+
+NPROCS=1 #$(wc -l < $PBS_NODEFILE)
+JOBID=sim_ev #${PBS_JOBID}
+OUTFILE=out.$NPROCS
+ERRFILE=err.$NPROCS
+
+
+#echo ${PBS_O_WORKDIR}
 
 PBS_O_WORKDIR=$PWD
-# Start the job in the current directory (PBS starts in the home folder)
-# Così lancio nella cartella corrente
+#echo ${PBS_O_WORKDIR}
+# Start the job in the current directory (PBS starts in the home folder) Così lancio nella cartella corrente
 rm -r ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID
 mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram
@@ -18,14 +43,24 @@ mkdir -p ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
 
 #cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond_H ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
 cp ${PBS_O_WORKDIR}/../Outputs/*.m ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
+cp ${PBS_O_WORKDIR}/../Outputs/*.R ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs
 
 cp -r ${PBS_O_WORKDIR}/../Outputs/initial_cond ${PBS_O_WORKDIR}/../Outputs/$JOBID/Outputs/
 cp -r ${PBS_O_WORKDIR}/../Geostatistics ${PBS_O_WORKDIR}/../Outputs/$JOBID/
 cp -r ${PBS_O_WORKDIR}/../Inputs ${PBS_O_WORKDIR}/../Outputs/$JOBID/
-#cp ${PBS_O_WORKDIR}/runAll.sh ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/runAll.sh
 cp ${PBS_O_WORKDIR}/SMARTSED_input_ev ${PBS_O_WORKDIR}/../Outputs/$JOBID/run/SMARTSED_input 
 cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs/$JOBID/DeterministicProgram/main.exe
 
+
+## Print information
+#cat > $OUTFILE << EOF
+#Script host:        ${PBS_O_HOST}
+#Allocated nodes:    $(cat ${PBS_NODEFILE} -)
+#Working dir:        $PBS_O_WORKDIR
+#job id:             $JOBID
+#Running on:         $(hostname)
+#Time:               $(date)
+#EOF
 
 
 
@@ -46,10 +81,14 @@ cp ${PBS_O_WORKDIR}/../DeterministicProgram/main.exe ${PBS_O_WORKDIR}/../Outputs
 
 
 
-#export PYTHONPATH=
 #export mkPrefix=/u/sw
 #source ${mkPrefix}/etc/profile
-#module load gcc-glibc
+#module load gcc-glibc/7
+#module load R
+#module load gdal
+#module unload python
+#export PYTHONPATH=
+
 #module load scipy
 #export PYTHONPATH=
 
@@ -69,7 +108,8 @@ res=10
 
 
 cd ${PBS_O_WORKDIR}/../Outputs/$JOBID/run
-./../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
+mpirun -np $NPROCS ../DeterministicProgram/main.exe -f SMARTSED_input -sim $nsim -scale $res >>$OUTFILE 2>$ERRFILE
+
 
 
 #export mkPrefix=/u/sw

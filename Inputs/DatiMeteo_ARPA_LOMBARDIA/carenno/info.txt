@@ -1,4 +1,0 @@
-Coordinate station
-Y=5072042.5
-X=536210.2
-height=633

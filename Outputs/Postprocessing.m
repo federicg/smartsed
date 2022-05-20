@@ -336,7 +336,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 1:numberSimDays
-    filename = char( "../"+folder+"/w_cum_" + string(n) +".asc");
+    filename = char( folder+"/w_cum_" + string(n) +".asc");
     [w_cum(:,:,n), R] = arcgridread(filename);
     n
     
@@ -348,13 +348,6 @@ for n = 1:numberSimDays
 end
 close(video);
 
-% %%
-% figure()
-% contourf(XX/1000,YY/1000,w_cum(:,:,363).*basin_mask)
-% colorbar
-% xlabel('$x \; (km)$','fontsize',10,'interpreter','latex')
-% ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
-% title('sources zones')
 
 
 %%
@@ -370,7 +363,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 1:numberSimDays
-    filename = char( "../"+folder+"/hG_" + string(n) +".asc");
+    filename = char( folder+"/hG_" + string(n) +".asc");
     [h_G(:,:,n), R] = arcgridread(filename);
     
     
@@ -396,7 +389,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 1:numberSimDays
-    filename = char( "../"+folder+"/ET_" + string(n) +".asc");
+    filename = char( folder+"/ET_" + string(n) +".asc");
     [ET(:,:,n), R] = arcgridread(filename);
     
     
@@ -423,7 +416,7 @@ colormap( copper )
 set(gca,'nextplot','replacechildren');
 for n = 1:1:numberSimDays
     n
-    filename = char( "../"+folder+"/hsd_" + string(n) +".asc");
+    filename = char( folder+"/hsd_" + string(n) +".asc");
     [h_sd(:,:,n+1), R] = arcgridread(filename);
     [M,c]=contour(XX/1000,YY/1000,b.*basin_mask);
     colorbar
@@ -450,7 +443,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 0:numberSimDays
-    filename = char( "../"+folder+"/hsn_" + string(n) +".asc");
+    filename = char( folder+"/hsn_" + string(n) +".asc");
     [h_sn(:,:,n+1), R] = arcgridread(filename);
     
     
@@ -481,7 +474,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 1:numberPrec
-    filename = char( "../"+folder+"/f_" + string(n) +".asc");
+    filename = char( folder+"/f_" + string(n) +".asc");
     [f(:,:,n+1), R] = arcgridread(filename);
     
     
@@ -503,7 +496,7 @@ ylabel('$y \; (km)$','fontsize',10,'interpreter','latex')
 colorbar
 set(gca,'nextplot','replacechildren');
 for n = 1:numberPrec
-    filename = char( "../"+folder+"/p_" + string(n) +".asc");
+    filename = char( folder+"/p_" + string(n) +".asc");
     [p(:,:,n+1), R] = arcgridread(filename);
     
     
@@ -513,93 +506,6 @@ for n = 1:numberPrec
     writeVideo(video,frame);
 end
 close(video);
-
-
-    
-% 
-% %% Setup the Import Options and import the data
-% 
-% 
-% opts = spreadsheetImportOptions("NumVariables", 4);
-% 
-% % Specify sheet and range
-% opts.Sheet = "Anno 2018";
-% opts.DataRange = "B1:E8818";
-% 
-% % Specify column names and types
-% opts.VariableNames = ["Ora", "ViaCarloPortaLIVELLOIDROmediadelperiodo1hcm", "ViaCarloPortaLIVELLOIDROmassimodelperiodo1hcm", "ViaCarloPortaPIOGGIAtotale1hmm"];
-% opts.VariableTypes = ["double", "double", "double", "double"];
-% 
-% % Import the data
-% datipioggiaportataS1 = readtable("caldone_carloPorta/dati_pioggia_portata.xlsx", opts, "UseExcel", false);
-% 
-% % Convert to output type
-% datipioggiaportataS1 = table2array(datipioggiaportataS1);
-% 
-% % Clear temporary variables
-% clear opts
-% 
-% datipioggiaportataS1=datipioggiaportataS1(2:end,:);
-% 
-% % Setup the Import Options and import the data
-% opts = spreadsheetImportOptions("NumVariables", 1);
-% 
-% % Specify sheet and range
-% opts.Sheet = "Anno 2018";
-% opts.DataRange = "A1:A8818";
-% 
-% % Specify column names and types
-% opts.VariableNames = "Data";
-% opts.VariableTypes = "datetime";
-% 
-% % Specify variable properties
-% opts = setvaropts(opts, "Data", "InputFormat", "");
-% 
-% % Import the data
-% times = readtable("caldone_carloPorta/dati_pioggia_portata.xlsx", opts, "UseExcel", false);
-% 
-% 
-% % Clear temporary variables
-% clear opts
-% 
-% 
-% times=times(2:end,"Data").Variables;
-% times.Hour=floor(datipioggiaportataS1(:,1)*24);
-% times.Minute=round((datipioggiaportataS1(:,1)*24-floor(datipioggiaportataS1(:,1)*24))*60);
-% 
-% waterHeight=abs(datipioggiaportataS1(:,2)); % c'è un valore acqua negativo
-% waterHeight=waterHeight/100; % convert to meters
-% 
-% figure()
-% plot(times, waterHeight)
-% 
-% 
-% % open simulation results
-% waterHeight_num  = readmatrix("../"+folder+"/waterSurfaceHeight.txt");
-% 
-% dt_numm=waterHeight_num(1);
-% waterHeight_num=waterHeight_num(2:end);
-% 
-% days_simulated_numm=dt_numm*length(waterHeight_num)/(3600*24);
-% 
-% times_simulation_num =linspace(times(1),times(1)+days_simulated_numm,length(waterHeight_num))';
-% 
-% %figure()
-% %plot(times_simulation_100, waterHeight_100)
-% 
-% figure()
-% plot(times_simulation_num, waterHeight_num, 'or', ...
-%      times, waterHeight, 'ob')
-% legend('sim','real')
-% xlabel('time')
-% ylabel('H (m)')
-% 
-% figure()
-% plot(times_simulation_num, waterHeight_num, 'or')
-% legend('sim')
-% xlabel('time')
-% ylabel('H (m)')
-
 
 
 
@@ -641,7 +547,7 @@ opts.VariableTypes = "datetime";
 opts = setvaropts(opts, "Data", "InputFormat", "");
 
 % Import the data
-times = readtable("caldone_carloPorta/dati_pioggia_portata.xlsx", opts, "UseExcel", false);
+times = readtable("../../dati_pioggia_portata.xlsx", opts, "UseExcel", false);
 
 % Clear temporary variables
 clear opts
@@ -657,51 +563,16 @@ waterHeight=waterHeight/100; % convert to meters
 
 figure()
 plot(times, waterHeight)
-
-
-% open simulation results
-folder=["0"];%, "45216.hpc.mate.polimi.it/Outputs/0", "45217.hpc.mate.polimi.it/Outputs/0"]; %["44765.hpc.mate.polimi.it/Outputs/0", "44771.hpc.mate.polimi.it/Outputs/0"];
-% waterHeight_num=zeros(1,length(folder));
-
-figure()
-plot(times, waterHeight, '-ob')
 hold on
-for i = 1:length(folder)
-    waterHeight_num  = readmatrix(folder(i)+"/waterSurfaceHeight.txt");
-    i
-    dt_numm=waterHeight_num(1);
-    waterHeight_num=waterHeight_num(2:end);
-    
-    days_simulated_numm=dt_numm*length(waterHeight_num)/(3600*24);
-    
-    times_simulation_num =linspace(times(1),times(1)+days_simulated_numm,length(waterHeight_num))';
-    
-    waterHeight_num(logical((times_simulation_num.Month>10) ...
-        .* (times_simulation_num.Day>18))) = nan;
-    
-    plot(times_simulation_num, waterHeight_num,'o')
-    hold on
-end
-hold off
-legend('real','20 (m)', '35 (m)','50 (m)')
+
+
+waterHeight_num  = load('0/waterSurfaceHeight_1.txt');
+times_sim = waterHeight_num(:,2)/3600/24+times(1)-4;
+
+plot(times_sim,waterHeight_num(:,1),'o')
+xlim([times(1),times(end)])
 xlabel('$time\:(sec.)$','interpreter','latex')
 ylabel('$H\:(m)$','interpreter','latex')
-
-%figure()
-%plot(times_simulation_100, waterHeight_100)
-
-% figure()
-% plot(times_simulation_num, waterHeight_num, 'or', ...
-%      times, waterHeight, 'ob')
-% legend('sim','real')
-% xlabel('time')
-% ylabel('H (m)')
-% 
-% figure()
-% plot(times_simulation_num, waterHeight_num, 'or')
-% legend('sim')
-% xlabel('time')
-% ylabel('H (m)')
 
 
 
@@ -815,6 +686,8 @@ plot(b_2-H_1)
 % figure()
 % plot(ep2,R_ep2)
 
+
+
 %%
 
 load('0/waterSurfaceHeight.txt');
@@ -822,13 +695,60 @@ load('0/waterSurfaceHeight.txt');
 H = waterSurfaceHeight(:,1);
 time = waterSurfaceHeight(:,2);
 
+
+start_day = datetime(2018,10,22);
+t1 = start_day + time/(3600*24);
+
+% figure()
+% plot(time, H)
+% return
+
+
+opts = spreadsheetImportOptions("NumVariables", 5);
+
+% Specify sheet and range
+opts.Sheet = "Evento Novembre 2018";
+opts.DataRange = "A2:E1595";
+
+% Specify column names and types
+opts.VariableNames = ["Data", "Ora", "ViaCarloPortaLIVELLOIDROmediaDelPeriodo1hcm", "ViaCarloPortaLIVELLOIDROmassimoDelPeriodo1hcm", "ViaCarloPortaPIOGGIAtotale1hmm"];
+opts.VariableTypes = ["datetime", "double", "double", "double", "double"];
+
+% Specify variable properties
+opts = setvaropts(opts, "Data", "InputFormat", "");
+
+% Import the data
+datipioggiaportata = readtable("/Users/federicog/Documents/smartsed/github_repo/smartsed/Outputs/57538.hpc.mate.polimi.it/Outputs/caldone_carloPorta/dati_pioggia_portata.xlsx", opts, "UseExcel", false);
+clear opts
+
+
+
+
+t2 = table2array(datipioggiaportata(:,1)) + table2array(datipioggiaportata(:,2));
+hh = table2array(datipioggiaportata(:,3))/100;
+
+
 figure()
-plot(time,H,'o--') 
+plot(t1,H,'o--') 
+hold on
+plot(t2, hh,'o--') 
+xlim([datetime(2018,10,26),t2(end)])
+ylabel('$H\:(m)$','interpreter','latex')
 
 
 
+% portata
+Q = @(H) 25.578.*H.^(3.098);
 
 
+load('0/waterSurfaceMassFlux.txt');
+QQ = waterSurfaceHeight(:,1)*50;
 
+figure()
+plot(t1,Q(H),'o--')
+hold on
+plot(t2,Q(hh),'o--')
+xlim([datetime(2018,10,26),t2(end)])
+ylabel('$Q\:(m^3/sec.)$','interpreter','latex')
 
 

@@ -39,151 +39,80 @@ operator* (Real const& factor, Vector2D const& vector)
 
 
 std::map<Int, std::array<Real,2>>
-createCN_map_Gav ()
+createCN_map_Gav (const std::string& file)
 {
+  std::cout << "Reading Gavrilovic coefficients, ... " << std::endl;
+
   std::map<Int, std::array<Real,2> > CN;
 
-/*
-  // Marrazzo evento Ottobre,
-  CN[ 111 ] = std::array<Real,2>{{ 0.05,0.2 }};
-  CN[ 112 ] = std::array<Real,2>{{ 0.2,0.2 }};
-  CN[ 121 ] = std::array<Real,2>{{ 0.05,0.2 }};
-  CN[ 122 ] = std::array<Real,2>{{ 0.2,0.2 }};
-  CN[ 123 ] = std::array<Real,2>{{ 0.2,0.2 }};
-  CN[ 124 ] = std::array<Real,2>{{ 0.2,0.2 }};
-  CN[ 131 ] = std::array<Real,2>{{ 1,1.8 }};
-  CN[ 132 ] = std::array<Real,2>{{ 0.8,1.8 }};
-  CN[ 133 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 141 ] = std::array<Real,2>{{ 0.5,1.5 }};
-  CN[ 142 ] = std::array<Real,2>{{ 0.5,1.5 }};
-  CN[ 211 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 212 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 213 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 221 ] = std::array<Real,2>{{ 0.6,2 }};
-  CN[ 222 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 223 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 231 ] = std::array<Real,2>{{ 0.4,1.6 }};
-  CN[ 241 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 242 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 243 ] = std::array<Real,2>{{ 0.4,1.8 }};
-  CN[ 244 ] = std::array<Real,2>{{ 0.4,1.6 }};
-  CN[ 311 ] = std::array<Real,2>{{ 0.05,1.6 }};
-  CN[ 312 ] = std::array<Real,2>{{ 0.05,1.6 }};
-  CN[ 313 ] = std::array<Real,2>{{ 0.05,1.6 }};
-  CN[ 321 ] = std::array<Real,2>{{ 0.6,1.6 }};
-  CN[ 322 ] = std::array<Real,2>{{ 0.2,1.6 }};
-  CN[ 323 ] = std::array<Real,2>{{ 0.2,1.6 }};
-  CN[ 324 ] = std::array<Real,2>{{ 0.4,1.6 }};
-  CN[ 331 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 332 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 333 ] = std::array<Real,2>{{ 0.8,1.5 }};
-  CN[ 334 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 335 ] = std::array<Real,2>{{ 1,0.2 }};
-  CN[ 411 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 412 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 421 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 422 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 423 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 511 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 512 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 521 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 522 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 523 ] = std::array<Real,2>{{ 1,0 }};
-**/
 
-  /*
-  // Graziotto Luglio-Ottobre,
-  CN[ 111 ] = std::array<Real,2>{{ 0.2,0.6 }};
-  CN[ 112 ] = std::array<Real,2>{{ 0.6,0.6 }};
-  CN[ 121 ] = std::array<Real,2>{{ 0.4,0.6 }};
-  CN[ 122 ] = std::array<Real,2>{{ 1,0.6 }};
-  CN[ 123 ] = std::array<Real,2>{{ 1,0.6 }};
-  CN[ 124 ] = std::array<Real,2>{{ 1,0.6 }};
-  CN[ 131 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 132 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 133 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 141 ] = std::array<Real,2>{{ 0.6,2 }};
-  CN[ 142 ] = std::array<Real,2>{{ 0.6,2 }};
-  CN[ 211 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 212 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 213 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 221 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 222 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 223 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 231 ] = std::array<Real,2>{{ 1,1.8 }};
-  CN[ 241 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 242 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 243 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 244 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 311 ] = std::array<Real,2>{{ 1,1.8 }};
-  CN[ 312 ] = std::array<Real,2>{{ 0.1,1.8 }};
-  CN[ 313 ] = std::array<Real,2>{{ 0.1,1.8 }};
-  CN[ 321 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 322 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 323 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 324 ] = std::array<Real,2>{{ 0.6,1.8 }};
-  CN[ 331 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 332 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 333 ] = std::array<Real,2>{{ 1,1.8 }};
-  CN[ 334 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 335 ] = std::array<Real,2>{{ 1,0.2 }};
-  CN[ 411 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 412 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 421 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 422 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 423 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 511 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 512 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 521 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 522 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 523 ] = std::array<Real,2>{{ 1,0 }};*/
+  std::vector<std::array<Real, 2>> vector_Gav(44);
+
+  std::ifstream ff ( file );
+  if ( ff.is_open() )
+  {
+    Real X, Y;
+    for ( UInt i = 0; i < 44; i++ )
+    {
+      ff >> X;
+      ff >> Y;
+      vector_Gav[ i ] = std::array<Real,2>{{ X,Y }};
+    }
+
+  }
+  else
+  {
+    std::cout << "Unable to open the file, check " << file << " in the SMARTSED_input file" << std::endl;
+    exit( -1. );
+  }
 
 
 
-  CN[ 111 ] = std::array<Real,2>{{ 0.19,0.51 }};
-  CN[ 112 ] = std::array<Real,2>{{ 0.47,0.51 }};
-  CN[ 121 ] = std::array<Real,2>{{ 0.36,0.51 }};
-  CN[ 122 ] = std::array<Real,2>{{ 1,0.51 }};
-  CN[ 123 ] = std::array<Real,2>{{ 1,0.51 }};
-  CN[ 124 ] = std::array<Real,2>{{ 1,0.51 }}; 
-  CN[ 131 ] = std::array<Real,2>{{ 1,1.96 }};
-  CN[ 132 ] = std::array<Real,2>{{ 1,1.96  }};
-  CN[ 133 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 141 ] = std::array<Real,2>{{ 0.58,1.89 }};
-  CN[ 142 ] = std::array<Real,2>{{ 0.58,1.89 }};
-  CN[ 211 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 212 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 213 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 221 ] = std::array<Real,2>{{ 0.96,2 }};
-  CN[ 222 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 223 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 231 ] = std::array<Real,2>{{ 0.91,1.76 }};
-  CN[ 241 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 242 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 243 ] = std::array<Real,2>{{ 0.96,1.96 }};
-  CN[ 244 ] = std::array<Real,2>{{ 0.96,1.91 }};
-  CN[ 311 ] = std::array<Real,2>{{ 0.8,1.76 }};
-  CN[ 312 ] = std::array<Real,2>{{ 0.09,1.76 }};
-  CN[ 313 ] = std::array<Real,2>{{ 0.1,1.76}};
-  CN[ 321 ] = std::array<Real,2>{{ 0.58,1.76 }};
-  CN[ 322 ] = std::array<Real,2>{{ 0.58,1.76 }};
-  CN[ 323 ] = std::array<Real,2>{{ 0.58,1.76 }};
-  CN[ 324 ] = std::array<Real,2>{{ 0.58,1.76 }};
-  CN[ 331 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 332 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 333 ] = std::array<Real,2>{{ 0.96,1.73 }};
-  CN[ 334 ] = std::array<Real,2>{{ 1,2 }};
-  CN[ 335 ] = std::array<Real,2>{{ 1,0.04 }};
-  CN[ 411 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 412 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 421 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 422 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 423 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 511 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 512 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 521 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 522 ] = std::array<Real,2>{{ 1,0 }};
-  CN[ 523 ] = std::array<Real,2>{{ 1,0 }};
+
+  CN[ 111 ] = std::array<Real,2>{{ vector_Gav[0 ][0],vector_Gav[0 ][1] }};
+  CN[ 112 ] = std::array<Real,2>{{ vector_Gav[1 ][0],vector_Gav[1 ][1] }};
+  CN[ 121 ] = std::array<Real,2>{{ vector_Gav[2 ][0],vector_Gav[2 ][1] }};
+  CN[ 122 ] = std::array<Real,2>{{ vector_Gav[3 ][0],vector_Gav[3 ][1] }};
+  CN[ 123 ] = std::array<Real,2>{{ vector_Gav[4 ][0],vector_Gav[4 ][1] }};
+  CN[ 124 ] = std::array<Real,2>{{ vector_Gav[5 ][0],vector_Gav[5 ][1] }}; 
+  CN[ 131 ] = std::array<Real,2>{{ vector_Gav[6 ][0],vector_Gav[6 ][1] }};
+  CN[ 132 ] = std::array<Real,2>{{ vector_Gav[7 ][0],vector_Gav[7 ][1] }};
+  CN[ 133 ] = std::array<Real,2>{{ vector_Gav[8 ][0],vector_Gav[8 ][1] }};
+  CN[ 141 ] = std::array<Real,2>{{ vector_Gav[9 ][0],vector_Gav[9 ][1] }};
+  CN[ 142 ] = std::array<Real,2>{{ vector_Gav[10][0],vector_Gav[10][1] }};
+  CN[ 211 ] = std::array<Real,2>{{ vector_Gav[11][0],vector_Gav[11][1] }};
+  CN[ 212 ] = std::array<Real,2>{{ vector_Gav[12][0],vector_Gav[12][1] }};
+  CN[ 213 ] = std::array<Real,2>{{ vector_Gav[13][0],vector_Gav[13][1] }};
+  CN[ 221 ] = std::array<Real,2>{{ vector_Gav[14][0],vector_Gav[14][1] }};
+  CN[ 222 ] = std::array<Real,2>{{ vector_Gav[15][0],vector_Gav[15][1] }};
+  CN[ 223 ] = std::array<Real,2>{{ vector_Gav[16][0],vector_Gav[16][1] }};
+  CN[ 231 ] = std::array<Real,2>{{ vector_Gav[17][0],vector_Gav[17][1] }};
+  CN[ 241 ] = std::array<Real,2>{{ vector_Gav[18][0],vector_Gav[18][1] }};
+  CN[ 242 ] = std::array<Real,2>{{ vector_Gav[19][0],vector_Gav[19][1] }};
+  CN[ 243 ] = std::array<Real,2>{{ vector_Gav[20][0],vector_Gav[20][1] }};
+  CN[ 244 ] = std::array<Real,2>{{ vector_Gav[21][0],vector_Gav[21][1] }};
+  CN[ 311 ] = std::array<Real,2>{{ vector_Gav[22][0],vector_Gav[22][1] }};
+  CN[ 312 ] = std::array<Real,2>{{ vector_Gav[23][0],vector_Gav[23][1] }};
+  CN[ 313 ] = std::array<Real,2>{{ vector_Gav[24][0],vector_Gav[24][1] }};
+  CN[ 321 ] = std::array<Real,2>{{ vector_Gav[25][0],vector_Gav[25][1] }};
+  CN[ 322 ] = std::array<Real,2>{{ vector_Gav[26][0],vector_Gav[26][1] }};
+  CN[ 323 ] = std::array<Real,2>{{ vector_Gav[27][0],vector_Gav[27][1] }};
+  CN[ 324 ] = std::array<Real,2>{{ vector_Gav[28][0],vector_Gav[28][1] }};
+  CN[ 331 ] = std::array<Real,2>{{ vector_Gav[29][0],vector_Gav[29][1] }};
+  CN[ 332 ] = std::array<Real,2>{{ vector_Gav[30][0],vector_Gav[30][1] }};
+  CN[ 333 ] = std::array<Real,2>{{ vector_Gav[31][0],vector_Gav[31][1] }};
+  CN[ 334 ] = std::array<Real,2>{{ vector_Gav[32][0],vector_Gav[32][1] }};
+  CN[ 335 ] = std::array<Real,2>{{ vector_Gav[33][0],vector_Gav[33][1] }};
+  CN[ 411 ] = std::array<Real,2>{{ vector_Gav[34][0],vector_Gav[34][1] }};
+  CN[ 412 ] = std::array<Real,2>{{ vector_Gav[35][0],vector_Gav[35][1] }};
+  CN[ 421 ] = std::array<Real,2>{{ vector_Gav[36][0],vector_Gav[36][1] }};
+  CN[ 422 ] = std::array<Real,2>{{ vector_Gav[37][0],vector_Gav[37][1] }};
+  CN[ 423 ] = std::array<Real,2>{{ vector_Gav[38][0],vector_Gav[38][1] }};
+  CN[ 511 ] = std::array<Real,2>{{ vector_Gav[39][0],vector_Gav[39][1] }};
+  CN[ 512 ] = std::array<Real,2>{{ vector_Gav[40][0],vector_Gav[40][1] }};
+  CN[ 521 ] = std::array<Real,2>{{ vector_Gav[41][0],vector_Gav[41][1] }};
+  CN[ 522 ] = std::array<Real,2>{{ vector_Gav[42][0],vector_Gav[42][1] }};
+  CN[ 523 ] = std::array<Real,2>{{ vector_Gav[43][0],vector_Gav[43][1] }};
 
   return CN;
 
@@ -193,6 +122,7 @@ createCN_map_Gav ()
 std::map<std::array<Int,2>, Int>
 createCN_map ()
 {
+  std::cout << "Reading CN coefficients, ... " << std::endl;
 
   std::map<std::array<Int,2>, Int > CN;
 
@@ -211,25 +141,25 @@ createCN_map ()
   CN[ std::array<Int,2>{{ 121,2 }} ] = 91;
   CN[ std::array<Int,2>{{ 121,3 }} ] = 93;
 
-  CN[ std::array<Int,2>{{ 122,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 122,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 122,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 122,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 122,0 }} ] = 83;
+  CN[ std::array<Int,2>{{ 122,1 }} ] = 89;
+  CN[ std::array<Int,2>{{ 122,2 }} ] = 92;
+  CN[ std::array<Int,2>{{ 122,3 }} ] = 93;
 
-  CN[ std::array<Int,2>{{ 123,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 123,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 123,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 123,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 123,0 }} ] = 83;
+  CN[ std::array<Int,2>{{ 123,1 }} ] = 89;
+  CN[ std::array<Int,2>{{ 123,2 }} ] = 92;
+  CN[ std::array<Int,2>{{ 123,3 }} ] = 93;
 
-  CN[ std::array<Int,2>{{ 124,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 124,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 124,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 124,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 124,0 }} ] = 83;
+  CN[ std::array<Int,2>{{ 124,1 }} ] = 89;
+  CN[ std::array<Int,2>{{ 124,2 }} ] = 92;
+  CN[ std::array<Int,2>{{ 124,3 }} ] = 93;
 
-  CN[ std::array<Int,2>{{ 131,0 }} ] = 76;
-  CN[ std::array<Int,2>{{ 131,1 }} ] = 85;
-  CN[ std::array<Int,2>{{ 131,2 }} ] = 89;
-  CN[ std::array<Int,2>{{ 131,3 }} ] = 91;
+  CN[ std::array<Int,2>{{ 131,0 }} ] = 81;
+  CN[ std::array<Int,2>{{ 131,1 }} ] = 88;
+  CN[ std::array<Int,2>{{ 131,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 131,3 }} ] = 93;
 
   CN[ std::array<Int,2>{{ 132,0 }} ] = 81;
   CN[ std::array<Int,2>{{ 132,1 }} ] = 88;
@@ -246,30 +176,30 @@ createCN_map ()
   CN[ std::array<Int,2>{{ 141,2 }} ] = 79;
   CN[ std::array<Int,2>{{ 141,3 }} ] = 84;
 
-  CN[ std::array<Int,2>{{ 142,0 }} ] = 68;
-  CN[ std::array<Int,2>{{ 142,1 }} ] = 79;
-  CN[ std::array<Int,2>{{ 142,2 }} ] = 86;
-  CN[ std::array<Int,2>{{ 142,3 }} ] = 89;
+  CN[ std::array<Int,2>{{ 142,0 }} ] = 49;
+  CN[ std::array<Int,2>{{ 142,1 }} ] = 69;
+  CN[ std::array<Int,2>{{ 142,2 }} ] = 79;
+  CN[ std::array<Int,2>{{ 142,3 }} ] = 84;
 
-  CN[ std::array<Int,2>{{ 211,0 }} ] = 61;
-  CN[ std::array<Int,2>{{ 211,1 }} ] = 73;
-  CN[ std::array<Int,2>{{ 211,2 }} ] = 81;
+  CN[ std::array<Int,2>{{ 211,0 }} ] = 60;
+  CN[ std::array<Int,2>{{ 211,1 }} ] = 72;
+  CN[ std::array<Int,2>{{ 211,2 }} ] = 80;
   CN[ std::array<Int,2>{{ 211,3 }} ] = 84;
 
-  CN[ std::array<Int,2>{{ 212,0 }} ] = 67;
-  CN[ std::array<Int,2>{{ 212,1 }} ] = 78;
-  CN[ std::array<Int,2>{{ 212,2 }} ] = 85;
-  CN[ std::array<Int,2>{{ 212,3 }} ] = 89;
+  CN[ std::array<Int,2>{{ 212,0 }} ] = 60;
+  CN[ std::array<Int,2>{{ 212,1 }} ] = 72;
+  CN[ std::array<Int,2>{{ 212,2 }} ] = 80;
+  CN[ std::array<Int,2>{{ 212,3 }} ] = 84;
 
   CN[ std::array<Int,2>{{ 213,0 }} ] = 62;
   CN[ std::array<Int,2>{{ 213,1 }} ] = 71;
   CN[ std::array<Int,2>{{ 213,2 }} ] = 78;
   CN[ std::array<Int,2>{{ 213,3 }} ] = 81;
 
-  CN[ std::array<Int,2>{{ 221,0 }} ] = 76;
-  CN[ std::array<Int,2>{{ 221,1 }} ] = 85;
-  CN[ std::array<Int,2>{{ 221,2 }} ] = 90;
-  CN[ std::array<Int,2>{{ 221,3 }} ] = 93;
+  CN[ std::array<Int,2>{{ 221,0 }} ] = 43;
+  CN[ std::array<Int,2>{{ 221,1 }} ] = 65;
+  CN[ std::array<Int,2>{{ 221,2 }} ] = 76;
+  CN[ std::array<Int,2>{{ 221,3 }} ] = 82;
 
   CN[ std::array<Int,2>{{ 222,0 }} ] = 43;
   CN[ std::array<Int,2>{{ 222,1 }} ] = 65;
@@ -281,25 +211,25 @@ createCN_map ()
   CN[ std::array<Int,2>{{ 223,2 }} ] = 76;
   CN[ std::array<Int,2>{{ 223,3 }} ] = 82;
 
-  CN[ std::array<Int,2>{{ 231,0 }} ] = 49;
-  CN[ std::array<Int,2>{{ 231,1 }} ] = 69;
-  CN[ std::array<Int,2>{{ 231,2 }} ] = 79;
-  CN[ std::array<Int,2>{{ 231,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 231,0 }} ] = 30;
+  CN[ std::array<Int,2>{{ 231,1 }} ] = 58;
+  CN[ std::array<Int,2>{{ 231,2 }} ] = 71;
+  CN[ std::array<Int,2>{{ 231,3 }} ] = 78;
 
-  CN[ std::array<Int,2>{{ 241,0 }} ] = 61;
-  CN[ std::array<Int,2>{{ 241,1 }} ] = 73;
+  CN[ std::array<Int,2>{{ 241,0 }} ] = 58;
+  CN[ std::array<Int,2>{{ 241,1 }} ] = 72;
   CN[ std::array<Int,2>{{ 241,2 }} ] = 81;
-  CN[ std::array<Int,2>{{ 241,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 241,3 }} ] = 85;
 
-  CN[ std::array<Int,2>{{ 242,0 }} ] = 61;
-  CN[ std::array<Int,2>{{ 242,1 }} ] = 73;
-  CN[ std::array<Int,2>{{ 242,2 }} ] = 81;
-  CN[ std::array<Int,2>{{ 242,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 242,0 }} ] = 59;
+  CN[ std::array<Int,2>{{ 242,1 }} ] = 74;
+  CN[ std::array<Int,2>{{ 242,2 }} ] = 82;
+  CN[ std::array<Int,2>{{ 242,3 }} ] = 86;
 
-  CN[ std::array<Int,2>{{ 243,0 }} ] = 61;
-  CN[ std::array<Int,2>{{ 243,1 }} ] = 73;
-  CN[ std::array<Int,2>{{ 243,2 }} ] = 81;
-  CN[ std::array<Int,2>{{ 243,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 243,0 }} ] = 59;
+  CN[ std::array<Int,2>{{ 243,1 }} ] = 74;
+  CN[ std::array<Int,2>{{ 243,2 }} ] = 82;
+  CN[ std::array<Int,2>{{ 243,3 }} ] = 86;
 
   CN[ std::array<Int,2>{{ 244,0 }} ] = 43;
   CN[ std::array<Int,2>{{ 244,1 }} ] = 65;
@@ -321,50 +251,50 @@ createCN_map ()
   CN[ std::array<Int,2>{{ 313,2 }} ] = 73;
   CN[ std::array<Int,2>{{ 313,3 }} ] = 79;
 
-  CN[ std::array<Int,2>{{ 321,0 }} ] = 49;
-  CN[ std::array<Int,2>{{ 321,1 }} ] = 69;
-  CN[ std::array<Int,2>{{ 321,2 }} ] = 79;
-  CN[ std::array<Int,2>{{ 321,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 321,0 }} ] = 39;
+  CN[ std::array<Int,2>{{ 321,1 }} ] = 61;
+  CN[ std::array<Int,2>{{ 321,2 }} ] = 74;
+  CN[ std::array<Int,2>{{ 321,3 }} ] = 80;
 
-  CN[ std::array<Int,2>{{ 322,0 }} ] = 49;
-  CN[ std::array<Int,2>{{ 322,1 }} ] = 69;
-  CN[ std::array<Int,2>{{ 322,2 }} ] = 79;
-  CN[ std::array<Int,2>{{ 322,3 }} ] = 84;
+  CN[ std::array<Int,2>{{ 322,0 }} ] = 77;
+  CN[ std::array<Int,2>{{ 322,1 }} ] = 86;
+  CN[ std::array<Int,2>{{ 322,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 322,3 }} ] = 94;
 
-  CN[ std::array<Int,2>{{ 323,0 }} ] = 35;
-  CN[ std::array<Int,2>{{ 323,1 }} ] = 56;
-  CN[ std::array<Int,2>{{ 323,2 }} ] = 70;
-  CN[ std::array<Int,2>{{ 323,3 }} ] = 77;
+  CN[ std::array<Int,2>{{ 323,0 }} ] = 77;
+  CN[ std::array<Int,2>{{ 323,1 }} ] = 86;
+  CN[ std::array<Int,2>{{ 323,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 323,3 }} ] = 94;
 
   CN[ std::array<Int,2>{{ 324,0 }} ] = 35;
   CN[ std::array<Int,2>{{ 324,1 }} ] = 56;
   CN[ std::array<Int,2>{{ 324,2 }} ] = 70;
   CN[ std::array<Int,2>{{ 324,3 }} ] = 77;
 
-  CN[ std::array<Int,2>{{ 331,0 }} ] = 46;
-  CN[ std::array<Int,2>{{ 331,1 }} ] = 65;
-  CN[ std::array<Int,2>{{ 331,2 }} ] = 77;
-  CN[ std::array<Int,2>{{ 331,3 }} ] = 82;
+  CN[ std::array<Int,2>{{ 331,0 }} ] = 55;
+  CN[ std::array<Int,2>{{ 331,1 }} ] = 72;
+  CN[ std::array<Int,2>{{ 331,2 }} ] = 81;
+  CN[ std::array<Int,2>{{ 331,3 }} ] = 86;
 
-  CN[ std::array<Int,2>{{ 332,0 }} ] = 96;
-  CN[ std::array<Int,2>{{ 332,1 }} ] = 96;
-  CN[ std::array<Int,2>{{ 332,2 }} ] = 96;
-  CN[ std::array<Int,2>{{ 332,3 }} ] = 96;
+  CN[ std::array<Int,2>{{ 332,0 }} ] = 77;
+  CN[ std::array<Int,2>{{ 332,1 }} ] = 86;
+  CN[ std::array<Int,2>{{ 332,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 332,3 }} ] = 94;
 
-  CN[ std::array<Int,2>{{ 333,0 }} ] = 63;
-  CN[ std::array<Int,2>{{ 333,1 }} ] = 77;
-  CN[ std::array<Int,2>{{ 333,2 }} ] = 85;
-  CN[ std::array<Int,2>{{ 333,3 }} ] = 88;
+  CN[ std::array<Int,2>{{ 333,0 }} ] = 74;
+  CN[ std::array<Int,2>{{ 333,1 }} ] = 83;
+  CN[ std::array<Int,2>{{ 333,2 }} ] = 88;
+  CN[ std::array<Int,2>{{ 333,3 }} ] = 90;
 
-  CN[ std::array<Int,2>{{ 334,0 }} ] = 63;
-  CN[ std::array<Int,2>{{ 334,1 }} ] = 77;
-  CN[ std::array<Int,2>{{ 334,2 }} ] = 85;
-  CN[ std::array<Int,2>{{ 334,3 }} ] = 88;
+  CN[ std::array<Int,2>{{ 334,0 }} ] = 77;
+  CN[ std::array<Int,2>{{ 334,1 }} ] = 86;
+  CN[ std::array<Int,2>{{ 334,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 334,3 }} ] = 94;
 
-  CN[ std::array<Int,2>{{ 335,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 335,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 335,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 335,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 335,0 }} ] = 77;
+  CN[ std::array<Int,2>{{ 335,1 }} ] = 86;
+  CN[ std::array<Int,2>{{ 335,2 }} ] = 91;
+  CN[ std::array<Int,2>{{ 335,3 }} ] = 94;
 
   CN[ std::array<Int,2>{{ 411,0 }} ] = 98;
   CN[ std::array<Int,2>{{ 411,1 }} ] = 98;
@@ -391,30 +321,30 @@ createCN_map ()
   CN[ std::array<Int,2>{{ 423,2 }} ] = 98;
   CN[ std::array<Int,2>{{ 423,3 }} ] = 98;
 
-  CN[ std::array<Int,2>{{ 511,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 511,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 511,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 511,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 511,0 }} ] = 100;
+  CN[ std::array<Int,2>{{ 511,1 }} ] = 100;
+  CN[ std::array<Int,2>{{ 511,2 }} ] = 100;
+  CN[ std::array<Int,2>{{ 511,3 }} ] = 100;
 
-  CN[ std::array<Int,2>{{ 512,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 512,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 512,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 512,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 512,0 }} ] = 100;
+  CN[ std::array<Int,2>{{ 512,1 }} ] = 100;
+  CN[ std::array<Int,2>{{ 512,2 }} ] = 100;
+  CN[ std::array<Int,2>{{ 512,3 }} ] = 100;
 
-  CN[ std::array<Int,2>{{ 521,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 521,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 521,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 521,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 521,0 }} ] = 100;
+  CN[ std::array<Int,2>{{ 521,1 }} ] = 100;
+  CN[ std::array<Int,2>{{ 521,2 }} ] = 100;
+  CN[ std::array<Int,2>{{ 521,3 }} ] = 100;
 
-  CN[ std::array<Int,2>{{ 522,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 522,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 522,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 522,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 522,0 }} ] = 100;
+  CN[ std::array<Int,2>{{ 522,1 }} ] = 100;
+  CN[ std::array<Int,2>{{ 522,2 }} ] = 100;
+  CN[ std::array<Int,2>{{ 522,3 }} ] = 100;
 
-  CN[ std::array<Int,2>{{ 523,0 }} ] = 98;
-  CN[ std::array<Int,2>{{ 523,1 }} ] = 98;
-  CN[ std::array<Int,2>{{ 523,2 }} ] = 98;
-  CN[ std::array<Int,2>{{ 523,3 }} ] = 98;
+  CN[ std::array<Int,2>{{ 523,0 }} ] = 100;
+  CN[ std::array<Int,2>{{ 523,1 }} ] = 100;
+  CN[ std::array<Int,2>{{ 523,2 }} ] = 100;
+  CN[ std::array<Int,2>{{ 523,3 }} ] = 100;
 
   return CN;
 }
