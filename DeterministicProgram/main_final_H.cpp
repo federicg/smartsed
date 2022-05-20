@@ -139,7 +139,7 @@ main (int argc, char** argv)
   MPI_Comm_size(MPI_COMM_WORLD,&size);
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
-  tic();
+  //tic();
   // Reading parameters through GetPot
   GetPot command_line (argc, argv);
   const std::string dataFileName = command_line.follow ( "SMARTSED_input", 2, "-f", "--file" );
@@ -197,7 +197,7 @@ main (int argc, char** argv)
   {
     chunk_sim_vec[i] += 1;
   } 
-  toc ("parse command line");
+  //toc ("parse command line");
 
   // execute R script
   //Rscript ../Geostatistics/Downscaling_Simulation_SoilGrids/Downscaling/DownscalingAitchisonSmartSed_2020.R $nsim $res
@@ -213,7 +213,6 @@ main (int argc, char** argv)
   for (int currentSimNumber = std::min(totSimNumber, current_start_chunk(rank, chunk_sim_vec)+1); 
     currentSimNumber <= std::min(totSimNumber,current_start_chunk(rank+1, chunk_sim_vec)); currentSimNumber++)
   {
-    //std::cout << currentSimNumber << " " << rank << std::endl;
 
     if (rank==0)
     {
@@ -234,7 +233,7 @@ main (int argc, char** argv)
   // |                 Reading Input files           |
   // +-----------------------------------------------+
 
-    tic();
+    //tic();
     const std::string file_dir       = "../Inputs/";
     const std::string output_dir     = "../Outputs/" + std::to_string ( currentSimNumber ) + "/";
 
@@ -355,20 +354,24 @@ main (int argc, char** argv)
 
     if ( basin_mask.cellsize != orographyMat.cellsize )
     {
-      std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
+      if (rank==0) std::cout << mask_file << " cellsize and " << orography_file << " cellsize are not equal" << std::endl;
       exit ( -1 );
     }
 
     pixel_size = Real ( command_line.follow ( 2, "-scale" ) ) * basin_mask.cellsize;
 
-    std::cout << "cell resolution for the current simulation = " << pixel_size << " meters" << std::endl;
-    std::cout << "-------------------- "                                                    << std::endl;
+    if (rank==0)
+    {
+      std::cout << "cell resolution for the current simulation = " << pixel_size << " meters" << std::endl;
+      std::cout << "-------------------- "                                                    << std::endl;
+    }
 
     xllcorner    = basin_mask.xllcorner;
     yllcorner    = basin_mask.yllcorner;
     NODATA_value = basin_mask.NODATA_value;
     if ( basin_mask.cellsize <= pixel_size )
     {
+
       const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
       "dem=raster('" + file_dir + orography_file + "');" +
       "basin=raster('" + file_dir + mask_file + "');" +
@@ -378,11 +381,11 @@ main (int argc, char** argv)
                                         //"values(dem)[is.na(values(dem))]=0;" +
       "writeRaster( dem, file=paste0('" + output_dir + "DEM.asc'), overwrite=TRUE );" +
       "writeRaster( basin, file=paste0('" + output_dir + "basin_mask.asc'), overwrite=TRUE )\"";
-      std::system ( bashCommand.c_str() ); 
+      std::system ( bashCommand.c_str() );
     }
     else
     {
-      std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
+      if (rank==0) std::cout << "Basin mask greater than simulation resolution, i.e. " << pixel_size << std::endl;
       exit ( -1. );
     }
 
@@ -491,7 +494,7 @@ main (int argc, char** argv)
       }
       else
       {
-        std::cout << "Error! resolution of surface water is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+        if (rank==0) std::cout << "Error! resolution of surface water is greater than simulation resolution, i.e. " << pixel_size << std::endl;
         exit ( -1. );
       }
     }
@@ -546,7 +549,7 @@ main (int argc, char** argv)
       }
       else
       {
-        std::cout << "Error! resolution of horizontal velocity is greater than simulation resolution i.e. " << pixel_size << std::endl;
+        if (rank==0) std::cout << "Error! resolution of horizontal velocity is greater than simulation resolution i.e. " << pixel_size << std::endl;
         exit ( -1. );
       }
     }
@@ -587,7 +590,7 @@ main (int argc, char** argv)
             }
             else
             {
-              std::cout << "Error! resolution of vertical velocity is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+              if (rank==0) std::cout << "Error! resolution of vertical velocity is greater than simulation resolution, i.e. " << pixel_size << std::endl;
               exit ( -1. );
             }
           }
@@ -644,7 +647,7 @@ main (int argc, char** argv)
             }
             else
             {
-              std::cout << "Error! resolution of snow file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+              if (rank==0) std::cout << "Error! resolution of snow file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
               exit ( -1. );
             }
           }
@@ -686,7 +689,7 @@ main (int argc, char** argv)
             }
             else
             {
-              std::cout << "Error! resolution of sediment file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+              if (rank==0) std::cout << "Error! resolution of sediment file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
               exit ( -1. );
             }
           }
@@ -729,7 +732,7 @@ main (int argc, char** argv)
             }
             else
             {
-              std::cout << "Error! resolution of gravitational file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
+              if (rank==0) std::cout << "Error! resolution of gravitational file is greater than simulation resolution, i.e. " << pixel_size << std::endl;
               exit ( -1. );
             }
           }
@@ -750,14 +753,14 @@ main (int argc, char** argv)
           h_G.assign (h_G.size (), 0.0);
           saveSolution ( output_dir + "hG_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_G );
         }
-        toc ("read input files");
+        //toc ("read input files");
 
 
   // +-----------------------------------------------+
   // |    Construct soilMoistureRetention vector     |
   // +-----------------------------------------------+
 
-        tic();
+        //tic();
 
         std::vector<Int> corineCode_Vec ( N ); 
         std::vector<Real> X_Gav ( N ), Y_Gav ( N );
@@ -769,11 +772,11 @@ main (int argc, char** argv)
 
           if (!is_file_exist(check_presence_string.c_str()))
           {
-            std::cout << check_presence_string << " is not present!" << std::endl;
+            if (rank==0) std::cout << check_presence_string << " is not present!" << std::endl;
             exit ( -1. );
           }
 
-          // interpolate CLC to make sure to match correct dimensions
+    // interpolate CLC to make sure to match correct dimensions
           {
             const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
             "dem=raster('" + output_dir + "DEM.asc" + "');" +
@@ -790,7 +793,7 @@ main (int argc, char** argv)
 
           if ( corineCode.cellsize != pixel_size )
           {
-            std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with " << mask_file << " and "     << orography_file  << " ones" << std::endl;
+            if (rank==0) std::cout << "Please check that the " << corineCode_file << " cellsize is consistent with " << mask_file << " and "     << orography_file  << " ones" << std::endl;
             exit ( -1. );
           }
 
@@ -805,7 +808,7 @@ main (int argc, char** argv)
             }
           }
 
-          //saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
+    //saveSolution ( output_dir + "CLC", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, corineCode_Vec );
         }
 
 
@@ -832,13 +835,13 @@ main (int argc, char** argv)
 
             if (!is_file_exist(str1.c_str()))
             {
-              std::cout << str1 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+              if (rank==0) std::cout << str1 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
               exit ( -1. );
             }
 
             if (!is_file_exist(str2.c_str()))
             {
-              std::cout << str2 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
+              if (rank==0) std::cout << str2 << " is not present! Make sure you have put nsim>=0 or in case you want to provide directly the particle size fractions make sure you have put restart_soilMoisture=true and specified the correct paths" << std::endl;
               exit ( -1. );
             }      
           }
@@ -847,7 +850,7 @@ main (int argc, char** argv)
           if (infiltrationModel != "None" || friction_model == "Rickenmann")
           {
 
-            // interpolate psfs to make sure to match correct dimensions
+      // interpolate psfs to make sure to match correct dimensions
             if ( restart_soilMoisture )
             {
               std::string bashCommand;
@@ -876,7 +879,7 @@ main (int argc, char** argv)
             cellsize_psf = clayPercentage.cellsize;
             if ( cellsize_psf != sandPercentage.cellsize )
             {
-              std::cout << "Please check that the soil texture files have the same resolution" << std::endl;
+              if (rank==0) std::cout << "Please check that the soil texture files have the same resolution" << std::endl;
               exit ( -1. );
             }
 
@@ -1022,7 +1025,7 @@ main (int argc, char** argv)
               }
               else
               {
-                std::cout << "Something wrong in HSG classification" << std::endl;
+                if (rank==0) std::cout << "Something wrong in HSG classification" << std::endl;
                 exit ( -1. );
               }
               
@@ -1083,7 +1086,7 @@ main (int argc, char** argv)
     
     if ( clayPercentage_Vec[0] == 0 && sandPercentage_Vec[0] == 0 && friction_model == "Rickenmann" )
     {
-      std::cout << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
+      if (rank==0) std::cout << "clay and sand are both zero (can't compute d90 for friction, maybe change friction_model in SMARTSED_input in Manning if you don't want to run the R script), probably you have not run correctly the Geostatistical preprocessor!, STOP!" << std::endl;
       exit ( 1. );
     }
     
@@ -1113,16 +1116,16 @@ main (int argc, char** argv)
     
   }
 
-  
+  if (rank==0)
   std::cout << "maximum and minimum hydraulic_conductivity  " << *std::max_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << " " << *std::min_element ( hydraulic_conductivity.begin(), hydraulic_conductivity.end() ) << std::endl;
-  toc ("build soil moisture vector");
+  //toc ("build soil moisture vector");
 
   // +-----------------------------------------------+
   // |                Compute Slopes                 |
   // +-----------------------------------------------+
 
 
-  tic();
+  //tic();
   for ( UInt i = 0; i < N_rows; i++ )
   {
     for ( UInt j = 1; j < N_cols; j++ )
@@ -1187,14 +1190,14 @@ main (int argc, char** argv)
 
   saveSolution ( output_dir + "slope_x", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_x );
   saveSolution ( output_dir + "slope_y", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_y );
-  toc ("compute slopes");
+  //toc ("compute slopes");
 
   // +-----------------------------------------------+
   // |     Compute boundaries of basin domain        |
   // +-----------------------------------------------+
 
 
-  tic();
+  //tic();
   computeAdjacencies ( basin_mask_Vec,
    idStaggeredBoundaryVectSouth,
    idStaggeredBoundaryVectNorth,
@@ -1208,13 +1211,13 @@ main (int argc, char** argv)
    N_cols );
   
   
-  toc ("compute basin boundaries");
+  //toc ("compute basin boundaries");
 
   // +-----------------------------------------------+
   // |                Gavrilovic Coeff.              |
   // +-----------------------------------------------+
 
-  tic();
+  //tic();
   for ( const auto & k : idBasinVect )
   {
     const UInt i = k / N_cols;
@@ -1223,13 +1226,13 @@ main (int argc, char** argv)
     Z_Gav[ k ] *= ( .5 + std::sqrt ( slope_cell[ k ] ) );
     Z_Gav[ k ] = std::pow ( Z_Gav[ k ], 1.5 );
   }
-  toc ("gavrilovic coeff");
+  //toc ("gavrilovic coeff");
 
   // +-----------------------------------------------+
   // |                    Gauges i,j                 |
   // +-----------------------------------------------+
 
-  tic();
+  //tic();
 
   std::vector<std::vector<UInt> > kk_gauges;
 
@@ -1270,7 +1273,7 @@ main (int argc, char** argv)
       XX(0) =  std::round(XX(0));
       if ( XX(0) < 0 || XX(1) < 0 || XX(1) >= N_rows || XX(0) >= N_cols )
       {
-        std::cout << "The gauges in the input file are not good" << std::endl;
+        if (rank==0) std::cout << "The gauges in the input file are not good" << std::endl;
         exit ( 1. );
       }
 
@@ -1299,14 +1302,14 @@ main (int argc, char** argv)
     }
 
   }
-  toc ("gauges i,j ");
+  //toc ("gauges i,j ");
   
 
   // +-----------------------------------------------+
   // |                    Rain                       |
   // +-----------------------------------------------+
 
-  tic();
+  //tic();
   const bool is_precipitation = dataFile ( "files/meteo_data/precipitation", true );
   const bool constant_precipitation = dataFile ( "files/meteo_data/constant_precipitation", true );
 
@@ -1366,13 +1369,13 @@ main (int argc, char** argv)
 
       precipitation.IDW_precipitation ( precipitation_file, ndata_rain, time_spacing_rain, X, Y, xllcorner, yllcorner, pixel_size, N_rows, N_cols, idBasinVect );
     }
-  toc ("rain");
+  //toc ("rain");
 
   // +-----------------------------------------------+
   // |                 Temperature                   |
   // +-----------------------------------------------+
 
-  tic();
+  //tic();
   const Real        time_spacing_temp = dataFile ( "files/meteo_data/time_spacing_temp", 1. );
   const std::string format_temp       = dataFile ( "files/meteo_data/format_temp", "arpa" );
   const Real        dt_temp           = time_spacing_temp * 3600;
@@ -1388,22 +1391,22 @@ main (int argc, char** argv)
                      height_thermometer,
                      format_temp );
 
-  toc ("temperature");
+  //toc ("temperature");
 
   // +-----------------------------------------------+
   // |              Evapotranspiration               |
   // +-----------------------------------------------+
 
-  tic();
+  //tic();
   evapoTranspiration ET ( ET_model, N, orography, temp.J, max_Days, phi_rad, height_thermometer );
-  toc ("evapotranspiration");
+  //toc ("evapotranspiration");
 
   // +-----------------------------------------------+
   // |                   Core Part                   |
   // +-----------------------------------------------+
 
 
-  tic();
+  //tic();
   
   for (int ii = 0; ii < N; ii++)
   {
@@ -1433,7 +1436,7 @@ main (int argc, char** argv)
     {
       if ( kk * ( dt_min / pixel_size ) > 1. )
         {
-          std::cout << "Error! Courant number for gravitational layer is greater than 1!" << std::endl;
+          if (rank==0) std::cout << "Error! Courant number for gravitational layer is greater than 1!" << std::endl;
           exit ( -1. );
         }
     }
@@ -1481,7 +1484,7 @@ main (int argc, char** argv)
   
   
 
-  toc ("prepare loop");
+  //toc ("prepare loop");
   
   
   
@@ -1496,7 +1499,7 @@ main (int argc, char** argv)
   if (static_subbasin_approx)
   {
   
-    tic();
+    //tic();
     
     const std::set<UInt> idBasinVect_set                 (idBasinVect.begin(),                  idBasinVect.end()),
                          idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(), idStaggeredBoundaryVectSouth.end()),
@@ -1617,7 +1620,7 @@ main (int argc, char** argv)
     }
     
 
-    toc ("get sub-basins");
+    //toc ("get sub-basins");
     
   }
   
@@ -1700,29 +1703,32 @@ main (int argc, char** argv)
   while ( !is_last_step )
     {
 
-      std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface run-off vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface run-off cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
-      std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
+      if (rank==0)
+      {
+	std::cout << "Simulation progress: " << time / t_final * 100 << " %" << " max surface run-off vel. based Courant: " << maxCourant ( u, v, c1_DSV_ ) << " max surface run-off cel. based Courant: " << maxCourant ( H, g, c1_DSV_ ) << std::endl;
+        std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given << std::endl;
+      }
 
-      tic();
+      //tic();
       // Compute interface fluxes via upwind method
       H_interface.computeHorizontal ( );
       H_interface.computeVertical   ( );
-      toc ("H_interface");
+      //toc ("H_interface");
 
-      tic();
+      //tic();
       // Compute alfa coefficients
       alfa.f_x ( );
       alfa.f_y ( );
-      toc ("alfa");
+      //toc ("alfa");
 
       
       // update only if necessary  --> governed by temperature dynamics, i.e. time_spacing_temp
       if ( std::floor ( time / dt_temp ) > std::floor ( (time - dt_DSV) / dt_temp ) )
         {
-          tic();
+          //tic();
           // Compute temperature map
           temp.computeTemperature ( std::floor( time / dt_temp ), orography, idBasinVect );
-          toc ("temperature");
+          //toc ("temperature");
         }
       
 
@@ -1730,10 +1736,10 @@ main (int argc, char** argv)
       // ET varies daily
       if ( std::floor ( time / (24. * 3600) ) > std::floor ( (time - dt_DSV) / (24. * 3600) ) )
         {
-          tic();
+          //tic();
           // Get ET rate at the current time
           ET.ET ( temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax, std::floor( time / ( 24 * 3600 ) ), idBasinVect, orography );
-          toc ("ET");
+          //toc ("ET");
         }
       
 
@@ -1741,7 +1747,7 @@ main (int argc, char** argv)
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
-          tic();
+          //tic();
           // +-----------------------------------------------+
           // |            Gravitational Layer                |
           // +-----------------------------------------------+
@@ -1765,11 +1771,11 @@ main (int argc, char** argv)
                              h_interface_y,
                              Res_x,
                              Res_y );
-          toc ("gravit") ;
+          //toc ("gravit") ;
         }
       
 
-      tic();
+      //tic();
       //
       precipitation.computePrecipitation (time,
                                           soilMoistureRetention,
@@ -1779,13 +1785,13 @@ main (int argc, char** argv)
                                           N_rows,
                                           N_cols,
                                           idBasinVect);
-      toc ("precipitation");
+      //toc ("precipitation");
 
       
       // update only if necessary
       if ( std::floor ( time / dt_min ) > std::floor ( (time - dt_DSV) / dt_min ) )
         {
-          tic();
+          //tic();
           for ( const UInt& k : idBasinVect )
             {
               S_coeff[ k ] = 4.62e-10 * h_sn[ k ] * ( temp.T_raster[ k ] - T_thr ) * temp.melt_mask[ k ];
@@ -1807,7 +1813,7 @@ main (int argc, char** argv)
               const auto snow_acc = precipitation.DP_total[ k ] * ( 1. - temp.melt_mask[ k ] ) * dt_min - S_coeff[ k ] * dt_min;
               h_sn[ k ] += snow_acc;
             }
-          toc ("snow");
+          //toc ("snow");
         }
       
 
@@ -1817,7 +1823,7 @@ main (int argc, char** argv)
       // +-----------------------------------------------+
 
 
-      tic();
+      //tic();
       // fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation ( u,
                               v,
@@ -1835,11 +1841,11 @@ main (int argc, char** argv)
                               idStaggeredBoundaryVectSouth_excluded );
 
       
-      toc ("bilinearInterpolation");
+      //toc ("bilinearInterpolation");
 
 
 
-      tic();
+      //tic();
 
       coefficients.reserve ( idBasinVect_excluded.size() +
                         4 * idStaggeredInternalVectHorizontal_excluded.size() +
@@ -1892,9 +1898,9 @@ main (int argc, char** argv)
       A.makeCompressed();
       coefficients.clear();
 
-      toc ("assemble matrix");
+      //toc ("assemble matrix");
 
-      tic();
+      //tic();
       if (spit_out_matrix)
         {
           tmpname = matrix_name + std::to_string (iter);
@@ -1904,10 +1910,10 @@ main (int argc, char** argv)
           std::cout << "saving " << tmpname << std::endl;
           Eigen::saveMarketVector_lis (rhs, tmpname);
         }
-      toc ("spit out matrix for debug");
+      //toc ("spit out matrix for debug");
 
 
-      tic();
+      //tic();
       if ( direct_method )  // Direct Sparse method: Cholesky being A spd
         {
           Eigen::SimplicialLDLT<SpMat, Eigen::Upper> solver;   
@@ -1948,18 +1954,20 @@ main (int argc, char** argv)
           //Eigen::IncompleteLUT<double> ILU(A); // create ILU preconditioner
           result = LinearAlgebra::CG(A, H_basin, rhs, IC, maxit, tol);   // Solve system
           
-          std::cout <<" IML++ CG "<< std::endl;
-          std::cout << "CG flag = " << result << std::endl;
-          std::cout << "iterations performed: " << maxit << std::endl;
-          std::cout << "tolerance achieved  : " << tol << std::endl;
-           
+	  if (rank==0)
+	  {   
+            std::cout <<" IML++ CG "<< std::endl;
+            std::cout << "CG flag = " << result << std::endl;
+            std::cout << "iterations performed: " << maxit << std::endl;
+            std::cout << "tolerance achieved  : " << tol << std::endl;
+          }  
 
         }
     
       
       
       minH = H_basin.minCoeff(); maxH = H_basin.maxCoeff();
-      std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
+      if (rank==0) std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
       
       
       
@@ -1970,7 +1978,7 @@ main (int argc, char** argv)
         
         if (dt_DSV == 0)
         {
-          std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
+          if (rank==0) std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
           exit( -1. );
         }
 
@@ -2035,7 +2043,7 @@ main (int argc, char** argv)
               eta ( k ) = H ( k ) + orography[ k ];
             }
         }*/
-      toc ("solve");
+      //toc ("solve");
 
       
 
@@ -2046,7 +2054,7 @@ main (int argc, char** argv)
 
       if (is_sediment_transport)
       {
-        tic();
+        //tic();
         const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
         dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
@@ -2098,8 +2106,8 @@ main (int argc, char** argv)
             // 1.e-3 is the conversion factor, look at EPM theory
           W_Gav[ k ] = 1.e-3 * M_PI * Z_Gav[ k ] * std::sqrt ( std::abs ( ( .1 + .1 * temp.T_raster[ k ] ) * temp.melt_mask[ k ] ) ) * precipitation.DP_total[ k ] * dt_sed + additional_source_term[ k ];
         }
-
-        std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
+ 
+        if (rank==0) std::cout << "# steps for solid transport, " << numberOfSteps << std::endl;
 
         for ( UInt kk = 0; kk < numberOfSteps; kk++ )
         {
@@ -2276,13 +2284,13 @@ main (int argc, char** argv)
 
 
         }
-        toc ("advance");
+        //toc ("advance");
       }
       
 
       
 
-      tic();
+      //tic();
 
       // +-----------------------------------------------+
       // |               Update time                     |
@@ -2309,7 +2317,7 @@ main (int argc, char** argv)
 
         for (Int number=1; number<=number_gauges; number++)
         {
-          std::string filename_x = "discretization/X_gauges_",
+          std::string filename_x = "discretization/X_gauges_", 
                       filename_y = "discretization/Y_gauges_";
 
           filename_x += std::to_string(number); 
@@ -2350,7 +2358,7 @@ main (int argc, char** argv)
                                                   std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
             const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                                          std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+                std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
 
             H_candidate += cc;
             mass_flux_candidate += cc*velo;
@@ -2367,6 +2375,9 @@ main (int argc, char** argv)
           H_candidate          /= kk_gauges[number-1].size();
           mass_flux_candidate  /= kk_gauges[number-1].size();
           solid_flux_candidate /= kk_gauges[number-1].size();
+
+
+	  saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
@@ -2417,8 +2428,8 @@ main (int argc, char** argv)
           iter++;
 
           const auto & currentDay = iter; // std::floor ( time / (frequency_save * 3600) )
-
-          std::cout << "Saving solution ..., current day " << iter << std::endl;
+         
+          if (rank==0) std::cout << "Saving solution ..., current day " << iter << std::endl;
 
           saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
@@ -2461,7 +2472,7 @@ main (int argc, char** argv)
       }
       
       
-      toc ("file output");
+      //toc ("file output");
       
       
       
