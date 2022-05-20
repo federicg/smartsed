@@ -181,7 +181,7 @@ Vector2D
 operator* (Real const& factor, Vector2D const& vector);
 
 std::map<Int, std::array<Real,2>>
-createCN_map_Gav ();
+createCN_map_Gav ( const std::string& file );
 
 std::map<std::array<Int,2>, Int>
 createCN_map ();
