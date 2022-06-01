@@ -14,10 +14,10 @@
 ### - A directory 'SoilGrids' containing SoilGrids' maps of the variable in exam covering the area of interest
 ### - A raster (.tif or .tiff) file of the Digital Elevation Model for the area in exam.
 
-packages = c('raster','gstat','compositions', 'dissever', 'fields', 'soiltexture', 'viridis','psych','latex2exp')
-for (pck in packages) {
-  if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) 
-}
+#packages = c('raster','gstat','compositions', 'dissever', 'fields', 'soiltexture', 'viridis','psych','latex2exp')
+#for (pck in packages) {
+#  if ( ! (pck %in% installed.packages()[,'Package']) ) install.packages(pck) 
+#}
 
 library(raster) # To handle raster data.
 
@@ -25,7 +25,7 @@ args<-commandArgs(trailingOnly = TRUE)
 # args[1]   # number of Conditional Simulations
 
 # Load the Digital Elevation Model (DEM). The resolution, extent and coordinate system will be used as reference.
-dem=raster('../Inputs/realOrography/DEM.tif')
+dem=raster('../Inputs/Geostatistics_input_data/DEM.tif')
 
 # Plot
 #plot(dem)
@@ -41,9 +41,9 @@ extent_ref=extent(dem)
 #               '../Inputs/SoilGrids/SLTPPT_M_sl1_250m.tiff',    # silt
 #               '../Inputs/SoilGrids/SNDPPT_M_sl1_250m.tiff' ) ) # sand
 
-psf = stack( c('../Inputs/SoilGrids/SoilGrids2020/clay.tif',    # clay
-               '../Inputs/SoilGrids/SoilGrids2020/silt.tif',    # silt
-               '../Inputs/SoilGrids/SoilGrids2020/sand.tif' ) ) # sand
+psf = stack( c('../Inputs/Geostatistics_input_data/clay.tif',    # clay
+               '../Inputs/Geostatistics_input_data/silt.tif',    # silt
+               '../Inputs/Geostatistics_input_data/sand.tif' ) ) # sand
 
 
 ### The .tiff files are searched in the directory 'SoilGrids'.
