@@ -1125,7 +1125,7 @@ main (int argc, char** argv)
   // +-----------------------------------------------+
 
 
-  std::cout << "aaaa " << std::endl;
+  //std::cout << "aaaa " << std::endl;
 
 
   //tic();
