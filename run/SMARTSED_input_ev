@@ -2,10 +2,6 @@
 #           Data file for SMARTSED                #
 #-------------------------------------------------#
 
-# All the files are AAIGrid files so --> ( provide a .txt and a .prj file )
-
-# the initial condition is done with constant rain and no initial loss
-
 
 # X = 532714.4289
 # Y = 5081673.379
@@ -139,7 +135,7 @@
 
    FillSinks = false
 
-   # per ora time_spacing deve essere un numero intero
+   # 
    steps_per_hour    = 50    # number of time steps per hour
    max_Days          = 35   # maximum number of simulated days
    H_min             = 1.e-3 # threshold for max mass loss
