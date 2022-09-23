@@ -6,7 +6,7 @@
 
 #include <cmath>
 #include <numeric>
-#include <iosfwd>
+#include <iosfwd> 
 #include <string>
 #include <limits>
 
@@ -1279,7 +1279,7 @@ evapoTranspiration::ET (const std::vector<Real>& T_mean, // lungo nstep: vettore
             t_min  = T_min [ i ] + Temp_diff * ( orography[ k ] - height_th );
 
           // unity: mm/day --> m/sec.
-          ET_vec[ k ] = .0023 * Ra[ i ] * ( t_mean + 17.8 ) * std::pow( ( t_max - t_min ), .5 ) * ( 1.e-3/(24*3600) ); // più che altro mettere la T del giorno media per poter calcolare T_min e T_max
+          ET_vec[ k ] = .0023 * Ra[ i ] * ( t_mean + 17.8 ) * std::pow( ( t_max - t_min ), .5 ) * ( 1.e-3/(24*3600) ); // piï¿½ che altro mettere la T del giorno media per poter calcolare T_min e T_max
 
         }
 
@@ -1591,7 +1591,7 @@ upwind::computeHorizontal ()
         & H_right = H[ Id - i ];
 
 
-      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id + 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocità interna di fianco
+      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id + 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocitï¿½ interna di fianco
 
     }
 
@@ -1607,7 +1607,7 @@ upwind::computeHorizontal ()
         H_right = 0;
 
 
-      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id - 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocità interna di fianco
+      horizontal[ Id ] = ( H_left + H_right ) * .5 + signum( u[ Id - 1 ] ) * ( H_left - H_right ) * .5; // messo il segno della velocitï¿½ interna di fianco
 
 
     }
@@ -1691,7 +1691,7 @@ bilinearInterpolation (const std::vector<Real>& u,
 
           const auto Id    = j + i * ( ncols + 1 ), // u
 
-            // ID della velocità
+            // ID della velocitï¿½
             ID_NE = Id - i,        // v
             ID_NW = ID_NE - 1,     // v
             ID_SE = ID_NE + ncols, // v
@@ -1824,7 +1824,7 @@ bilinearInterpolation (const std::vector<Real>& u,
 
           const auto Id    = j + i * ncols, // v
 
-            // ID della velocitÃ
+            // ID della velocitï¿½
             ID_SW = Id + i,                // u
             ID_SE = ID_SW + 1,             // u
             ID_NW = ID_SW - ( ncols + 1 ), // u
