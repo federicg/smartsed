@@ -3868,7 +3868,7 @@ maxdt (const std::vector<Real>& u,
   
   const Real vel_max_x = std::max( *std::max_element( u.begin(), u.end() ), std::abs( *std::min_element( u.begin(), u.end() ) ) );
   
-  const Real Co = 0.9; // 0.3
+  const Real Co = 2.; //0.9; // 0.3
   const Real Co_cel = 1e4; // 10
   
   const Real cel = std::sqrt( Hmax * gravity );

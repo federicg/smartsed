@@ -154,7 +154,7 @@ main (int argc, char** argv)
 
 
   const UInt        steps_per_hour         = dataFile ( "discretization/steps_per_hour", 10 );
-  const Real        max_Days               = dataFile ( "discretization/max_Days", 20 );
+  const Real        max_Days               = dataFile ( "discretization/max_Days", 20. );
   const Real        starting_day           = dataFile ( "discretization/starting_day", 0 );
   const Real        H_min                  = dataFile ( "discretization/H_min", 0.001 );
   const Real        T_thr                  = dataFile ( "discretization/T_thr", 0 );
@@ -175,7 +175,7 @@ main (int argc, char** argv)
   
   const Real        frequency_save         = dataFile( "debug/frequency_save", 24. );
 
-  const UInt nstep   = steps_per_hour * max_Days * 24;
+  const Real nstep   = steps_per_hour * max_Days * 24;
   const Real t_final = max_Days * 24 * 3600;
   const Real dt_DSV_given  = t_final / Real ( nstep );
   Real dt_DSV = dt_DSV_given;
@@ -1957,8 +1957,8 @@ main (int argc, char** argv)
           //Eigen::IncompleteLUT<double> ILU(A); // create ILU preconditioner
           result = LinearAlgebra::CG(A, H_basin, rhs, IC, maxit, tol);   // Solve system
           
-	  if (rank==0)
-	  {   
+	        if (rank==0)
+	        {   
             std::cout <<" IML++ CG "<< std::endl;
             std::cout << "CG flag = " << result << std::endl;
             std::cout << "iterations performed: " << maxit << std::endl;
@@ -2382,7 +2382,7 @@ main (int argc, char** argv)
           solid_flux_candidate /= kk_gauges[number-1].size();
 
 
-	  saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
+	        saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
@@ -2434,7 +2434,7 @@ main (int argc, char** argv)
 
           const auto & currentDay = iter; // std::floor ( time / (frequency_save * 3600) )
          
-          if (rank==0) std::cout << "Saving solution ..., current day " << iter << std::endl;
+          if (rank==0) std::cout << "Saving solution ..., current saving " << iter << std::endl;
 
           saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
