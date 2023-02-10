@@ -1,0 +1,181 @@
+#-------------------------------------------------#
+#           Data file for SMARTSED                #
+#-------------------------------------------------#
+
+
+# X = 532714.4289
+# Y = 5081673.379
+
+
+      
+[files]
+    orography_file              = input_smartsed/DEM10m_listo.asc  #DEM_tanks.asc
+    mask_file                   = input_smartsed/Mask_Dragone.asc #mask.asc copre tutto il bacino
+
+    [./meteo_data]
+    temperature_file            = input_smartsed/temperature.txt
+    height_thermometer          = 405.9125
+    time_spacing_temp           = 3
+    format_temp                 = arpa # comune, arpa
+
+    precipitation               = true
+    constant_precipitation      = true  # false: IDW
+
+    # comune lecco files
+    rain_file                   = input_smartsed/rain_E0.txt #100_anni.txt #rain/event/pioggia_id.txt
+    time_spacing_rain           = .25
+
+    # arpa files
+    number_stations             = 9
+    # if constant_precipitation false, provide multiple rain data, insert NODATA = -999
+    rain_file_1                 = DatiMeteo_ARPA_LOMBARDIA/rotaImagna/rain_rotaImagna_ev0.txt
+    X_1                         = 539709.2
+    Y_1                         = 5076380.39
+    time_spacing_rain_1         = 0.1667
+
+    rain_file_2                 = DatiMeteo_ARPA_LOMBARDIA/cortenova/rain_cortenova_ev0.txt
+    X_2                         = 529451.7
+    Y_2                         = 5094947.19
+    time_spacing_rain_2         = 0.1667
+
+    rain_file_3                 = DatiMeteo_ARPA_LOMBARDIA/barzio_PDB/rain_barzioPDB_ev0.txt
+    X_3                         = 538832.65
+    Y_3                         = 5089669.44
+    time_spacing_rain_3         = 0.1667
+
+    rain_file_4                 = DatiMeteo_ARPA_LOMBARDIA/carenno/rain_carenno_ev0.txt
+    X_4                         = 536210.2
+    Y_4                         = 5072042.5
+    time_spacing_rain_4         = 0.1667
+
+    rain_file_5                 = DatiMeteo_ARPA_LOMBARDIA/canzo/rain_canzo_ev0.txt
+    X_5                         = 524701.49
+    Y_5                         = 5077224.59
+    time_spacing_rain_5         = 0.1667
+
+    rain_file_6                 = DatiMeteo_ARPA_LOMBARDIA/cassina/rain_cassina_ev0.txt
+    X_6                         = 538583.36
+    Y_6                         = 5084512.25
+    time_spacing_rain_6         = 0.1667
+
+    rain_file_7                 = DatiMeteo_ARPA_LOMBARDIA/lecco/rain_lecco_ev0.txt
+    X_7                         = 531045.41
+    Y_7                         = 5078987.45
+    time_spacing_rain_7         = 0.1667
+
+    rain_file_8                 = DatiMeteo_ARPA_LOMBARDIA/sormano/rain_sormano_ev0.txt
+    X_8                         = 518233
+    Y_8                         = 5083535
+    time_spacing_rain_8         = 0.1667
+
+    rain_file_9                 = DatiMeteo_ARPA_LOMBARDIA/valmadrera/rain_valmadrera_ev0.txt
+    X_9                         = 527307.44
+    Y_9                         = 5076576.55
+    time_spacing_rain_9         = 1.
+          
+    [../]
+
+    [./initial_conditions]
+    
+    restart_H                   = false
+    H_file                      = ../Outputs/initial_cond/H_ev_5.asc   #realOrography/H.asc
+    
+    restart_vel                 = false
+    vel_file_u                  = ../Outputs/initial_cond/u_ev_5.asc
+    vel_file_v                  = ../Outputs/initial_cond/v_ev_5.asc
+    
+    restart_snow                = false
+    snow_file                   = ../Outputs/restart/hsn_1.asc
+
+    restart_sediment            = false
+    sediment_file               = ../Outputs/restart/hsd_1.asc
+
+    restart_gravitational       = false
+    gravitational_file          = ../Outputs/restart/hG_1.asc
+
+    restart_soilMoisture        = false
+    clay_file                   = ../Outputs/initial_cond/clay_0.asc 
+    sand_file                   = ../Outputs/initial_cond/sand_0.asc 
+
+    [../]
+
+    [./infiltration]
+    infiltration_model           = SCS-CN # None, SCS-CN
+    isInitialLoss                = true
+    roughness_scale_factor1      = 1.e0
+    roughness_scale_factor2      = 1.e0
+    roughness_scale_factor3      = 1.e0
+    perc_initialLoss             = 0.2  # i.e. c in I_a <= c * S
+    corineCode_file              = input_smartsed/CLC.asc
+
+    [../]
+
+    [./evapotranspiration]
+    ET_model                    = None # None, Hargreaves
+    latitude_deg                = 45.8566
+
+
+    [../]
+[../]      
+                  
+                  
+                     
+[physics]
+    
+    friction_model = Rickenmann  # Manning or Rickenmann or None (no friction model)
+    n_manning      = 1.e-2  #.01       # value used if Manning
+
+    Gavrilovic_txt = input_smartsed/Gavr_cilento.txt
+
+    is_sediment_transport = true
+    
+[../] 
+
+[discretization]
+
+   FillSinks = false
+
+   # 
+   steps_per_hour    = 50    # number of time steps per hour
+   max_Days          = 0.125   # maximum number of simulated days
+   H_min             = 1.e-3 # threshold for max mass loss
+   T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
+   
+
+   
+   number_gauges = 1
+
+   X_gauges_1          = 530850.173
+   Y_gauges_1          = 5077721.741
+
+   X_gauges_2          = 531640.745
+   Y_gauges_2          = 5078711.930
+
+
+   delta_gauges      = 20
+
+   save_temporal_sequence = false # if true the value of the gauges are considered
+
+   isNonReflectingBC = true
+
+
+   slope_thr = 1.
+   static_subbasin_approx = false
+
+
+   [../]
+[../]
+
+[linear_solver]
+    direct_method = false
+
+
+[debug]
+    frequency_save = 0.0075
+    spit_out_solutions_each_time_step = false
+    spit_out_matrix = false
+    matrix_name = matrice_passo_
+    vector_name = vettore_passo_
+
+
+
