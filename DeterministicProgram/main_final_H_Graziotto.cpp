@@ -123,7 +123,7 @@ int main()
 
 //! Parse library
 #include "GetPot.hpp"
-
+#include <cmath>
 
 //! for simple profiling
 #include "timing.h"
@@ -133,7 +133,7 @@ int main()
 int
 main (int argc, char** argv)
 {
-
+  
   int rank, size;
   MPI_Init(&argc,&argv);
   MPI_Comm_size(MPI_COMM_WORLD,&size);
@@ -145,16 +145,20 @@ main (int argc, char** argv)
   const std::string dataFileName = command_line.follow ( "SMARTSED_input", 2, "-f", "--file" );
   GetPot dataFile ( dataFileName );
 
-
+  
   const Int         totSimNumber           = command_line.follow ( 2, "-sim" );
   const std::string friction_model         = dataFile ( "physics/friction_model", "None" );
   const Real        n_manning              = dataFile ( "physics/n_manning", 0.01 );
+  const Real        alfa_coeff             = dataFile ( "physics/alfa_coeff", 2.5 );
+  const Real        beta_coeff             = dataFile ( "physics/beta_coeff", 1.6 );
+
+
 
   const Real        height_thermometer     = dataFile ( "files/meteo_data/height_thermometer", 200. );
 
 
   const UInt        steps_per_hour         = dataFile ( "discretization/steps_per_hour", 10 );
-  const Real        max_Days               = dataFile ( "discretization/max_Days", 20. );
+  const Real        max_Days               = dataFile ( "discretization/max_Days", 20 );
   const Real        starting_day           = dataFile ( "discretization/starting_day", 0 );
   const Real        H_min                  = dataFile ( "discretization/H_min", 0.001 );
   const Real        T_thr                  = dataFile ( "discretization/T_thr", 0 );
@@ -174,11 +178,25 @@ main (int argc, char** argv)
   const bool        spit_out_solutions_each_time_step = dataFile ( "debug/spit_out_solutions_each_time_step", false );
   
   const Real        frequency_save         = dataFile( "debug/frequency_save", 24. );
+  const Real        frequency_save_txt     = dataFile( "debug/frequency_save_txt", 60 );
+  const Real        frequency_save_landslide     = dataFile( "debug/frequency_save_landslide", 1 );
+  // LANDSLIDE
+  const bool        simulate_landslides  = dataFile ( "Landslide/simulate_landslides", true );
+  const Real        friction_angle     = dataFile( "Landslide/friction_angle", 25 );
+  const Real        soil_depth     = dataFile( "Landslide/soil_depth ", 2 );
+  const Real        root_cohesion     = dataFile( "Landslide/root_cohesion", 5 );
+  const Real        soil_cohesion     = dataFile( "Landslide/soil_cohesion", 5 );
+  const Real        gamma_dry     = dataFile( "Landslide/gamma_dry", 16 );
+  const Real        gamma_sat     = dataFile( "Landslide/gamma_sat", 18 );
+  
 
-  const Real nstep   = steps_per_hour * max_Days * 24;
+
+  const UInt nstep   = steps_per_hour * max_Days * 24;
   const Real t_final = max_Days * 24 * 3600;
   const Real dt_DSV_given  = t_final / Real ( nstep );
   Real dt_DSV = dt_DSV_given;
+
+  
 
 
   if ((size>totSimNumber && totSimNumber>0) || (size!=1 && totSimNumber<=1))
@@ -253,6 +271,8 @@ main (int argc, char** argv)
     const bool restart_gravitational = dataFile ( "files/initial_conditions/restart_gravitational", false );
     const bool restart_soilMoisture  = dataFile ( "files/initial_conditions/restart_soilMoisture",  false );
 
+    
+
 
 
     {
@@ -274,7 +294,7 @@ main (int argc, char** argv)
     UInt N_rows,
     N_cols,
     N;
-
+    
     std::vector<UInt> idStaggeredBoundaryVectSouth,
     idStaggeredBoundaryVectNorth,
     idStaggeredBoundaryVectWest,
@@ -305,6 +325,7 @@ main (int argc, char** argv)
     orography,
     h_G,
     h_sd,
+    h_sd_landslide,
     h_sn,
     S_coeff,
     W_Gav,
@@ -325,7 +346,20 @@ main (int argc, char** argv)
     slope_x,
     slope_y,
     slope_cell,
+    vel_cell,
+    Qliq,
+    Qsol,
+    QsolPost,
     soilMoistureRetention,
+    //Landslide
+    FcHarp,
+    FwHarp,
+    FfHarp,
+    mland,
+    FsHarp,
+    FsMont,
+    slopedeg_cell,
+    //
     roughness_vect, 
     eta,
     H;
@@ -429,6 +463,7 @@ main (int argc, char** argv)
     eta                   .resize ( N );
     h_G                   .resize ( N );
     h_sd                  .resize ( N );
+    h_sd_landslide        .resize ( N );
     h_sn                  .resize ( N );
     S_coeff               .resize ( N );
     W_Gav                 .resize ( N );
@@ -443,7 +478,18 @@ main (int argc, char** argv)
     excluded_ids          .resize ( N );
     additional_source_term.resize ( N );
     slope_cell            .resize ( N );
-
+    vel_cell              .resize ( N );
+    Qliq                  .resize ( N );
+    Qsol                  .resize ( N );
+    QsolPost              .resize ( N );
+    //Landslides
+    FsMont               .resize ( N );
+    FsHarp               .resize ( N );
+    FcHarp               .resize ( N );
+    FwHarp               .resize ( N );
+    FfHarp               .resize ( N );
+    mland                .resize ( N );
+    slopedeg_cell        .resize ( N );
     u             .resize ( ( N_cols + 1 ) * N_rows );
     v             .resize ( ( N_rows + 1 ) * N_cols );
     n_x           .resize ( u.size( ) );
@@ -670,7 +716,11 @@ main (int argc, char** argv)
           saveSolution ( output_dir + "hsn_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sn );
         }
 
-        if ( restart_sediment )
+      
+ 
+
+
+      if ( restart_sediment )
         {
           {
             const std::string restart_sediment_file = dataFile ( "files/initial_conditions/sediment_file", "h_sd.asc" );
@@ -711,6 +761,18 @@ main (int argc, char** argv)
           saveSolution ( output_dir + "hsd_0", " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, h_sd );
 
         }
+
+
+       for ( UInt i = 0; i < N_rows; i++ )
+          {
+            for ( UInt j = 0; j < N_cols; j++ )
+            {
+              const auto k = j + i * N_cols;
+              h_sd[ k ] = h_sd_landslide[ k ] + h_sd[ k ];
+            }
+          }
+
+
 
 
         if ( restart_gravitational )
@@ -763,7 +825,7 @@ main (int argc, char** argv)
         //tic();
 
         std::vector<Int> corineCode_Vec ( N ); 
-        std::vector<Real> X_Gav ( N ), Y_Gav ( N );
+        std::vector<Real> X_Gav ( N ), Y_Gav ( N ), CN_value ( N );
 
         {
           const std::string corineCode_file = dataFile ( "files/infiltration/corineCode_file", "CLC_RASTER.txt" );
@@ -776,7 +838,7 @@ main (int argc, char** argv)
             exit ( -1. );
           }
 
-          // interpolate CLC to make sure to match correct dimensions
+    // interpolate CLC to make sure to match correct dimensions
           {
             const std::string bashCommand = std::string ( "Rscript -e " ) + "\"library(raster);" +
             "dem=raster('" + output_dir + "DEM.asc" + "');" +
@@ -785,6 +847,7 @@ main (int argc, char** argv)
             "values(clc)[is.na(values(clc))]=0;" +
             "writeRaster( clc, file=paste0('" + output_dir + "CLC.asc'), overwrite=TRUE )\"";
             std::system ( bashCommand.c_str() );
+
           }
 
           Raster corineCode ( output_dir + "CLC.asc" );
@@ -871,9 +934,9 @@ main (int argc, char** argv)
               std::system ( bashCommand.c_str() );
             }
 
+
             Raster clayPercentage ( str1 ),
             sandPercentage ( str2 );
-
 
             cellsize_psf = clayPercentage.cellsize;
             if ( cellsize_psf != sandPercentage.cellsize )
@@ -894,9 +957,6 @@ main (int argc, char** argv)
             }
 
           }
-
-
-
 
 
           if (infiltrationModel != "None" || friction_model == "Rickenmann")
@@ -1051,19 +1111,19 @@ main (int argc, char** argv)
       const auto key = std::array<Int, 2> {{ corineCode_Vec[ k ], HSG[ k ] }};
       
       const auto it = CN_map.find ( key );
+      const auto itvalue = CN_map.find ( key );
       
       
       if ( it != CN_map.end( ) && infiltrationModel != "None" )
       {
         soilMoistureRetention[ k ] = S_0 * ( 100. / Real ( it->second ) - 1. ) * basin_mask_Vec[ k ];
+        CN_value[ k ] = itvalue->second;
       }
       else
       {
         soilMoistureRetention[ k ] = 0.;
       }
     }
-
-
     
     
     // build X_Gav and Y_Gav
@@ -1117,6 +1177,7 @@ main (int argc, char** argv)
     saveSolution ( output_dir + "d_10",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_10 );
     saveSolution ( output_dir + "d_90",                   " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, d_90 );
     saveSolution ( output_dir + "k_c",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, hydraulic_conductivity );
+    saveSolution ( output_dir + "CNmap",                    " ", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, CN_value);
     
   }
 
@@ -1127,9 +1188,6 @@ main (int argc, char** argv)
   // +-----------------------------------------------+
   // |                Compute Slopes                 |
   // +-----------------------------------------------+
-
-
-  //std::cout << "aaaa " << std::endl;
 
 
   //tic();
@@ -1197,6 +1255,7 @@ main (int argc, char** argv)
 
   saveSolution ( output_dir + "slope_x", "u", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_x );
   saveSolution ( output_dir + "slope_y", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_y );
+
   //toc ("compute slopes");
 
   // +-----------------------------------------------+
@@ -1229,12 +1288,12 @@ main (int argc, char** argv)
   {
     const UInt i = k / N_cols;
     slope_cell[ k ] = std::sqrt ( std::pow ( .5 * ( slope_x[ k + i ] + slope_x[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( slope_y[ k ] + slope_y[ k + N_cols ] ), 2. ) );
-
+    
     Z_Gav[ k ] *= ( .5 + std::sqrt ( slope_cell[ k ] ) );
     Z_Gav[ k ] = std::pow ( Z_Gav[ k ], 1.5 );
   }
   //toc ("gavrilovic coeff");
-
+  saveSolution ( output_dir + "slope_cell", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slope_cell );
   // +-----------------------------------------------+
   // |                    Gauges i,j                 |
   // +-----------------------------------------------+
@@ -1683,6 +1742,7 @@ main (int argc, char** argv)
   
   
   int iter = 0;
+  int iterlandslide = 0;
   
   
   double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
@@ -1961,8 +2021,8 @@ main (int argc, char** argv)
           //Eigen::IncompleteLUT<double> ILU(A); // create ILU preconditioner
           result = LinearAlgebra::CG(A, H_basin, rhs, IC, maxit, tol);   // Solve system
           
-	        if (rank==0)
-	        {   
+	  if (rank==0)
+	  {   
             std::cout <<" IML++ CG "<< std::endl;
             std::cout << "CG flag = " << result << std::endl;
             std::cout << "iterations performed: " << maxit << std::endl;
@@ -2062,7 +2122,7 @@ main (int argc, char** argv)
       if (is_sediment_transport)
       {
         //tic();
-        const double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
+        const double gamma_coeff = 1.;
 
         dt_sed = compute_dt_sediment ( alfa_coeff, beta_coeff, slope_x_max, slope_y_max, u, v, pixel_size, dt_DSV, numberOfSteps );
         c1_sed = dt_sed / pixel_size;
@@ -2295,7 +2355,66 @@ main (int argc, char** argv)
       }
       
 
+      // +-----------------------------------------------+
+      // |               Landslide                       |
+      // +-----------------------------------------------+
       
+
+      if (simulate_landslides)
+      {
+
+      
+      for ( const UInt& k : idBasinVect )
+        {
+         const UInt i = k / N_cols;
+         slopedeg_cell[ k ]  = atan ( std::abs( slope_cell[ k ]) ) * 180/ M_PI; 
+         // Harp Model
+         FcHarp[ k ] = ( root_cohesion + soil_cohesion)/(gamma_sat * soil_depth * sin( M_PI * slopedeg_cell[ k ] /180));
+         FfHarp[ k ] = tan(friction_angle*M_PI/180) / tan(M_PI * slopedeg_cell[ k ] /180);
+         if (soilMoistureRetention[ k ]==0)
+            {
+              mland[ k ] = 0;
+            }
+          else
+            {
+              mland[ k ] = h_G[ k ] / soilMoistureRetention[ k ];
+            }
+         FwHarp[ k ] = mland [ k ] * 9.81 * tan (friction_angle*M_PI/180) / (gamma_sat * tan(M_PI * slopedeg_cell[ k ] /180));
+         FsHarp[ k ] = FwHarp[ k ] + FfHarp[ k ] + FcHarp[ k ];
+         if (FcHarp[ k ] > 10)
+            {
+              FcHarp[ k ] = 10;
+            }
+         if (FfHarp[ k ] > 10)
+            {
+              FfHarp[ k ] = 10;
+            }
+         if (FwHarp[ k ] > 10)
+            {
+              FwHarp[ k ] = 10;
+            }
+         if (FsHarp[ k ] > 30)
+            {
+              FsHarp[ k ] = 30;
+            }
+             
+
+         // Montgomery
+
+         FsMont[ k ] = ( root_cohesion + soil_cohesion + (( 1 - mland[ k ] ) * gamma_dry + mland[ k ] * ( gamma_sat - 9.81 ) ) * soil_depth * std::pow ( cos ( M_PI * slopedeg_cell[ k ] /180), 2. ) * tan(M_PI * friction_angle /180) ) / ( ((1 - mland[ k ]) * gamma_dry + mland[ k ] * gamma_sat ) * soil_depth * sin(M_PI * slopedeg_cell[ k ] /180) * cos(M_PI * slopedeg_cell[ k ] /180) );
+
+         if (FsMont[ k ] > 30)
+            {
+              FsMont[ k ] = 30;
+            }
+
+        }
+
+      //saveSolution ( output_dir + "slopedeg_cell", "v", N_rows, N_cols, xllcorner, yllcorner, pixel_size, NODATA_value, slopedeg_cell );
+
+      }
+
+
 
       //tic();
 
@@ -2318,9 +2437,32 @@ main (int argc, char** argv)
       // |             Save The Raster Solution          |
       // +-----------------------------------------------+
 
+       double mean_saturation = 0, counterSat = 0;
       
-      if ( save_temporal_sequence )
-      {
+      if ( save_temporal_sequence && (std::floor ( time / (frequency_save_txt) ) > std::floor ( (time - dt_DSV) / (frequency_save_txt) ) ) )  // volendo epsilon macchina al posto di dt_DSV
+      { 
+
+              mean_saturation = 0; 
+      counterSat = 0;
+      for ( const UInt& k : idBasinVect )
+        {
+          const UInt i = k / N_cols;
+          W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );
+          vel_cell[ k ] = std::sqrt ( std::pow ( .5 * ( u[ k + i ] + u[ k + i + 1 ] ), 2. ) + std::pow ( .5 * ( v[ k ] + v[ k + N_cols ] ), 2. ) );
+          Qliq [ k ] = H[ k ] * vel_cell[ k ] * pixel_size ;
+          Qsol [ k ]  = h_sd[ k ] * vel_cell[ k ] * alfa_coeff * std::pow( std::abs( slope_cell[ k ]) , beta_coeff ) * pixel_size;
+          QsolPost [ k ] = H[ k ] * vel_cell[ k ] * alfa_coeff * std::pow( std::abs( slope_cell[ k ]) , beta_coeff ) * pixel_size ;
+          if (soilMoistureRetention[ k ]==0)
+            {
+              mean_saturation += 0;
+            }
+          else
+            {
+              mean_saturation += h_G[ k ] / soilMoistureRetention[ k ] * 100;
+            }
+          counterSat += 1;
+        }
+        mean_saturation /= counterSat;
 
         for (Int number=1; number<=number_gauges; number++)
         {
@@ -2335,76 +2477,71 @@ main (int argc, char** argv)
 
           const Vector2D XX_gauges ( std::array<Real, 2> {{ X_gauges, Y_gauges }} );
 
-
-          /*
-          const Vector2D XX_O = std::array<Real, 2> {{ xllcorner, yllcorner + N_rows * pixel_size }};
-
-          auto XX = ( XX_gauges - XX_O )/pixel_size; // coordinate in the matrix
-          XX(1) = -XX(1);
           
-          auto H_candidate       = bilinearInterpolation (H,    N_cols, N_rows, XX);
-          auto h_sd_candidate    = bilinearInterpolation (h_sd, N_cols, N_rows, XX);
-          auto vel_abs_candidate = bilinearInterpolation (u, v, N_cols, N_rows, XX);
-
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_" + std::to_string(number), H_candidate );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number),
-            H_candidate * vel_abs_candidate * pixel_size );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_" + std::to_string(number),
-            h_sd_candidate * vel_abs_candidate * pixel_size );*/
-
           
-          double H_current = 0., H_candidate = 0., mass_flux_candidate = 0., solid_flux_candidate = 0.;
-          UInt kk_gauges_max = 0;
-          for (const auto & candidate : kk_gauges[number-1])
+          UInt kk_gauges_Hmax = 0, kk_gauges_hsdmax = 0, kk_gauges_Qliqmax = 0, kk_gauges_Qsolmax = 0,kk_gauges_QsolPostmax = 0 ;
+          double H_current = 0, hsd_current= 0, Qsol_current= 0, QsolPost_current= 0, Qliq_current= 0;
+          for (const auto & candidate : kk_gauges[number-1]) 
           {
             const UInt i = candidate/N_cols;
-            const auto & cc = H[ candidate ];
 
+            const auto & ccH = H[ candidate ];
+            const auto & cchsd = h_sd[ candidate ];
+            const auto & ccQliq = Qliq[ candidate ];
+            const auto & ccQsol = Qsol[ candidate ];
+            const auto & ccQsolPost = QsolPost[ candidate ];
 
-            const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                                          std::pow ( ( ( u[ candidate + i ] + u[ candidate + i + 1  ] ) *.5 ), 2. ) );
-
-            H_candidate += cc;
-            mass_flux_candidate += cc*velo;
-            solid_flux_candidate += h_sd[ candidate ]*velo;
-
-            if (cc > H_current)
+            if (ccH > H_current)
             {
-              kk_gauges_max = candidate;
-              H_current = cc;
+              kk_gauges_Hmax = candidate;
+              H_current = ccH;
             }
+            if (cchsd > hsd_current)
+            {
+              kk_gauges_hsdmax = candidate;
+              hsd_current = cchsd;
+            }
+            if (ccQliq > Qliq_current)
+            {
+              kk_gauges_Qliqmax = candidate;
+              Qliq_current = ccQliq;
+            }
+            if (ccQsol > Qsol_current)
+            {
+              kk_gauges_Qsolmax = candidate;
+              Qsol_current = ccQsol;
+            }
+             if (ccQsolPost > QsolPost_current)
+            {
+              kk_gauges_QsolPostmax = candidate;
+              QsolPost_current = ccQsolPost;
+            }
+
+
           }
-          const UInt i = kk_gauges_max/N_cols;
+      
+                saveTemporalSequence ( XX_gauges, time, output_dir + "hsd_" + std::to_string(number),
+                 h_sd[ kk_gauges_hsdmax ]);
 
-          H_candidate          /= kk_gauges[number-1].size();
-          mass_flux_candidate  /= kk_gauges[number-1].size();
-          solid_flux_candidate /= kk_gauges[number-1].size();
+                 saveTemporalSequence ( XX_gauges, time, output_dir + "waterDepth_" + std::to_string(number),
+                 H[ kk_gauges_Hmax ]);
 
+                saveTemporalSequence ( XX_gauges, time, output_dir + "Qsol_" + std::to_string(number),
+                 Qsol[ kk_gauges_Qsolmax ]);
 
-	        saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
+                saveTemporalSequence ( XX_gauges, time, output_dir + "QsolPost_" + std::to_string(number),
+                 QsolPost[ kk_gauges_QsolPostmax ]);
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFlux_"            + std::to_string(number), solid_flux_candidate );
+                saveTemporalSequence ( XX_gauges, time, output_dir + "Qliq_" + std::to_string(number),
+                 Qliq[ kk_gauges_Qliqmax ]);
 
-          saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
+                saveTemporalSequence ( XX_gauges, time, output_dir + "Mean_Saturation" , mean_saturation);
           
-	        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFluxmax_" + std::to_string(number),
-            H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
-
-          saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFluxmax_" + std::to_string(number),
-            h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
         }
       }
       
       
-      // sediment production zones,
-      for ( const UInt& k : idBasinVect )
-        {
-          W_Gav_cum[ k ] += W_Gav[ k ] * ( dt_DSV/dt_sed );
-        }
+     
 
       
       if ( spit_out_solutions_each_time_step )
@@ -2416,10 +2553,10 @@ main (int argc, char** argv)
         saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, H                            );
         saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sd                         );
         saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, W_Gav_cum                    );
-        //saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
-        //saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
-        //saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
-        //saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
+        saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, ET.ET_vec                    );
+        saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_cumulative  );
+        saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_total       );
+        saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, precipitation.DP_infiltrated );
         saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_G                          );
         saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, iter, u, v, h_sn                         );  
 
@@ -2433,22 +2570,49 @@ main (int argc, char** argv)
 
           const auto & currentDay = iter; // std::floor ( time / (frequency_save * 3600) )
          
-          if (rank==0) std::cout << "Saving solution ..., current saving " << iter << std::endl;
-
+          if (rank==0) std::cout << "Saving solution ..., current day " << iter << std::endl;
+          {
           saveSolution ( output_dir + "u_",     "u", N_rows, N_cols, xllcorner_staggered_u, yllcorner_staggered_u, pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "v_",     "v", N_rows, N_cols, xllcorner_staggered_v, yllcorner_staggered_v, pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "H_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, H                            );
           saveSolution ( output_dir + "hsd_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sd                         );
           saveSolution ( output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, W_Gav_cum                    );
-          //saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
-          //saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
-          //saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
-          //saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
+          saveSolution ( output_dir + "ET_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, ET.ET_vec                    );
+          saveSolution ( output_dir + "q_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_cumulative  );
+          saveSolution ( output_dir + "p_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_total       );
+          saveSolution ( output_dir + "f_",     " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, precipitation.DP_infiltrated );
           saveSolution ( output_dir + "hG_",    " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_G                          );
           saveSolution ( output_dir + "hsn_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, h_sn                         );
-
+          saveSolution ( output_dir + "Qliq_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, Qliq                        );
+          saveSolution ( output_dir + "Qsol_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, Qsol                        );
+          saveSolution ( output_dir + "QsolPost_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, QsolPost                );
+          
+          }
         }
+
       }
+
+        if ( std::floor ( time / (frequency_save_landslide * 3600) ) > std::floor ( (time - dt_DSV) / (frequency_save_landslide * 3600) ) && simulate_landslides )
+          {
+          iterlandslide++;
+
+          const auto & currentDay = iterlandslide; // std::floor ( time / (frequency_save * 3600) )
+         
+          if (rank==0) std::cout << "Saving solution ..., Landslides" << iterlandslide << std::endl;
+
+        
+          saveSolution ( output_dir + "FcHarp_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, FcHarp                    );
+          saveSolution ( output_dir + "FfHarp_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, FfHarp                    );
+          saveSolution ( output_dir + "FwHarp_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, FwHarp                    );
+          saveSolution ( output_dir + "FsHarp_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, FsHarp                    );
+          saveSolution ( output_dir + "FsMont_",   " ", N_rows, N_cols, xllcorner,             yllcorner,             pixel_size, NODATA_value, currentDay, u, v, FsMont          
+                                  );
+
+
+          }
+        
+        
+      
       
       // +-----------------------------------------------+
       // |               Update time step                |
