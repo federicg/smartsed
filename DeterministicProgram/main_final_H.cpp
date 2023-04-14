@@ -2356,14 +2356,9 @@ main (int argc, char** argv)
             const UInt i = candidate/N_cols;
             const auto & cc = H[ candidate ];
 
-/*
-            H_candidate += cc;
-            mass_flux_candidate += cc*std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                                                  std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
-*/
 
             const auto velo = std::sqrt ( std::pow ( ( ( v[ candidate     ] + v[ candidate + N_cols ] ) *.5 ), 2. ) +
-                std::pow ( ( ( u[ candidate - i ] + u[ candidate - i + 1  ] ) *.5 ), 2. ) );
+                std::pow ( ( ( u[ candidate + i ] + u[ candidate + i + 1  ] ) *.5 ), 2. ) );
 
             H_candidate += cc;
             mass_flux_candidate += cc*velo;
