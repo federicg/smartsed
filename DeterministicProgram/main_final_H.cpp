@@ -2381,7 +2381,7 @@ main (int argc, char** argv)
           solid_flux_candidate /= kk_gauges[number-1].size();
 
 
-	        saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
+	  saveTemporalSequence ( XX_gauges, time, output_dir + "timesteps_"   + std::to_string(number), dt_DSV          );
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeight_"   + std::to_string(number), H_candidate          );
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFlux_" + std::to_string(number), mass_flux_candidate  );
@@ -2389,13 +2389,13 @@ main (int argc, char** argv)
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceHeightmax_" + std::to_string(number), H[ kk_gauges_max ] );
           
-	        saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFluxmax_" + std::to_string(number),
+	  saveTemporalSequence ( XX_gauges, time, output_dir + "waterSurfaceMassFluxmax_" + std::to_string(number),
             H[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+              std::pow ( ( ( u[ kk_gauges_max + i ] + u[ kk_gauges_max + i + 1 ]  ) / 2. ), 2. ) ) );
 
           saveTemporalSequence ( XX_gauges, time, output_dir + "SolidFluxmax_" + std::to_string(number),
             h_sd[ kk_gauges_max ] * std::sqrt ( std::pow ( ( ( v[ kk_gauges_max ]     + v[ kk_gauges_max + N_cols ] ) / 2. ), 2. ) +
-              std::pow ( ( ( u[ kk_gauges_max - i ] + u[ kk_gauges_max - i + 1 ]  ) / 2. ), 2. ) ) );
+              std::pow ( ( ( u[ kk_gauges_max + i ] + u[ kk_gauges_max + i + 1 ]  ) / 2. ), 2. ) ) );
         }
       }
       
