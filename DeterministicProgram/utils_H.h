@@ -1,8 +1,22 @@
 #ifndef UTILS_H_H
 #define UTILS_H_H
 
-#include "typedefs_H.h"
+
+//! std library
+#include <cstdint>
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <vector>
+#include <set>
 #include <array>
+
+//! Eigen library    
+#include <Eigen/Sparse>
+#include <unsupported/Eigen/SparseExtra>
+
+//! IML++ CG template
+#include "cg.hpp" 
 
 //! to parallelize with openmp
 #if defined(_OPENMP)
@@ -14,12 +28,12 @@ namespace Eigen {
 namespace internal {
 
 template <typename Scalar>
-inline void putVectorElt(Scalar value, std::ofstream &out, const UInt &i) {
+inline void putVectorElt(Scalar value, std::ofstream &out, const unsigned int &i) {
   out << i << " " << value << "\n";
 }
 template <typename Scalar>
 inline void putVectorElt(std::complex<Scalar> value, std::ofstream &out,
-                         const UInt &i) {
+                         const unsigned int &i) {
   out << i << " " << value.real << " " << value.imag() << "\n";
 }
 
@@ -55,7 +69,7 @@ public:
   //! Empty constructor (all components are set to zero)
   Vector2D() {}
 
-  Vector2D(std::array<Real, 2> const &indices) // Note the use of Real indices
+  Vector2D(std::array<double, 2> const &indices) // Note the use of double indices
       : M_coords(indices) {}
 
   //! Copy constructor
@@ -65,14 +79,14 @@ public:
 
   //! Operator +=
   Vector2D &operator+=(Vector2D const &vector) {
-    for (UInt i = 0; i < 2; i++)
+    for (unsigned int i = 0; i < 2; i++)
       M_coords[i] += vector.M_coords[i];
     return *this;
   }
 
   //! Assignment operator
   Vector2D &operator=(Vector2D const &vector) {
-    for (UInt i = 0; i < 2; i++)
+    for (unsigned int i = 0; i < 2; i++)
       M_coords[i] = vector.M_coords[i];
     return *this;
   }
@@ -84,7 +98,7 @@ public:
 
   //! Operator -=
   Vector2D &operator-=(Vector2D const &vector) {
-    for (UInt i = 0; i < 2; i++)
+    for (unsigned int i = 0; i < 2; i++)
       M_coords[i] -= vector.M_coords[i];
     return *this;
   }
@@ -96,57 +110,57 @@ public:
   }
 
   //! Operator *= (multiplication by scalar)
-  Vector2D &operator*=(Real const &factor) {
-    for (UInt i = 0; i < 2; i++)
+  Vector2D &operator*=(double const &factor) {
+    for (unsigned int i = 0; i < 2; i++)
       M_coords[i] *= factor;
     return *this;
   }
 
   //! Operator /= (division by scalar)
-  Vector2D &operator/=(Real const &factor) {
+  Vector2D &operator/=(double const &factor) {
     *this *= 1. / factor;
     return *this;
   }
 
   //! Operator / (division by scalar)
-  Vector2D operator/(Real const &factor) const {
+  Vector2D operator/(double const &factor) const {
     Vector2D tmp(*this);
     return tmp /= factor;
   }
 
-  Vector2D operator*(Real const &factor) {
+  Vector2D operator*(double const &factor) {
     Vector2D tmp(*this);
     return tmp *= factor;
   }
 
-  Real dot(Vector2D const &vector) const {
-    Real scalarProduct = 0.;
-    for (UInt i = 0; i < 2; i++)
+  double dot(Vector2D const &vector) const {
+    double scalarProduct = 0.;
+    for (unsigned int i = 0; i < 2; i++)
       scalarProduct += M_coords[i] * vector.M_coords[i];
     return scalarProduct;
   }
 
-  Real norm() const { return std::sqrt(this->dot(*this)); }
+  double norm() const { return std::sqrt(this->dot(*this)); }
 
   //! Operator ()b
-  Real const &operator()(UInt const &i) const { return M_coords[i]; }
+  double const &operator()(unsigned int const &i) const { return M_coords[i]; }
 
   //! Operator ()
-  Real &operator()(UInt const &i) { return M_coords[i]; }
+  double &operator()(unsigned int const &i) { return M_coords[i]; }
 
 private:
-  std::array<Real, 2> M_coords;
+  std::array<double, 2> M_coords;
 };
 
 //! Operator * (multiplication by scalar on the right)
-Vector2D operator*(Vector2D const &vector, Real const &factor);
+Vector2D operator*(Vector2D const &vector, double const &factor);
 
 //! Operator * (multiplication by scalar on the left)
-Vector2D operator*(Real const &factor, Vector2D const &vector);
+Vector2D operator*(double const &factor, Vector2D const &vector);
 
-std::map<Int, std::array<Real, 2>> createCN_map_Gav(const std::string &file);
+std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file);
 
-std::map<std::array<Int, 2>, Int> createCN_map();
+std::map<std::array<int, 2>, int> createCN_map();
 
 class Raster {
 
@@ -155,127 +169,127 @@ public:
 
   ~Raster() = default;
 
-  UInt ncols, nrows;
+  unsigned int ncols, nrows;
 
-  Real xllcorner, yllcorner, cellsize, NODATA_value;
+  double xllcorner, yllcorner, cellsize, NODATA_value;
 
-  SpMat Coords; // forse mettere una matrice densa
+  Eigen::SparseMatrix<double> Coords; // forse mettere una matrice densa
 };
 
-Real signum(const Real &x);
+double signum(const double &x);
 
 class Rain // Previous interpolation not Linear
 {
 
 public:
-  Rain(const std::string &infiltrationModel, const UInt &N,
-       const bool &isInitialLoss, const Real &perc_initialLoss);
+  Rain(const std::string &infiltrationModel, const unsigned int &N,
+       const bool &isInitialLoss, const double &perc_initialLoss);
 
   Rain() = delete;
   ~Rain() = default;
 
-  void constant_precipitation(const std::string &file, const UInt &ndata,
+  void constant_precipitation(const std::string &file, const unsigned int &ndata,
                               const bool &is_precipitation,
-                              const Real &time_spacing);
+                              const double &time_spacing);
 
   void IDW_precipitation(const std::vector<std::string> &file_vect,
-                         const std::vector<UInt> &ndata_vec,
-                         const std::vector<Real> &time_spacing_vect,
-                         const std::vector<Real> &X, const std::vector<Real> &Y,
-                         const Real &xllcorner, const Real &yllcorner,
-                         const Real &pixel_size, const UInt &N_rows,
-                         const UInt &N_cols,
-                         const std::vector<UInt> &idBasinVect);
+                         const std::vector<unsigned int> &ndata_vec,
+                         const std::vector<double> &time_spacing_vect,
+                         const std::vector<double> &X, const std::vector<double> &Y,
+                         const double &xllcorner, const double &yllcorner,
+                         const double &pixel_size, const unsigned int &N_rows,
+                         const unsigned int &N_cols,
+                         const std::vector<unsigned int> &idBasinVect);
 
-  void computePrecipitation(const Real &time, const std::vector<Real> &S,
-                            const std::vector<Real> &melt_mask,
-                            const std::vector<Real> &h_G,
-                            const std::vector<Real> &H, const UInt &N_rows,
-                            const UInt &N_cols,
-                            const std::vector<UInt> &idBasinVect);
+  void computePrecipitation(const double &time, const std::vector<double> &S,
+                            const std::vector<double> &melt_mask,
+                            const std::vector<double> &h_G,
+                            const std::vector<double> &H, const unsigned int &N_rows,
+                            const unsigned int &N_cols,
+                            const std::vector<unsigned int> &idBasinVect);
 
-  std::vector<Real> DP_total, DP_cumulative, DP_infiltrated;
+  std::vector<double> DP_total, DP_cumulative, DP_infiltrated;
 
 private:
-  std::vector<std::vector<Real>> Hyetograph, // # station times ndata
+  std::vector<std::vector<double>> Hyetograph, // # station times ndata
       IDW_weights;
 
-  std::vector<Real> M_time_spacing_vect;
+  std::vector<double> M_time_spacing_vect;
   bool M_isInitialLoss;
-  Real rainfall_intensity = 0;
-  Real c;
+  double rainfall_intensity = 0;
+  double c;
 };
 
 class Temperature {
 
 public:
-  Temperature(const std::string &file, const UInt &N, const UInt &max_Days,
-              const Real &T_crit, const std::vector<Real> &orography,
-              const UInt &ndata, const UInt &steps_per_hour,
-              const Real &time_spacing, const Real &height_thermometer,
+  Temperature(const std::string &file, const unsigned int &N, const unsigned int &max_Days,
+              const double &T_crit, const std::vector<double> &orography,
+              const unsigned int &ndata, const unsigned int &steps_per_hour,
+              const double &time_spacing, const double &height_thermometer,
               const std::string format_temp);
 
   Temperature() = delete;
   ~Temperature() = default;
 
-  void computeTemperature(const UInt &i, const std::vector<Real> &orography,
-                          const std::vector<UInt> &idBasinVect);
+  void computeTemperature(const unsigned int &i, const std::vector<double> &orography,
+                          const std::vector<unsigned int> &idBasinVect);
 
-  std::vector<Real> T_raster, melt_mask, T_dailyMean, T_dailyMin, T_dailyMax, J;
+  std::vector<double> T_raster, melt_mask, T_dailyMean, T_dailyMin, T_dailyMax, J;
 
-  const Real T_crit;
+  const double T_crit;
 
 private:
-  std::vector<Real> Temperature_Graph; // length: ndata
-  const Real Temp_diff = -6.5e-3;
-  const Real height_th;
+  std::vector<double> Temperature_Graph; // length: ndata
+  const double Temp_diff = -6.5e-3;
+  const double height_th;
 };
 
 class evapoTranspiration {
 
 public:
-  evapoTranspiration(const std::string &ET_model, const UInt &N,
-                     const std::vector<Real> &orography,
-                     const std::vector<Real> &J, const UInt &max_Days,
-                     const Real &phi_rad, const Real &height_thermometer);
+  evapoTranspiration(const std::string &ET_model, const unsigned int &N,
+                     const std::vector<double> &orography,
+                     const std::vector<double> &J, const unsigned int &max_Days,
+                     const double &phi_rad, const double &height_thermometer);
 
   evapoTranspiration() = delete;
   ~evapoTranspiration() = default;
 
-  void ET(const std::vector<Real>
+  void ET(const std::vector<double>
               &T_mean, // length nstep: vector of temperature in deg Celsius
-          const std::vector<Real> &T_min, // length nstep
-          const std::vector<Real> &T_max, // length nstep
-          const Int &i, const std::vector<UInt> &idBasinVect,
-          const std::vector<Real> &orography);
+          const std::vector<double> &T_min, // length nstep
+          const std::vector<double> &T_max, // length nstep
+          const int &i, const std::vector<unsigned int> &idBasinVect,
+          const std::vector<double> &orography);
 
-  std::vector<Real> ET_vec;
+  std::vector<double> ET_vec;
 
 private:
-  std::vector<Real> Ra;
-  UInt M_evapoTranspiration_model;
-  static constexpr Real M_Gsc = .082; // Solar constant
-  const Real height_th;
-  static constexpr Real Temp_diff = -6.5e-3;
+  std::vector<double> Ra;
+  unsigned int M_evapoTranspiration_model;
+  static constexpr double M_Gsc = .082; // Solar constant
+  const double height_th;
+  static constexpr double Temp_diff = -6.5e-3;
 };
 
 class frictionClass {
 
 public:
-  frictionClass(const std::vector<Real> &H_interface_horizontal,
-                const std::vector<Real> &H_interface_vertical,
-                const std::vector<Real> &u, const std::vector<Real> &v,
-                const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-                const std::vector<UInt> &idStaggeredBoundaryVectWest,
-                const std::vector<UInt> &idStaggeredBoundaryVectEast,
-                const std::vector<UInt> &idStaggeredInternalVectVertical,
-                const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-                const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-                const std::string &friction_model, const Real &n_manning,
-                const Real &dt_DSV, const std::vector<Real> &d_90,
-                const std::vector<Real> &rough, const Real &H_min,
-                const UInt &N_rows, const UInt &N_cols,
-                const std::vector<Real> &S_x, const std::vector<Real> &S_y);
+  frictionClass(const std::vector<double> &H_interface_horizontal,
+                const std::vector<double> &H_interface_vertical,
+                const std::vector<double> &u, const std::vector<double> &v,
+                const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+                const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+                const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+                const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+                const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+                const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+                const std::string &friction_model, const double &n_manning,
+                const double &dt_DSV, const std::vector<double> &d_90,
+                const std::vector<double> &rough, const double &H_min,
+                const unsigned int &N_rows, const unsigned int &N_cols,
+                const std::vector<double> &S_x, const std::vector<double> &S_y);
 
   frictionClass() = delete;
   ~frictionClass() = default;
@@ -284,59 +298,59 @@ public:
 
   void f_y();
 
-  std::vector<Real> alfa_x, alfa_y;
+  std::vector<double> alfa_x, alfa_y;
 
 private:
-  UInt M_frictionModel;
+  unsigned int M_frictionModel;
 
-  const Real &M_n_manning;
-  const Real &M_dt_DSV;
+  const double &M_n_manning;
+  const double &M_dt_DSV;
 
-  Real M_coeff;
-  std::function<Real(Real const &, Real const &)> M_gamma_dt_DSV =
-      [](Real const &dt, Real const &cc) { return dt * cc; };
+  double M_coeff;
+  std::function<double(double const &, double const &)> M_gamma_dt_DSV =
+      [](double const &dt, double const &cc) { return dt * cc; };
 
-  Real M_H_min;
+  double M_H_min;
 
-  const std::vector<Real> &u;
-  const std::vector<Real> &v;
-  const std::vector<Real> &H_interface_horizontal;
-  const std::vector<Real> &H_interface_vertical;
+  const std::vector<double> &u;
+  const std::vector<double> &v;
+  const std::vector<double> &H_interface_horizontal;
+  const std::vector<double> &H_interface_vertical;
 
-  const std::vector<UInt> &idStaggeredInternalVectHorizontal;
-  const std::vector<UInt> &idStaggeredBoundaryVectWest;
-  const std::vector<UInt> &idStaggeredBoundaryVectEast;
-  const std::vector<UInt> &idStaggeredInternalVectVertical;
-  const std::vector<UInt> &idStaggeredBoundaryVectNorth;
-  const std::vector<UInt> &idStaggeredBoundaryVectSouth;
+  const std::vector<unsigned int> &idStaggeredInternalVectHorizontal;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectWest;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectEast;
+  const std::vector<unsigned int> &idStaggeredInternalVectVertical;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectNorth;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectSouth;
 
-  const UInt &N_rows;
-  const UInt &N_cols;
+  const unsigned int &N_rows;
+  const unsigned int &N_cols;
 
-  static constexpr Real M_expo = 4. / 3.;
-  static constexpr Real M_expo_r1 = .11 * 2;
-  static constexpr Real M_expo_r2 = .03 * 2;
-  static constexpr Real M_g = 9.81;
-  static constexpr Real M_toll = 1.e-4;
+  static constexpr double M_expo = 4. / 3.;
+  static constexpr double M_expo_r1 = .11 * 2;
+  static constexpr double M_expo_r2 = .03 * 2;
+  static constexpr double M_g = 9.81;
+  static constexpr double M_toll = 1.e-4;
 
-  std::vector<Real> M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
+  std::vector<double> M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
       M_gamma_dt_DSV_y_;
 };
 
 class upwind {
 
 public:
-  upwind(const std::vector<Real> &H, const std::vector<Real> &u,
-         const std::vector<Real> &v,
+  upwind(const std::vector<double> &H, const std::vector<double> &u,
+         const std::vector<double> &v,
 
-         const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-         const std::vector<UInt> &idStaggeredBoundaryVectWest,
-         const std::vector<UInt> &idStaggeredBoundaryVectEast,
-         const std::vector<UInt> &idStaggeredInternalVectVertical,
-         const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-         const std::vector<UInt> &idStaggeredBoundaryVectSouth,
+         const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+         const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+         const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+         const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+         const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+         const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
 
-         const UInt &N_rows, const UInt &N_cols)
+         const unsigned int &N_rows, const unsigned int &N_cols)
       : H(H), u(u), v(v),
         idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal),
         idStaggeredBoundaryVectWest(idStaggeredBoundaryVectWest),
@@ -356,267 +370,267 @@ public:
 
   void computeVertical();
 
-  std::vector<Real> horizontal, vertical;
+  std::vector<double> horizontal, vertical;
 
 private:
-  const std::vector<Real> &H;
-  const std::vector<Real> &u;
-  const std::vector<Real> &v;
+  const std::vector<double> &H;
+  const std::vector<double> &u;
+  const std::vector<double> &v;
 
-  const std::vector<UInt> &idStaggeredInternalVectHorizontal;
-  const std::vector<UInt> &idStaggeredBoundaryVectWest;
-  const std::vector<UInt> &idStaggeredBoundaryVectEast;
-  const std::vector<UInt> &idStaggeredInternalVectVertical;
-  const std::vector<UInt> &idStaggeredBoundaryVectNorth;
-  const std::vector<UInt> &idStaggeredBoundaryVectSouth;
+  const std::vector<unsigned int> &idStaggeredInternalVectHorizontal;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectWest;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectEast;
+  const std::vector<unsigned int> &idStaggeredInternalVectVertical;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectNorth;
+  const std::vector<unsigned int> &idStaggeredBoundaryVectSouth;
 
-  const UInt &N_cols;
-  const UInt &N_rows;
+  const unsigned int &N_cols;
+  const unsigned int &N_rows;
 };
 
 bool is_file_exist(const char *fileName);
 
-void bilinearInterpolation(const std::vector<Real> &u,
-                           const std::vector<Real> &v,
-                           std::vector<Real> &u_star, std::vector<Real> &v_star,
-                           const UInt &nrows, const UInt &ncols, const Real &dt,
-                           const Real &pixel_size);
+void bilinearInterpolation(const std::vector<double> &u,
+                           const std::vector<double> &v,
+                           std::vector<double> &u_star, std::vector<double> &v_star,
+                           const unsigned int &nrows, const unsigned int &ncols, const double &dt,
+                           const double &pixel_size);
 
 void bilinearInterpolation(
-    const std::vector<Real> &u, const std::vector<Real> &v,
-    std::vector<Real> &u_star, std::vector<Real> &v_star, const UInt &nrows,
-    const UInt &ncols, const Real &dt_DSV, const Real &pixel_size,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth);
+    const std::vector<double> &u, const std::vector<double> &v,
+    std::vector<double> &u_star, std::vector<double> &v_star, const unsigned int &nrows,
+    const unsigned int &ncols, const double &dt_DSV, const double &pixel_size,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth);
 
-Real bilinearInterpolation(const std::vector<Real> &H, const UInt &ncols,
-                           const UInt &nrows, const Vector2D &XX_gauges);
+double bilinearInterpolation(const std::vector<double> &H, const unsigned int &ncols,
+                           const unsigned int &nrows, const Vector2D &XX_gauges);
 
-Real bilinearInterpolation(const std::vector<Real> &u,
-                           const std::vector<Real> &v, const UInt &ncols,
-                           const UInt &nrows, const Vector2D &XX_gauges);
+double bilinearInterpolation(const std::vector<double> &u,
+                           const std::vector<double> &v, const unsigned int &ncols,
+                           const unsigned int &nrows, const Vector2D &XX_gauges);
 
-int computePourCell(const int &IDcell, const UInt &N_cols,
-                    const std::vector<Real> &oro,
-                    const std::set<UInt> &idBasinVect,
-                    const std::set<UInt> &idStaggeredBoundaryVectSouth,
-                    const std::set<UInt> &idStaggeredBoundaryVectNorth,
-                    const std::set<UInt> &idStaggeredBoundaryVectWest,
-                    const std::set<UInt> &idStaggeredBoundaryVectEast);
+int computePourCell(const int &IDcell, const unsigned int &N_cols,
+                    const std::vector<double> &oro,
+                    const std::set<unsigned int> &idBasinVect,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectSouth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectNorth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectWest,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectEast);
 
 void computeAdjacencies(
-    const std::vector<Real> &basin_mask_Vec_mpi,
-    const std::vector<Real> &basin_mask_Vec,
+    const std::vector<double> &basin_mask_Vec_mpi,
+    const std::vector<double> &basin_mask_Vec,
 
-    std::vector<UInt> &idStaggeredBoundaryVectSouth_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectNorth_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectWest_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectEast_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast_mpi,
 
-    std::vector<UInt> &idStaggeredInternalVectHorizontal_mpi,
-    std::vector<UInt> &idStaggeredInternalVectVertical_mpi,
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal_mpi,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical_mpi,
 
-    std::vector<UInt> &idBasinVectReIndex_mpi,
-    std::vector<UInt> &idBasinVectReIndex,
+    std::vector<unsigned int> &idBasinVectReIndex_mpi,
+    std::vector<unsigned int> &idBasinVectReIndex,
 
-    const UInt &N_rows, const UInt &N_cols);
+    const unsigned int &N_rows, const unsigned int &N_cols);
 
-void computeAdjacencies(const std::vector<Real> &basin_mask_Vec,
+void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
 
-                        std::vector<UInt> &idStaggeredBoundaryVectSouth,
-                        std::vector<UInt> &idStaggeredBoundaryVectNorth,
-                        std::vector<UInt> &idStaggeredBoundaryVectWest,
-                        std::vector<UInt> &idStaggeredBoundaryVectEast,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<UInt> &idStaggeredInternalVectHorizontal,
-                        std::vector<UInt> &idStaggeredInternalVectVertical,
+                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<UInt> &idBasinVect,
-                        std::vector<UInt> &idBasinVectReIndex,
+                        std::vector<unsigned int> &idBasinVect,
+                        std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const UInt &N_rows, const UInt &N_cols);
+                        const unsigned int &N_rows, const unsigned int &N_cols);
 
-void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
+void computeAdjacencies(const std::vector<double> &basin_mask_Vec_input,
                         const std::vector<std::tuple<bool, int>> &excluded_ids,
 
-                        std::vector<UInt> &idStaggeredBoundaryVectSouth,
-                        std::vector<UInt> &idStaggeredBoundaryVectNorth,
-                        std::vector<UInt> &idStaggeredBoundaryVectWest,
-                        std::vector<UInt> &idStaggeredBoundaryVectEast,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<UInt> &idStaggeredInternalVectHorizontal,
-                        std::vector<UInt> &idStaggeredInternalVectVertical,
+                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<UInt> &idBasinVect,
-                        std::vector<UInt> &idBasinVectReIndex,
+                        std::vector<unsigned int> &idBasinVect,
+                        std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const UInt &N_rows, const UInt &N_cols);
+                        const unsigned int &N_rows, const unsigned int &N_cols);
 
 void buildMatrix(
-    const std::vector<Real> &H_int_x, const std::vector<Real> &H_int_y,
-    const std::vector<Real> &orography, const std::vector<Real> &u_star,
-    const std::vector<Real> &v_star, const std::vector<Real> &u,
-    const std::vector<Real> &v, const std::vector<Real> &H, const UInt &N_cols,
-    const UInt &N_rows, const UInt &N, const Real &c1, const Real &c3,
-    const Real &H_min, const std::vector<Real> &precipitation,
-    const Real &dt_DSV, const std::vector<Real> &alfa_x,
-    const std::vector<Real> &alfa_y,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect,
-    const std::vector<UInt> &idBasinVect_not_excluded,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal_not_excluded,
-    const std::vector<UInt> &idStaggeredInternalVectVertical_not_excluded,
-    const std::vector<UInt> &idBasinVectReIndex, const bool &isNonReflectingBC,
+    const std::vector<double> &H_int_x, const std::vector<double> &H_int_y,
+    const std::vector<double> &orography, const std::vector<double> &u_star,
+    const std::vector<double> &v_star, const std::vector<double> &u,
+    const std::vector<double> &v, const std::vector<double> &H, const unsigned int &N_cols,
+    const unsigned int &N_rows, const unsigned int &N, const double &c1, const double &c3,
+    const double &H_min, const std::vector<double> &precipitation,
+    const double &dt_DSV, const std::vector<double> &alfa_x,
+    const std::vector<double> &alfa_y,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect,
+    const std::vector<unsigned int> &idBasinVect_not_excluded,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal_not_excluded,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical_not_excluded,
+    const std::vector<unsigned int> &idBasinVectReIndex, const bool &isNonReflectingBC,
     const bool &isH,
 
     const std::vector<std::tuple<bool, int>> &excluded_ids,
-    std::vector<Real> &additional_source_term,
+    std::vector<double> &additional_source_term,
 
-    std::vector<Eigen::Triplet<Real>> &coefficients, Eigen::VectorXd &rhs);
+    std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs);
 
-void updateVel(std::vector<Real> &u, std::vector<Real> &v,
-               const std::vector<Real> &u_star, const std::vector<Real> &v_star,
-               const std::vector<Real> &alfa_x, const std::vector<Real> &alfa_y,
-               const Real &N_rows, const Real &N_cols, const Real &c2,
-               const Real &H_min, const std::vector<Real> &eta,
-               const std::vector<Real> &H, const std::vector<Real> &orography,
-               const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-               const std::vector<UInt> &idStaggeredInternalVectVertical,
-               const std::vector<UInt> &idStaggeredBoundaryVectWest,
-               const std::vector<UInt> &idStaggeredBoundaryVectEast,
-               const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-               const std::vector<UInt> &idStaggeredBoundaryVectSouth,
+void updateVel(std::vector<double> &u, std::vector<double> &v,
+               const std::vector<double> &u_star, const std::vector<double> &v_star,
+               const std::vector<double> &alfa_x, const std::vector<double> &alfa_y,
+               const double &N_rows, const double &N_cols, const double &c2,
+               const double &H_min, const std::vector<double> &eta,
+               const std::vector<double> &H, const std::vector<double> &orography,
+               const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+               const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
                const bool &isNonReflectingBC);
 
 void putDry_excludedNodes(
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect, const UInt &N_cols,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect, const unsigned int &N_cols,
     const std::vector<std::tuple<bool, int>> &excluded_ids,
 
     Eigen::VectorXd &H, Eigen::VectorXd &eta,
-    const std::vector<Real> &orography, std::vector<Real> &u,
-    std::vector<Real> &v);
+    const std::vector<double> &orography, std::vector<double> &u,
+    std::vector<double> &v);
 
-void compute_dt_adaptive(const std::vector<Real> &H,
-                         const std::vector<Real> &H_old,
-                         const std::vector<Real> &H_oldold,
-                         const std::vector<UInt> &idBasinVect, Real &dt,
-                         const Real &local_estimator_time_tolerance,
-                         const Real &time, const Real &timed,
-                         const Real &timedd);
+void compute_dt_adaptive(const std::vector<double> &H,
+                         const std::vector<double> &H_old,
+                         const std::vector<double> &H_oldold,
+                         const std::vector<unsigned int> &idBasinVect, double &dt,
+                         const double &local_estimator_time_tolerance,
+                         const double &time, const double &timed,
+                         const double &timedd);
 
-Real maxdt(const std::vector<Real> &u, const std::vector<Real> &v,
-           const Real &gravity, const Real &Hmax, const Real &pixel_size);
+double maxdt(const std::vector<double> &u, const std::vector<double> &v,
+           const double &gravity, const double &Hmax, const double &pixel_size);
 
-Real maxCourant(const std::vector<Real> &u, const std::vector<Real> &v,
-                const Real &c1);
+double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
+                const double &c1);
 
-Real maxCourant(const std::vector<Real> &H, const Real &gravity,
-                const Real &c1);
+double maxCourant(const std::vector<double> &H, const double &gravity,
+                const double &c1);
 
-Real compute_dt_sediment(const Real &alpha, const Real &beta, const Real &S_x,
-                         const Real &S_y, const std::vector<Real> &u,
-                         const std::vector<Real> &v, const Real &pixel_size,
-                         const Real &dt_DSV, UInt &numberOfSteps);
+double compute_dt_sediment(const double alpha, const double beta, const double S_x,
+                         const double S_y, const std::vector<double> &u,
+                         const std::vector<double> &v, const double pixel_size,
+                         const double dt_DSV, unsigned int* numberOfSteps);
 
 int current_start_chunk(const int &rank,
                         const std::vector<int> &chunk_length_vec);
 
 void saveVector(const Eigen::VectorXd &b, const std::string &Name);
 
-void saveMatrix(const SpMat &A, const std::string &Name);
+void saveMatrix(const Eigen::SparseMatrix<double>&A, const std::string &Name);
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
                   const Eigen::VectorXd &H); // it is H or orography
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
-                  const std::vector<Real> &H); // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
+                  const std::vector<double> &H); // it is H or orography
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
-                  const std::vector<Int> &H); // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
+                  const std::vector<int> &H); // it is H or orography
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value, const UInt &n,
-                  const std::vector<Real> &u, const std::vector<Real> &v,
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value, const unsigned int &n,
+                  const std::vector<double> &u, const std::vector<double> &v,
                   const Eigen::VectorXd &H); // it is H or orography
 
-void saveSolution(const std::string &preName, const UInt &N_rows,
-                  const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
+void saveSolution(const std::string &preName, const unsigned int &N_rows,
+                  const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
                   const std::vector<std::tuple<bool, int>>
                       excluded_ids); // excluded regions, high slopes I hope
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value, const UInt &n,
-                  const std::vector<Real> &u, const std::vector<Real> &v,
-                  const std::vector<Real> &H); // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value, const unsigned int &n,
+                  const std::vector<double> &u, const std::vector<double> &v,
+                  const std::vector<double> &H); // it is H or orography
 
-void saveTemporalSequence(const Vector2D &X_gauges, const Real &time,
-                          const std::string &preName, const Real &H);
+void saveTemporalSequence(const Vector2D &X_gauges, const double &time,
+                          const std::string &preName, const double &H);
 
-void saveTemporalSequence(const Real &time, const std::string &preName,
-                          const Real &H);
+void saveTemporalSequence(const double &time, const std::string &preName,
+                          const double &H);
 
 // For gravitational layer
 void computeResiduals(
-    const std::vector<Real> &n_x, const std::vector<Real> &n_y,
-    const UInt &N_cols, const UInt &N_rows, const std::vector<Real> &h,
-    const std::vector<Real> &coeff, // hydraulic conductivity
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect, std::vector<Real> &h_interface_x,
-    std::vector<Real> &h_interface_y, std::vector<Real> &Res_x,
-    std::vector<Real> &Res_y);
+    const std::vector<double> &n_x, const std::vector<double> &n_y,
+    const unsigned int &N_cols, const unsigned int &N_rows, const std::vector<double> &h,
+    const std::vector<double> &coeff, // hydraulic conductivity
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect, std::vector<double> &h_interface_x,
+    std::vector<double> &h_interface_y, std::vector<double> &Res_x,
+    std::vector<double> &Res_y);
 
 // For sediment transport
 void computeResidualsTruncated(
-    const std::vector<Real> &u, const std::vector<Real> &v, const UInt &N_cols,
-    const UInt &N_rows, const UInt &N, const Real &c1,
-    const std::vector<Real> &S_x, const std::vector<Real> &S_y,
-    const Real &alpha, const Real &beta, const Real &gamma,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    std::vector<std::array<Real, 2>> &Gamma_x,
-    std::vector<std::array<Real, 2>> &Gamma_y);
+    const std::vector<double> &u, const std::vector<double> &v, const unsigned int &N_cols,
+    const unsigned int &N_rows, const unsigned int &N, const double &c1,
+    const std::vector<double> &S_x, const std::vector<double> &S_y,
+    const double &alpha, const double &beta, const double &gamma,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<std::array<double, 2>> &Gamma_x,
+    std::vector<std::array<double, 2>> &Gamma_y);
 
-std::vector<Real> compute_d_perc(const std::vector<Real> &clay,
-                                 const std::vector<Real> &sand,
-                                 const Real &perc);
+std::vector<double> compute_d_perc(const std::vector<double> &clay,
+                                 const std::vector<double> &sand,
+                                 const double &perc);
 
 #endif

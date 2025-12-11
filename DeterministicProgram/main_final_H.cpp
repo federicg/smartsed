@@ -73,6 +73,9 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/copy.h>
+
+// cuSPARSE
+
 #endif
 
 int main(int argc, char **argv) {
@@ -88,18 +91,18 @@ int main(int argc, char **argv) {
       command_line.follow("SMARTSED_input", 2, "-f", "--file");
   GetPot dataFile(dataFileName);
 
-  const Int totSimNumber = command_line.follow(2, "-sim");
+  const int totSimNumber = command_line.follow(2, "-sim");
   const std::string friction_model = dataFile("physics/friction_model", "None");
-  const Real n_manning = dataFile("physics/n_manning", 0.01);
+  const double n_manning = dataFile("physics/n_manning", 0.01);
 
-  const Real height_thermometer =
+  const double height_thermometer =
       dataFile("files/meteo_data/height_thermometer", 200.);
 
-  const UInt steps_per_hour = dataFile("discretization/steps_per_hour", 10);
-  const Real max_Days = dataFile("discretization/max_Days", 20.);
-  const Real starting_day = dataFile("discretization/starting_day", 0);
-  const Real H_min = dataFile("discretization/H_min", 0.001);
-  const Real T_thr = dataFile("discretization/T_thr", 0);
+  const unsigned int steps_per_hour = dataFile("discretization/steps_per_hour", 10);
+  const double max_Days = dataFile("discretization/max_Days", 20.);
+  const double starting_day = dataFile("discretization/starting_day", 0);
+  const double H_min = dataFile("discretization/H_min", 0.001);
+  const double T_thr = dataFile("discretization/T_thr", 0);
 
   const bool direct_method = dataFile("linear_solver/direct_method", true);
 
@@ -119,12 +122,12 @@ int main(int argc, char **argv) {
   const bool spit_out_solutions_each_time_step =
       dataFile("debug/spit_out_solutions_each_time_step", false);
 
-  const Real frequency_save = dataFile("debug/frequency_save", 24.);
+  const double frequency_save = dataFile("debug/frequency_save", 24.);
 
-  const Real nstep = steps_per_hour * max_Days * 24;
-  const Real t_final = max_Days * 24 * 3600;
-  const Real dt_DSV_given = t_final / Real(nstep);
-  Real dt_DSV = dt_DSV_given;
+  const double nstep = steps_per_hour * max_Days * 24;
+  const double t_final = max_Days * 24 * 3600;
+  const double dt_DSV_given = t_final / double(nstep);
+  double dt_DSV = dt_DSV_given;
 
   if ((size > totSimNumber && totSimNumber > 0) ||
       (size != 1 && totSimNumber <= 1)) {
@@ -138,7 +141,7 @@ int main(int argc, char **argv) {
   std::vector<int> chunk_sim_vec(size);
   chunk_sim_vec.assign(size, chunk_length);
 
-  for (UInt i = 0; i < residual; i++) {
+  for (unsigned int i = 0; i < residual; i++) {
     chunk_sim_vec[i] += 1;
   }
 
@@ -218,7 +221,7 @@ int main(int argc, char **argv) {
 
     const std::string ET_model =
         dataFile("files/evapotranspiration/ET_model", "None");
-    const Real phi_rad =
+    const double phi_rad =
         M_PI / 180. * dataFile("files/evapotranspiration/latitude_deg", 45.);
 
     const std::string infiltrationModel =
@@ -226,9 +229,9 @@ int main(int argc, char **argv) {
 
     /* Variables living all over the code */
 
-    UInt N_rows, N_cols, N;
+    unsigned int N_rows, N_cols, N;
 
-    std::vector<UInt> idStaggeredBoundaryVectSouth,
+    std::vector<unsigned int> idStaggeredBoundaryVectSouth,
         idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectWest,
         idStaggeredBoundaryVectEast, idStaggeredInternalVectHorizontal,
         idStaggeredInternalVectVertical, idBasinVect, idBasinVectReIndex,
@@ -241,19 +244,19 @@ int main(int argc, char **argv) {
         idStaggeredInternalVectVertical_excluded, idBasinVect_excluded,
         idBasinVectReIndex_excluded;
 
-    std::vector<std::array<Real, 2>> Gamma_vect_x, Gamma_vect_y;
+    std::vector<std::array<double, 2>> Gamma_vect_x, Gamma_vect_y;
 
     std::vector<std::tuple<bool, int>> excluded_ids;
-    std::vector<Real> additional_source_term;
+    std::vector<double> additional_source_term;
 
-    std::vector<Real> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
+    std::vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
         W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u,
         v, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
         slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, H;
 
     Eigen::VectorXd H_basin, rhs;
 
-    Real pixel_size, // meter/pixel
+    double pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
         xllcorner_staggered_v, yllcorner_staggered_v, NODATA_value;
 
@@ -271,7 +274,7 @@ int main(int argc, char **argv) {
         exit(-1);
       }
 
-      pixel_size = Real(command_line.follow(2, "-scale")) * basin_mask.cellsize;
+      pixel_size = double(command_line.follow(2, "-scale")) * basin_mask.cellsize;
 
       if (rank == 0) {
         std::cout << "cell resolution for the current simulation = "
@@ -372,8 +375,8 @@ int main(int argc, char **argv) {
       slope_x.resize(u.size());
       slope_y.resize(v.size());
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           basin_mask_Vec[k] = basin_mask.Coords.coeff(i, j) > 0;
           orography[k] = orographyMat.Coords.coeff(i, j);
@@ -408,8 +411,8 @@ int main(int argc, char **argv) {
       }
       Raster HMat(output_dir + "H_0.asc");
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           H[k] = HMat.Coords.coeff(i, j) * basin_mask_Vec[k];
           eta[k] = H[k] + orography[k];
@@ -417,7 +420,7 @@ int main(int argc, char **argv) {
       }
 
     } else {
-      for (UInt i = 0; i < N; i++) {
+      for (unsigned int i = 0; i < N; i++) {
         H[i] = 0.;
         eta[i] = 0.;
       }
@@ -457,8 +460,8 @@ int main(int argc, char **argv) {
         }
       }
       Raster vel_u_Mat(output_dir + "u_0.asc");
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j <= N_cols; j++) {
           const auto Id = j + (N_cols + 1) * i;
           u[Id] = vel_u_Mat.Coords.coeff(i, j);
         }
@@ -501,8 +504,8 @@ int main(int argc, char **argv) {
       xllcorner_staggered_v = vel_v_Mat.xllcorner;
       yllcorner_staggered_v = vel_v_Mat.yllcorner;
 
-      for (UInt i = 0; i <= N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i <= N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto Id = j + i * N_cols;
           v[Id] = vel_v_Mat.Coords.coeff(i, j);
         }
@@ -553,8 +556,8 @@ int main(int argc, char **argv) {
       }
       Raster snow_Mat(output_dir + "hsn_0.asc");
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           h_sn[k] = snow_Mat.Coords.coeff(i, j) * basin_mask_Vec[k];
         }
@@ -593,8 +596,8 @@ int main(int argc, char **argv) {
       }
       Raster sediment_Mat(output_dir + "hsd_0.asc");
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           h_sd[k] = sediment_Mat.Coords.coeff(i, j) * basin_mask_Vec[k];
         }
@@ -632,8 +635,8 @@ int main(int argc, char **argv) {
       }
       Raster gravitational_Mat(output_dir + "hG_0.asc");
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           h_G[k] = gravitational_Mat.Coords.coeff(i, j) * basin_mask_Vec[k];
         }
@@ -649,8 +652,8 @@ int main(int argc, char **argv) {
     // |    Construct soilMoistureRetention vector     |
     // +-----------------------------------------------+
 
-    std::vector<Int> corineCode_Vec(N);
-    std::vector<Real> X_Gav(N), Y_Gav(N);
+    std::vector<int> corineCode_Vec(N);
+    std::vector<double> X_Gav(N), Y_Gav(N);
 
     {
       const std::string corineCode_file =
@@ -686,8 +689,8 @@ int main(int argc, char **argv) {
         exit(-1.);
       }
 
-      for (UInt i = 0; i < N_rows; i++) {
-        for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int i = 0; i < N_rows; i++) {
+        for (unsigned int j = 0; j < N_cols; j++) {
           const auto k = j + i * N_cols;
           corineCode_Vec[k] = corineCode.Coords.coeff(i, j);
         }
@@ -695,8 +698,8 @@ int main(int argc, char **argv) {
     }
 
     {
-      std::vector<Int> HSG(N);
-      std::vector<Real> clayPercentage_Vec(N), sandPercentage_Vec(N);
+      std::vector<int> HSG(N);
+      std::vector<double> clayPercentage_Vec(N), sandPercentage_Vec(N);
 
       std::string str1, str2;
       if (restart_soilMoisture) {
@@ -777,8 +780,8 @@ int main(int argc, char **argv) {
           exit(-1.);
         }
 
-        for (UInt i = 0; i < N_rows; i++) {
-          for (UInt j = 0; j < N_cols; j++) {
+        for (unsigned int i = 0; i < N_rows; i++) {
+          for (unsigned int j = 0; j < N_cols; j++) {
             const auto k = j + i * N_cols;
 
             clayPercentage_Vec[k] = clayPercentage.Coords.coeff(i, j);
@@ -789,8 +792,8 @@ int main(int argc, char **argv) {
 
       if (infiltrationModel != "None" || friction_model == "Rickenmann") {
 
-        for (UInt i = 0; i < N_rows; i++) {
-          for (UInt j = 0; j < N_cols; j++) {
+        for (unsigned int i = 0; i < N_rows; i++) {
+          for (unsigned int j = 0; j < N_cols; j++) {
 
             const auto k = j + i * N_cols;
 
@@ -811,23 +814,23 @@ int main(int argc, char **argv) {
               HSG[k] = 3;
             } else if (sand >= 0 && sand <= 1 && clay >= 0 && clay <= 1) {
 
-              Vector2D point(std::array<Real, 2>{{clay, sand}});
+              Vector2D point(std::array<double, 2>{{clay, sand}});
 
-              Vector2D point_A(std::array<Real, 2>{{0, 1}});
-              Vector2D point_B(std::array<Real, 2>{{.1, 1}});
-              Vector2D point_C(std::array<Real, 2>{{.1, .9}});
-              Vector2D point_D(std::array<Real, 2>{{0, .9}});
+              Vector2D point_A(std::array<double, 2>{{0, 1}});
+              Vector2D point_B(std::array<double, 2>{{.1, 1}});
+              Vector2D point_C(std::array<double, 2>{{.1, .9}});
+              Vector2D point_D(std::array<double, 2>{{0, .9}});
 
-              Vector2D point_E(std::array<Real, 2>{{.1, .5}});
-              Vector2D point_F(std::array<Real, 2>{{.2, .5}});
-              Vector2D point_G(std::array<Real, 2>{{.2, .9}});
+              Vector2D point_E(std::array<double, 2>{{.1, .5}});
+              Vector2D point_F(std::array<double, 2>{{.2, .5}});
+              Vector2D point_G(std::array<double, 2>{{.2, .9}});
 
-              Vector2D point_H(std::array<Real, 2>{{.2, 0}});
-              Vector2D point_I(std::array<Real, 2>{{.4, 0}});
-              Vector2D point_L(std::array<Real, 2>{{.4, .5}});
+              Vector2D point_H(std::array<double, 2>{{.2, 0}});
+              Vector2D point_I(std::array<double, 2>{{.4, 0}});
+              Vector2D point_L(std::array<double, 2>{{.4, .5}});
 
-              Vector2D point_M(std::array<Real, 2>{{1, 0}});
-              Vector2D point_N(std::array<Real, 2>{{1, .5}});
+              Vector2D point_M(std::array<double, 2>{{1, 0}});
+              Vector2D point_N(std::array<double, 2>{{1, .5}});
 
               std::vector<Vector2D> vv = {point_A, point_D, point_C, point_B,
 
@@ -837,17 +840,17 @@ int main(int argc, char **argv) {
 
                                           point_L, point_I, point_M, point_N};
 
-              std::pair<Real, Int> min = std::make_pair(1.e4, -1);
+              std::pair<double, int> min = std::make_pair(1.e4, -1);
 
               for (auto ii = 0; ii < vv.size(); ii += 4) {
 
                 const auto A = vv[ii], D = vv[ii + 1], C = vv[ii + 2],
                            B = vv[ii + 3];
 
-                Real d1 = 1.e4, d2 = 1.e4, d3 = 1.e4, d4 = 1.e4;
+                double d1 = 1.e4, d2 = 1.e4, d3 = 1.e4, d4 = 1.e4;
 
-                Vector2D e1(std::array<Real, 2>{{1, 0}}),
-                    e2(std::array<Real, 2>{{0, 1}});
+                Vector2D e1(std::array<double, 2>{{1, 0}}),
+                    e2(std::array<double, 2>{{0, 1}});
 
                 if (e1.dot(point - D) >= 0 &&
                     e1.dot(point - D) <= (C(0) - D(0)))
@@ -863,13 +866,13 @@ int main(int argc, char **argv) {
                   d4 = std::abs((point - C).dot(e1));
 
                 if (d1 < min.first)
-                  min = std::pair<Real, Int>(d1, ii / 4.);
+                  min = std::pair<double, int>(d1, ii / 4.);
                 if (d2 < min.first)
-                  min = std::pair<Real, Int>(d2, ii / 4.);
+                  min = std::pair<double, int>(d2, ii / 4.);
                 if (d3 < min.first)
-                  min = std::pair<Real, Int>(d3, ii / 4.);
+                  min = std::pair<double, int>(d3, ii / 4.);
                 if (d4 < min.first)
-                  min = std::pair<Real, Int>(d4, ii / 4.);
+                  min = std::pair<double, int>(d4, ii / 4.);
               }
 
               const auto &id = min.second;
@@ -899,18 +902,18 @@ int main(int argc, char **argv) {
         }
       }
 
-      const Real S_0 = .254; // 254 mm
+      static constexpr double S_0 = .254; // 254 mm
 
       const auto CN_map = createCN_map();
 
-      for (UInt k = 0; k < N; k++) {
-        const auto key = std::array<Int, 2>{{corineCode_Vec[k], HSG[k]}};
+      for (unsigned int k = 0; k < N; k++) {
+        const auto key = std::array<int, 2>{{corineCode_Vec[k], HSG[k]}};
 
         const auto it = CN_map.find(key);
 
         if (it != CN_map.end() && infiltrationModel != "None") {
           soilMoistureRetention[k] =
-              S_0 * (100. / Real(it->second) - 1.) * basin_mask_Vec[k];
+              S_0 * (100. / double(it->second) - 1.) * basin_mask_Vec[k];
         } else {
           soilMoistureRetention[k] = 0.;
         }
@@ -922,7 +925,7 @@ int main(int argc, char **argv) {
       const auto CN_Gav_map =
           createCN_map_Gav(file_dir + Gavrilovic_file_input);
 
-      for (UInt k = 0; k < N; k++) {
+      for (unsigned int k = 0; k < N; k++) {
         const auto key = corineCode_Vec[k];
 
         const auto it = CN_Gav_map.find(key);
@@ -956,10 +959,10 @@ int main(int argc, char **argv) {
         // Equations for hydraulic conductivity estimation from particle size
         // distribution: A dimensional analysis Ji-Peng Wang1, Bertrand
         // François, and Pierre Lambert
-        const Real C_H = 6.54e-4;
-        const Real gravity = 9.81;
-        const Real kin_visc = 0.89e-6;
-        for (UInt i = 0; i < N; i++) {
+        static constexpr double C_H = 6.54e-4;
+        static constexpr double gravity = 9.81;
+        static constexpr double kin_visc = 0.89e-6;
+        for (unsigned int i = 0; i < N; i++) {
           hydraulic_conductivity[i] =
               C_H * gravity / kin_visc * std::pow(d_10[i], 2.);
         }
@@ -992,8 +995,8 @@ int main(int argc, char **argv) {
     // |                Compute Slopes                 |
     // +-----------------------------------------------+
 
-    for (UInt i = 0; i < N_rows; i++) {
-      for (UInt j = 1; j < N_cols; j++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
+      for (unsigned int j = 1; j < N_cols; j++) {
         const auto Id = j + i * (N_cols + 1);
 
         slope_x[Id] = (orography[Id - i] - orography[Id - 1 - i]) / pixel_size;
@@ -1005,22 +1008,22 @@ int main(int argc, char **argv) {
       }
     }
 
-    for (UInt i = 0, j = 0; i < N_rows; i++) {
+    for (unsigned int i = 0, j = 0; i < N_rows; i++) {
       const auto Id = j + i * (N_cols + 1);
 
       slope_x[Id] = slope_x[Id + 1];
       n_x[Id] = n_x[Id + 1];
     }
 
-    for (UInt i = 0, j = N_cols; i < N_rows; i++) {
+    for (unsigned int i = 0, j = N_cols; i < N_rows; i++) {
       const auto Id = j + i * (N_cols + 1);
 
       slope_x[Id] = slope_x[Id - 1];
       n_x[Id] = n_x[Id - 1];
     }
 
-    for (UInt i = 1; i < N_rows; i++) {
-      for (UInt j = 0; j < N_cols; j++) {
+    for (unsigned int i = 1; i < N_rows; i++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
         const auto Id = j + i * N_cols;
 
         slope_y[Id] = (orography[Id] - orography[Id - N_cols]) / pixel_size;
@@ -1032,14 +1035,14 @@ int main(int argc, char **argv) {
       }
     }
 
-    for (UInt j = 0, i = 0; j < N_cols; j++) {
+    for (unsigned int j = 0, i = 0; j < N_cols; j++) {
       const auto Id = j + i * N_cols;
 
       slope_y[Id] = slope_y[Id + N_cols];
       n_y[Id] = n_y[Id + N_cols];
     }
 
-    for (UInt j = 0, i = N_rows; j < N_cols; j++) {
+    for (unsigned int j = 0, i = N_rows; j < N_cols; j++) {
       const auto Id = j + i * N_cols;
 
       slope_y[Id] = slope_y[Id - N_cols];
@@ -1067,7 +1070,7 @@ int main(int argc, char **argv) {
     // +-----------------------------------------------+
 
     for (const auto &k : idBasinVect) {
-      const UInt i = k / N_cols;
+      const unsigned int i = k / N_cols;
       slope_cell[k] =
           std::sqrt(std::pow(.5 * (slope_x[k + i] + slope_x[k + i + 1]), 2.) +
                     std::pow(.5 * (slope_y[k] + slope_y[k + N_cols]), 2.));
@@ -1080,41 +1083,41 @@ int main(int argc, char **argv) {
     // |                    Gauges i,j                 |
     // +-----------------------------------------------+
 
-    std::vector<std::vector<UInt>> kk_gauges;
+    std::vector<std::vector<unsigned int>> kk_gauges;
 
-    const Int number_gauges = dataFile("discretization/number_gauges", 1);
+    const int number_gauges = dataFile("discretization/number_gauges", 1);
     const double delta_gauges = dataFile("discretization/delta_gauges", 0);
 
     kk_gauges.resize(number_gauges);
 
-    for (Int number = 1; number <= number_gauges; number++) {
+    for (int number = 1; number <= number_gauges; number++) {
       std::string filename_x = "discretization/X_gauges_",
                   filename_y = "discretization/Y_gauges_";
 
       filename_x += std::to_string(number);
       filename_y += std::to_string(number);
 
-      const Real X_gauges = dataFile(filename_x.c_str(), 0.);
-      const Real Y_gauges = dataFile(filename_y.c_str(), 0.);
+      const double X_gauges = dataFile(filename_x.c_str(), 0.);
+      const double Y_gauges = dataFile(filename_y.c_str(), 0.);
 
-      const Vector2D XX_gauges(std::array<Real, 2>{{X_gauges, Y_gauges}});
+      const Vector2D XX_gauges(std::array<double, 2>{{X_gauges, Y_gauges}});
 
       if (save_temporal_sequence) {
 
         const Vector2D XX_O =
-            std::array<Real, 2>{{xllcorner, yllcorner + N_rows * pixel_size}};
+            std::array<double, 2>{{xllcorner, yllcorner + N_rows * pixel_size}};
 
         auto XX = (XX_gauges - XX_O) / pixel_size; // coordinate in the matrix
 
         auto XX_east =
-            XX + Vector2D(std::array<Real, 2>{{delta_gauges / pixel_size, 0}});
+            XX + Vector2D(std::array<double, 2>{{delta_gauges / pixel_size, 0}});
         auto XX_west =
-            XX - Vector2D(std::array<Real, 2>{{delta_gauges / pixel_size, 0}});
+            XX - Vector2D(std::array<double, 2>{{delta_gauges / pixel_size, 0}});
 
         auto XX_south =
-            XX + Vector2D(std::array<Real, 2>{{0, delta_gauges / pixel_size}});
+            XX + Vector2D(std::array<double, 2>{{0, delta_gauges / pixel_size}});
         auto XX_north =
-            XX - Vector2D(std::array<Real, 2>{{0, delta_gauges / pixel_size}});
+            XX - Vector2D(std::array<double, 2>{{0, delta_gauges / pixel_size}});
 
         XX(1) = -std::round(XX(1));
         XX(0) = std::round(XX(0));
@@ -1154,7 +1157,7 @@ int main(int argc, char **argv) {
     const bool constant_precipitation =
         dataFile("files/meteo_data/constant_precipitation", true);
 
-    Real dt_rain = 0;
+    double dt_rain = 0;
 
     Rain precipitation(infiltrationModel, N,
                        dataFile("files/infiltration/isInitialLoss", false),
@@ -1164,7 +1167,7 @@ int main(int argc, char **argv) {
       const std::string precipitation_file =
           dataFile("files/meteo_data/rain_file", " ");
 
-      const Real time_spacing_rain =
+      const double time_spacing_rain =
           dataFile("files/meteo_data/time_spacing_rain", 1.);
 
       dt_rain = time_spacing_rain * 3600;
@@ -1177,12 +1180,12 @@ int main(int argc, char **argv) {
     } else // IDW
     {
       std::vector<std::string> precipitation_file;
-      std::vector<Real> time_spacing_rain, X, Y;
-      std::vector<UInt> ndata_rain;
+      std::vector<double> time_spacing_rain, X, Y;
+      std::vector<unsigned int> ndata_rain;
 
-      const Int number_stations =
+      const int number_stations =
           dataFile("files/meteo_data/number_stations", 1);
-      for (Int number = 1; number <= number_stations; number++) {
+      for (int number = 1; number <= number_stations; number++) {
         std::string filename = "files/meteo_data/rain_file_";
         filename += std::to_string(number);
         const std::string precipitation_file_current =
@@ -1190,17 +1193,17 @@ int main(int argc, char **argv) {
 
         filename = "files/meteo_data/time_spacing_rain_";
         filename += std::to_string(number);
-        const Real time_spacing_rain_current = dataFile(filename.c_str(), 1.);
+        const double time_spacing_rain_current = dataFile(filename.c_str(), 1.);
 
         filename = "files/meteo_data/X_";
         filename += std::to_string(number);
-        const Real X_current = dataFile(filename.c_str(), 1.);
+        const double X_current = dataFile(filename.c_str(), 1.);
 
         filename = "files/meteo_data/Y_";
         filename += std::to_string(number);
-        const Real Y_current = dataFile(filename.c_str(), 1.);
+        const double Y_current = dataFile(filename.c_str(), 1.);
 
-        const UInt ndata_rain_current =
+        const unsigned int ndata_rain_current =
             std::round(max_Days * 24 / time_spacing_rain_current);
 
         precipitation_file.push_back(file_dir + precipitation_file_current);
@@ -1223,11 +1226,11 @@ int main(int argc, char **argv) {
     // |                 Temperature                   |
     // +-----------------------------------------------+
 
-    const Real time_spacing_temp =
+    const double time_spacing_temp =
         dataFile("files/meteo_data/time_spacing_temp", 1.);
     const std::string format_temp =
         dataFile("files/meteo_data/format_temp", "arpa");
-    const Real dt_temp = time_spacing_temp * 3600;
+    const double dt_temp = time_spacing_temp * 3600;
 
     Temperature temp(file_dir + temperature_file, N, max_Days, T_thr, orography,
                      std::round(max_Days * 24 / time_spacing_temp),
@@ -1262,7 +1265,7 @@ int main(int argc, char **argv) {
       }
     }
 
-    const Real dt_min = std::min(dt_rain, dt_temp);
+    const double dt_min = std::min(dt_rain, dt_temp);
     for (const auto &kk : hydraulic_conductivity) {
       if (kk * (dt_min / pixel_size) > 1.) {
         if (rank == 0)
@@ -1273,24 +1276,24 @@ int main(int argc, char **argv) {
       }
     }
 
-    const Real c1_min = dt_min / pixel_size;
+    const double c1_min = dt_min / pixel_size;
 
-    constexpr Real g = 9.81;
-    std::function<Real(Real const &, Real const &)> c1_DSV =
-        [](Real const &dt_DSV, Real const &pixel_size) {
+    constexpr double g = 9.81;
+    std::function<double(double const &, double const &)> c1_DSV =
+        [](double const &dt_DSV, double const &pixel_size) {
           return dt_DSV / pixel_size;
         };
-    std::function<Real(Real const &, Real const &)> c2_DSV =
-        [](Real const &g, Real const &c1) { return g * c1; };
-    std::function<Real(Real const &, Real const &)> c3_DSV =
-        [](Real const &g, Real const &c1) { return g * c1 * c1; };
+    std::function<double(double const &, double const &)> c2_DSV =
+        [](double const &g, double const &c1) { return g * c1; };
+    std::function<double(double const &, double const &)> c3_DSV =
+        [](double const &g, double const &c1) { return g * c1 * c1; };
 
-    const Real area = std::pow(pixel_size, 2) * 1.e-6; // km^2
+    const double area = std::pow(pixel_size, 2) * 1.e-6; // km^2
 
-    Real slope_y_max = 0.;
-    Real slope_x_max = 0.;
+    double slope_y_max = 0.;
+    double slope_x_max = 0.;
     for (const auto &k : idBasinVect) {
-      const UInt i = k / N_cols;
+      const unsigned int i = k / N_cols;
 
       const auto slope_x_l = std::abs(slope_x[k + i]);
       const auto slope_x_r = std::abs(slope_x[k + i + 1]);
@@ -1307,11 +1310,9 @@ int main(int argc, char **argv) {
         slope_y_max = slope_y_r;
     }
 
-    Real dt_sed, c1_sed;
+    double dt_sed, c1_sed;
 
-    UInt numberOfSteps = 1;
-
-    bool isHNegative = false;
+    unsigned int numberOfSteps = 1;
 
     // +-----------------------------------------------+
     // |              compute_sub_basins               |
@@ -1324,7 +1325,7 @@ int main(int argc, char **argv) {
         dataFile("discretization/static_subbasin_approx", false);
     if (static_subbasin_approx) {
 
-      const std::set<UInt> idBasinVect_set(idBasinVect.begin(),
+      const std::set<unsigned int> idBasinVect_set(idBasinVect.begin(),
                                            idBasinVect.end()),
           idStaggeredBoundaryVectSouth_set(idStaggeredBoundaryVectSouth.begin(),
                                            idStaggeredBoundaryVectSouth.end()),
@@ -1335,10 +1336,10 @@ int main(int argc, char **argv) {
           idStaggeredBoundaryVectEast_set(idStaggeredBoundaryVectEast.begin(),
                                           idStaggeredBoundaryVectEast.end());
 
-      const Real slope_thr = dataFile("discretization/slope_thr", 1.);
+      const double slope_thr = dataFile("discretization/slope_thr", 1.);
 
       // exclude high slopes,
-      for (const UInt &Id : idBasinVect) {
+      for (const unsigned int &Id : idBasinVect) {
         const auto &current_slope_cell = slope_cell[Id];
         if (current_slope_cell > slope_thr) {
           std::get<0>(excluded_ids[Id]) = true;
@@ -1347,13 +1348,13 @@ int main(int argc, char **argv) {
 
       // exclude also isolated cells, see below,
       // maybe cycle on intefaces, build a list of bool for each id
-      std::vector<UInt> counter_near_excl;
+      std::vector<unsigned int> counter_near_excl;
       counter_near_excl.resize(N);
       counter_near_excl.assign(N, 0);
 
       // cycle over interfaces, internal vertical and horizontal
       for (const auto &Id : idStaggeredInternalVectHorizontal) {
-        const UInt i = Id / (N_cols + 1),
+        const unsigned int i = Id / (N_cols + 1),
 
                    IDleft = Id - i - 1, // H
             IDright = Id - i;
@@ -1368,7 +1369,7 @@ int main(int argc, char **argv) {
 
       for (const auto &Id : idStaggeredInternalVectVertical) {
 
-        const UInt IDleft = Id - N_cols, // H
+        const unsigned int IDleft = Id - N_cols, // H
             IDright = Id;
 
         if (std::get<0>(excluded_ids[IDleft])) {
@@ -1390,7 +1391,7 @@ int main(int argc, char **argv) {
 
       // compute pour points, local movement in the 8 directions! (also diagonal
       // ones)
-      for (const UInt &Id : idBasinVect) {
+      for (const unsigned int &Id : idBasinVect) {
 
         auto &current_tuple = excluded_ids[Id];
 
@@ -1456,23 +1457,18 @@ int main(int argc, char **argv) {
     H_basin.resize(idBasinVect_excluded.size());
     rhs.resize(idBasinVect_excluded.size());
 
-    for (int i = 0; i < H_basin.size(); i++)
+    for (unsigned int i = 0; i < H_basin.size(); i++)
       H_basin(i) = 0.;
-    for (int i = 0; i < rhs.size(); i++)
+    for (unsigned int i = 0; i < rhs.size(); i++)
       rhs(i) = 0.;
 
     saveSolution(output_dir + "excluded_ids", N_rows, N_cols, xllcorner,
                  yllcorner, pixel_size, NODATA_value, excluded_ids);
 
-    SpMat A(idBasinVect_excluded.size(), idBasinVect_excluded.size());
+    Eigen::SparseMatrix<double> A(idBasinVect_excluded.size(), idBasinVect_excluded.size());
 
     // row, column and value in the Triplet
-    std::vector<Eigen::Triplet<Real>> coefficients;
-
-    /*
-    coefficients.reserve ( idBasinVect_excluded.size() +
-                          4 * idStaggeredInternalVectHorizontal_excluded.size()
-    + 4 * idStaggeredInternalVectVertical_excluded.size() );*/
+    std::vector<Eigen::Triplet<double>> coefficients;
 
     int iter = 0;
 
@@ -1500,7 +1496,7 @@ int main(int argc, char **argv) {
     bool is_last_step = false, check_last = false;
 
     // +-----------------------------------------------+
-    // |   Copy to Device all the needed quantities    |
+    // |   Copy to Device all the needed objects       |
     // +-----------------------------------------------+
     
     // From this part on we just perform all the computations on the device, 
@@ -1516,6 +1512,9 @@ int main(int argc, char **argv) {
     // Host -> Device, if h_std is a std::vector<float>
     thrust::device_vector<float> d_vec(h_std.begin(), h_std.end());
     */
+
+    // Host -> Device, if h_std is a std::vector<float>
+    thrust::device_vector<double> H_device(H.begin(), H.end());
 
 
     while (!is_last_step) {
@@ -1575,7 +1574,7 @@ int main(int argc, char **argv) {
 
       // update only if necessary
       if (std::floor(time / dt_min) > std::floor((time - dt_DSV) / dt_min)) {
-        for (const UInt &k : idBasinVect) {
+        for (const unsigned int &k : idBasinVect) {
           S_coeff[k] = 4.62e-10 * h_sn[k] * (temp.T_raster[k] - T_thr) *
                        temp.melt_mask[k];
         }
@@ -1627,7 +1626,7 @@ int main(int argc, char **argv) {
 
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, N_rows, N, c1_DSV_, c3_DSV_,
-                  0, // 0
+                  0, 
                   precipitation.DP_cumulative, dt_DSV, alfa.alfa_x, alfa.alfa_y,
                   idStaggeredInternalVectHorizontal_excluded,
                   idStaggeredInternalVectVertical_excluded,
@@ -1657,7 +1656,7 @@ int main(int argc, char **argv) {
 
       if (direct_method) // Direct Sparse method: Cholesky being A spd
       {
-        Eigen::SimplicialLDLT<SpMat, Eigen::Upper> solver;
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Upper> solver;
         solver.compute(A);
         if (solver.info() != Eigen::Success) {
           std::cout << "Decomposition Failed" << std::endl;
@@ -1666,7 +1665,7 @@ int main(int argc, char **argv) {
         H_basin = solver.solve(rhs);
       } else {
 
-        double tol = 1.e-6;
+        constexpr static double tol = 1.e-6;
         int result, maxit = 15000;
 
         // IML++
@@ -1701,12 +1700,10 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      for (const UInt &Id : idBasinVect_excluded) {
-        const UInt IDreIndex = idBasinVectReIndex_excluded[Id];
-
+      for (const unsigned int &Id : idBasinVect_excluded) {
+        const unsigned int IDreIndex = idBasinVectReIndex_excluded[Id];
         H_oldold[Id] = H_old[Id];
         H_old[Id] = H[Id];
-
         H[Id] = std::abs(H_basin(IDreIndex));
         eta[Id] = H[Id] + orography[Id];
       }
@@ -1734,7 +1731,7 @@ int main(int argc, char **argv) {
 
         dt_sed = compute_dt_sediment(alfa_coeff, beta_coeff, slope_x_max,
                                      slope_y_max, u, v, pixel_size, dt_DSV,
-                                     numberOfSteps);
+                                     &numberOfSteps);
         c1_sed = dt_sed / pixel_size;
 
         // vertical and horizontal residuals truncated for Sediment Transport
@@ -1766,7 +1763,7 @@ int main(int argc, char **argv) {
           }
         }
 
-        for (const UInt &k : idBasinVect_excluded) {
+        for (const unsigned int &k : idBasinVect_excluded) {
           // 1.e-3 is the conversion factor, look at EPM theory
           W_Gav[k] = 1.e-3 * M_PI * Z_Gav[k] *
                          std::sqrt(std::abs((.1 + .1 * temp.T_raster[k]) *
@@ -1779,82 +1776,82 @@ int main(int argc, char **argv) {
           std::cout << "# steps for solid transport, " << numberOfSteps
                     << std::endl;
 
-        for (UInt kk = 0; kk < numberOfSteps; kk++) {
+        for (unsigned int kk = 0; kk < numberOfSteps; kk++) {
 
           additional_source_term.assign(N, 0.);
 
           // assemble horizontal fluxes
-          for (const UInt &Id : idStaggeredInternalVectHorizontal_excluded) {
-            const UInt i = Id / (N_cols + 1), IDeast = Id - i,
+          for (const unsigned int &Id : idStaggeredInternalVectHorizontal_excluded) {
+            const unsigned int i = Id / (N_cols + 1), IDeast = Id - i,
                        IDwest = Id - i - 1;
 
-            const Real &h_left = h_sd[IDwest], &h_right = h_sd[IDeast];
+            const double &h_left = h_sd[IDwest], &h_right = h_sd[IDeast];
 
             h_interface_x[Id] =
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idStaggeredBoundaryVectWest_excluded) {
-            const UInt i = Id / (N_cols + 1);
+          for (const unsigned int &Id : idStaggeredBoundaryVectWest_excluded) {
+            const unsigned int i = Id / (N_cols + 1);
 
-            const Real h_left = 0, // 0,
+            const double h_left = 0, // 0,
                 h_right = h_sd[Id - i];
 
             h_interface_x[Id] =
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idStaggeredBoundaryVectEast_excluded) {
+          for (const unsigned int &Id : idStaggeredBoundaryVectEast_excluded) {
 
-            const UInt i = Id / (N_cols + 1);
+            const unsigned int i = Id / (N_cols + 1);
 
-            const Real h_left = h_sd[Id - i - 1], h_right = 0;
+            const double h_left = h_sd[Id - i - 1], h_right = 0;
 
             h_interface_x[Id] =
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idBasinVect_excluded) {
-            const UInt i = Id / N_cols;
+          for (const unsigned int &Id : idBasinVect_excluded) {
+            const unsigned int i = Id / N_cols;
 
             Res_x[Id] = h_interface_x[Id + 1 + i] - h_interface_x[Id + i];
           }
 
           // assemble vertical fluxes
-          for (const UInt &Id : idStaggeredInternalVectVertical_excluded) {
-            const UInt IDsouth = Id, IDnorth = Id - N_cols;
+          for (const unsigned int &Id : idStaggeredInternalVectVertical_excluded) {
+            const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
 
-            const Real &h_left = h_sd[IDnorth], &h_right = h_sd[IDsouth];
+            const double &h_left = h_sd[IDnorth], &h_right = h_sd[IDsouth];
 
             h_interface_y[Id] =
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idStaggeredBoundaryVectNorth_excluded) {
+          for (const unsigned int &Id : idStaggeredBoundaryVectNorth_excluded) {
 
-            const Real h_left = 0, // 0
+            const double h_left = 0, // 0
                 h_right = h_sd[Id];
 
             h_interface_y[Id] =
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idStaggeredBoundaryVectSouth_excluded) {
+          for (const unsigned int &Id : idStaggeredBoundaryVectSouth_excluded) {
 
-            const Real h_left = h_sd[Id - N_cols], h_right = 0;
+            const double h_left = h_sd[Id - N_cols], h_right = 0;
 
             h_interface_y[Id] =
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const UInt &Id : idBasinVect_excluded) {
+          for (const unsigned int &Id : idBasinVect_excluded) {
             Res_y[Id] = h_interface_y[Id + N_cols] - h_interface_y[Id];
           }
 
           // assemble the source term
           for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
-            const UInt i = Id / (N_cols + 1), IDleft = Id - i - 1,
+            const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1,
                        IDright = Id - i;
 
             if (std::get<0>(excluded_ids[IDleft])) {
@@ -1876,7 +1873,7 @@ int main(int argc, char **argv) {
 
           for (const auto &Id : idStaggeredInternalVectVertical) {
 
-            const UInt IDleft = Id - N_cols, IDright = Id;
+            const unsigned int IDleft = Id - N_cols, IDright = Id;
 
             if (std::get<0>(excluded_ids[IDleft])) {
               const auto &k_pour = std::get<1>(excluded_ids[IDleft]);
@@ -1896,7 +1893,7 @@ int main(int argc, char **argv) {
           }
 
           // Update the solution
-          for (const UInt &Id : idBasinVect_excluded) {
+          for (const unsigned int &Id : idBasinVect_excluded) {
             h_sd[Id] += -(Res_x[Id] + Res_y[Id]) + W_Gav[Id] +
                         additional_source_term[Id];
           }
@@ -1924,24 +1921,24 @@ int main(int argc, char **argv) {
 
       if (save_temporal_sequence) {
 
-        for (Int number = 1; number <= number_gauges; number++) {
+        for (int number = 1; number <= number_gauges; number++) {
           std::string filename_x = "discretization/X_gauges_",
                       filename_y = "discretization/Y_gauges_";
 
           filename_x += std::to_string(number);
           filename_y += std::to_string(number);
 
-          const Real X_gauges = dataFile(filename_x.c_str(), 0.);
-          const Real Y_gauges = dataFile(filename_y.c_str(), 0.);
+          const double X_gauges = dataFile(filename_x.c_str(), 0.);
+          const double Y_gauges = dataFile(filename_y.c_str(), 0.);
 
-          const Vector2D XX_gauges(std::array<Real, 2>{{X_gauges, Y_gauges}});
+          const Vector2D XX_gauges(std::array<double, 2>{{X_gauges, Y_gauges}});
 
           double H_current = 0., H_candidate = 0., mass_flux_candidate = 0.,
                  solid_flux_candidate = 0.;
-          UInt kk_gauges_max = 0;
-          for (const auto &candidate : kk_gauges[number - 1]) {
-            const UInt i = candidate / N_cols;
-            const auto &cc = H[candidate];
+          unsigned int kk_gauges_max = 0;
+          for (const auto & candidate : kk_gauges[number - 1]) {
+            const unsigned int i = candidate / N_cols;
+            const auto & cc = H[candidate];
 
             const auto velo = std::sqrt(
                 std::pow(((v[candidate] + v[candidate + N_cols]) * .5), 2.) +
@@ -1956,7 +1953,7 @@ int main(int argc, char **argv) {
               H_current = cc;
             }
           }
-          const UInt i = kk_gauges_max / N_cols;
+          const unsigned int i = kk_gauges_max / N_cols;
 
           H_candidate /= kk_gauges[number - 1].size();
           mass_flux_candidate /= kk_gauges[number - 1].size();
@@ -2013,7 +2010,7 @@ int main(int argc, char **argv) {
       }
 
       // sediment production zones,
-      for (const UInt &k : idBasinVect) {
+      for (const unsigned int &k : idBasinVect) {
         W_Gav_cum[k] += W_Gav[k] * (dt_DSV / dt_sed);
       }
 
@@ -2080,7 +2077,7 @@ int main(int argc, char **argv) {
       // +-----------------------------------------------+
 
       dt_DSV = maxdt(u, v, g, maxH, pixel_size);
-      Real dt_DSV_min = dt_DSV * .5;
+      double dt_DSV_min = dt_DSV * .5;
 
       compute_dt_adaptive(H, H_old, H_oldold, idBasinVect_excluded, dt_DSV,
                           1.e-5, time, timed, timedd);

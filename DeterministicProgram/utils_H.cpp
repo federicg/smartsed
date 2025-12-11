@@ -1,5 +1,4 @@
 #include "utils_H.h"
-#include "typedefs_H.h"
 
 //! std library
 #include <cstdlib>
@@ -18,30 +17,30 @@
 #include "Eigen/Sparse"
 #include "Eigen/SparseCholesky"
 
-Vector2D operator*(Vector2D const &vector, Real const &factor) {
+Vector2D operator*(Vector2D const &vector, double const &factor) {
   Vector2D tmp(vector);
   return tmp *= factor;
 }
 
-Vector2D operator*(Real const &factor, Vector2D const &vector) {
+Vector2D operator*(double const &factor, Vector2D const &vector) {
   Vector2D tmp(vector);
   return tmp *= factor;
 }
 
-std::map<Int, std::array<Real, 2>> createCN_map_Gav(const std::string &file) {
+std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file) {
   std::cout << "Reading Gavrilovic coefficients, ... " << std::endl;
 
-  std::map<Int, std::array<Real, 2>> CN;
+  std::map<int, std::array<double, 2>> CN;
 
-  std::vector<std::array<Real, 2>> vector_Gav(44);
+  std::vector<std::array<double, 2>> vector_Gav(44);
 
   std::ifstream ff(file);
   if (ff.is_open()) {
-    Real X, Y;
-    for (UInt i = 0; i < 44; i++) {
+    double X, Y;
+    for (unsigned int i = 0; i < 44; i++) {
       ff >> X;
       ff >> Y;
-      vector_Gav[i] = std::array<Real, 2>{{X, Y}};
+      vector_Gav[i] = std::array<double, 2>{{X, Y}};
     }
 
   } else {
@@ -50,278 +49,278 @@ std::map<Int, std::array<Real, 2>> createCN_map_Gav(const std::string &file) {
     exit(-1.);
   }
 
-  CN[111] = std::array<Real, 2>{{vector_Gav[0][0], vector_Gav[0][1]}};
-  CN[112] = std::array<Real, 2>{{vector_Gav[1][0], vector_Gav[1][1]}};
-  CN[121] = std::array<Real, 2>{{vector_Gav[2][0], vector_Gav[2][1]}};
-  CN[122] = std::array<Real, 2>{{vector_Gav[3][0], vector_Gav[3][1]}};
-  CN[123] = std::array<Real, 2>{{vector_Gav[4][0], vector_Gav[4][1]}};
-  CN[124] = std::array<Real, 2>{{vector_Gav[5][0], vector_Gav[5][1]}};
-  CN[131] = std::array<Real, 2>{{vector_Gav[6][0], vector_Gav[6][1]}};
-  CN[132] = std::array<Real, 2>{{vector_Gav[7][0], vector_Gav[7][1]}};
-  CN[133] = std::array<Real, 2>{{vector_Gav[8][0], vector_Gav[8][1]}};
-  CN[141] = std::array<Real, 2>{{vector_Gav[9][0], vector_Gav[9][1]}};
-  CN[142] = std::array<Real, 2>{{vector_Gav[10][0], vector_Gav[10][1]}};
-  CN[211] = std::array<Real, 2>{{vector_Gav[11][0], vector_Gav[11][1]}};
-  CN[212] = std::array<Real, 2>{{vector_Gav[12][0], vector_Gav[12][1]}};
-  CN[213] = std::array<Real, 2>{{vector_Gav[13][0], vector_Gav[13][1]}};
-  CN[221] = std::array<Real, 2>{{vector_Gav[14][0], vector_Gav[14][1]}};
-  CN[222] = std::array<Real, 2>{{vector_Gav[15][0], vector_Gav[15][1]}};
-  CN[223] = std::array<Real, 2>{{vector_Gav[16][0], vector_Gav[16][1]}};
-  CN[231] = std::array<Real, 2>{{vector_Gav[17][0], vector_Gav[17][1]}};
-  CN[241] = std::array<Real, 2>{{vector_Gav[18][0], vector_Gav[18][1]}};
-  CN[242] = std::array<Real, 2>{{vector_Gav[19][0], vector_Gav[19][1]}};
-  CN[243] = std::array<Real, 2>{{vector_Gav[20][0], vector_Gav[20][1]}};
-  CN[244] = std::array<Real, 2>{{vector_Gav[21][0], vector_Gav[21][1]}};
-  CN[311] = std::array<Real, 2>{{vector_Gav[22][0], vector_Gav[22][1]}};
-  CN[312] = std::array<Real, 2>{{vector_Gav[23][0], vector_Gav[23][1]}};
-  CN[313] = std::array<Real, 2>{{vector_Gav[24][0], vector_Gav[24][1]}};
-  CN[321] = std::array<Real, 2>{{vector_Gav[25][0], vector_Gav[25][1]}};
-  CN[322] = std::array<Real, 2>{{vector_Gav[26][0], vector_Gav[26][1]}};
-  CN[323] = std::array<Real, 2>{{vector_Gav[27][0], vector_Gav[27][1]}};
-  CN[324] = std::array<Real, 2>{{vector_Gav[28][0], vector_Gav[28][1]}};
-  CN[331] = std::array<Real, 2>{{vector_Gav[29][0], vector_Gav[29][1]}};
-  CN[332] = std::array<Real, 2>{{vector_Gav[30][0], vector_Gav[30][1]}};
-  CN[333] = std::array<Real, 2>{{vector_Gav[31][0], vector_Gav[31][1]}};
-  CN[334] = std::array<Real, 2>{{vector_Gav[32][0], vector_Gav[32][1]}};
-  CN[335] = std::array<Real, 2>{{vector_Gav[33][0], vector_Gav[33][1]}};
-  CN[411] = std::array<Real, 2>{{vector_Gav[34][0], vector_Gav[34][1]}};
-  CN[412] = std::array<Real, 2>{{vector_Gav[35][0], vector_Gav[35][1]}};
-  CN[421] = std::array<Real, 2>{{vector_Gav[36][0], vector_Gav[36][1]}};
-  CN[422] = std::array<Real, 2>{{vector_Gav[37][0], vector_Gav[37][1]}};
-  CN[423] = std::array<Real, 2>{{vector_Gav[38][0], vector_Gav[38][1]}};
-  CN[511] = std::array<Real, 2>{{vector_Gav[39][0], vector_Gav[39][1]}};
-  CN[512] = std::array<Real, 2>{{vector_Gav[40][0], vector_Gav[40][1]}};
-  CN[521] = std::array<Real, 2>{{vector_Gav[41][0], vector_Gav[41][1]}};
-  CN[522] = std::array<Real, 2>{{vector_Gav[42][0], vector_Gav[42][1]}};
-  CN[523] = std::array<Real, 2>{{vector_Gav[43][0], vector_Gav[43][1]}};
+  CN[111] = std::array<double, 2>{{vector_Gav[0][0], vector_Gav[0][1]}};
+  CN[112] = std::array<double, 2>{{vector_Gav[1][0], vector_Gav[1][1]}};
+  CN[121] = std::array<double, 2>{{vector_Gav[2][0], vector_Gav[2][1]}};
+  CN[122] = std::array<double, 2>{{vector_Gav[3][0], vector_Gav[3][1]}};
+  CN[123] = std::array<double, 2>{{vector_Gav[4][0], vector_Gav[4][1]}};
+  CN[124] = std::array<double, 2>{{vector_Gav[5][0], vector_Gav[5][1]}};
+  CN[131] = std::array<double, 2>{{vector_Gav[6][0], vector_Gav[6][1]}};
+  CN[132] = std::array<double, 2>{{vector_Gav[7][0], vector_Gav[7][1]}};
+  CN[133] = std::array<double, 2>{{vector_Gav[8][0], vector_Gav[8][1]}};
+  CN[141] = std::array<double, 2>{{vector_Gav[9][0], vector_Gav[9][1]}};
+  CN[142] = std::array<double, 2>{{vector_Gav[10][0], vector_Gav[10][1]}};
+  CN[211] = std::array<double, 2>{{vector_Gav[11][0], vector_Gav[11][1]}};
+  CN[212] = std::array<double, 2>{{vector_Gav[12][0], vector_Gav[12][1]}};
+  CN[213] = std::array<double, 2>{{vector_Gav[13][0], vector_Gav[13][1]}};
+  CN[221] = std::array<double, 2>{{vector_Gav[14][0], vector_Gav[14][1]}};
+  CN[222] = std::array<double, 2>{{vector_Gav[15][0], vector_Gav[15][1]}};
+  CN[223] = std::array<double, 2>{{vector_Gav[16][0], vector_Gav[16][1]}};
+  CN[231] = std::array<double, 2>{{vector_Gav[17][0], vector_Gav[17][1]}};
+  CN[241] = std::array<double, 2>{{vector_Gav[18][0], vector_Gav[18][1]}};
+  CN[242] = std::array<double, 2>{{vector_Gav[19][0], vector_Gav[19][1]}};
+  CN[243] = std::array<double, 2>{{vector_Gav[20][0], vector_Gav[20][1]}};
+  CN[244] = std::array<double, 2>{{vector_Gav[21][0], vector_Gav[21][1]}};
+  CN[311] = std::array<double, 2>{{vector_Gav[22][0], vector_Gav[22][1]}};
+  CN[312] = std::array<double, 2>{{vector_Gav[23][0], vector_Gav[23][1]}};
+  CN[313] = std::array<double, 2>{{vector_Gav[24][0], vector_Gav[24][1]}};
+  CN[321] = std::array<double, 2>{{vector_Gav[25][0], vector_Gav[25][1]}};
+  CN[322] = std::array<double, 2>{{vector_Gav[26][0], vector_Gav[26][1]}};
+  CN[323] = std::array<double, 2>{{vector_Gav[27][0], vector_Gav[27][1]}};
+  CN[324] = std::array<double, 2>{{vector_Gav[28][0], vector_Gav[28][1]}};
+  CN[331] = std::array<double, 2>{{vector_Gav[29][0], vector_Gav[29][1]}};
+  CN[332] = std::array<double, 2>{{vector_Gav[30][0], vector_Gav[30][1]}};
+  CN[333] = std::array<double, 2>{{vector_Gav[31][0], vector_Gav[31][1]}};
+  CN[334] = std::array<double, 2>{{vector_Gav[32][0], vector_Gav[32][1]}};
+  CN[335] = std::array<double, 2>{{vector_Gav[33][0], vector_Gav[33][1]}};
+  CN[411] = std::array<double, 2>{{vector_Gav[34][0], vector_Gav[34][1]}};
+  CN[412] = std::array<double, 2>{{vector_Gav[35][0], vector_Gav[35][1]}};
+  CN[421] = std::array<double, 2>{{vector_Gav[36][0], vector_Gav[36][1]}};
+  CN[422] = std::array<double, 2>{{vector_Gav[37][0], vector_Gav[37][1]}};
+  CN[423] = std::array<double, 2>{{vector_Gav[38][0], vector_Gav[38][1]}};
+  CN[511] = std::array<double, 2>{{vector_Gav[39][0], vector_Gav[39][1]}};
+  CN[512] = std::array<double, 2>{{vector_Gav[40][0], vector_Gav[40][1]}};
+  CN[521] = std::array<double, 2>{{vector_Gav[41][0], vector_Gav[41][1]}};
+  CN[522] = std::array<double, 2>{{vector_Gav[42][0], vector_Gav[42][1]}};
+  CN[523] = std::array<double, 2>{{vector_Gav[43][0], vector_Gav[43][1]}};
 
   return CN;
 }
 
-std::map<std::array<Int, 2>, Int> createCN_map() {
+std::map<std::array<int, 2>, int> createCN_map() {
   std::cout << "Reading CN coefficients, ... " << std::endl;
 
-  std::map<std::array<Int, 2>, Int> CN;
+  std::map<std::array<int, 2>, int> CN;
 
-  CN[std::array<Int, 2>{{111, 0}}] = 89;
-  CN[std::array<Int, 2>{{111, 1}}] = 92;
-  CN[std::array<Int, 2>{{111, 2}}] = 94;
-  CN[std::array<Int, 2>{{111, 3}}] = 95;
+  CN[std::array<int, 2>{{111, 0}}] = 89;
+  CN[std::array<int, 2>{{111, 1}}] = 92;
+  CN[std::array<int, 2>{{111, 2}}] = 94;
+  CN[std::array<int, 2>{{111, 3}}] = 95;
 
-  CN[std::array<Int, 2>{{112, 0}}] = 77;
-  CN[std::array<Int, 2>{{112, 1}}] = 85;
-  CN[std::array<Int, 2>{{112, 2}}] = 90;
-  CN[std::array<Int, 2>{{112, 3}}] = 92;
+  CN[std::array<int, 2>{{112, 0}}] = 77;
+  CN[std::array<int, 2>{{112, 1}}] = 85;
+  CN[std::array<int, 2>{{112, 2}}] = 90;
+  CN[std::array<int, 2>{{112, 3}}] = 92;
 
-  CN[std::array<Int, 2>{{121, 0}}] = 81;
-  CN[std::array<Int, 2>{{121, 1}}] = 88;
-  CN[std::array<Int, 2>{{121, 2}}] = 91;
-  CN[std::array<Int, 2>{{121, 3}}] = 93;
+  CN[std::array<int, 2>{{121, 0}}] = 81;
+  CN[std::array<int, 2>{{121, 1}}] = 88;
+  CN[std::array<int, 2>{{121, 2}}] = 91;
+  CN[std::array<int, 2>{{121, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{122, 0}}] = 83;
-  CN[std::array<Int, 2>{{122, 1}}] = 89;
-  CN[std::array<Int, 2>{{122, 2}}] = 92;
-  CN[std::array<Int, 2>{{122, 3}}] = 93;
+  CN[std::array<int, 2>{{122, 0}}] = 83;
+  CN[std::array<int, 2>{{122, 1}}] = 89;
+  CN[std::array<int, 2>{{122, 2}}] = 92;
+  CN[std::array<int, 2>{{122, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{123, 0}}] = 83;
-  CN[std::array<Int, 2>{{123, 1}}] = 89;
-  CN[std::array<Int, 2>{{123, 2}}] = 92;
-  CN[std::array<Int, 2>{{123, 3}}] = 93;
+  CN[std::array<int, 2>{{123, 0}}] = 83;
+  CN[std::array<int, 2>{{123, 1}}] = 89;
+  CN[std::array<int, 2>{{123, 2}}] = 92;
+  CN[std::array<int, 2>{{123, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{124, 0}}] = 83;
-  CN[std::array<Int, 2>{{124, 1}}] = 89;
-  CN[std::array<Int, 2>{{124, 2}}] = 92;
-  CN[std::array<Int, 2>{{124, 3}}] = 93;
+  CN[std::array<int, 2>{{124, 0}}] = 83;
+  CN[std::array<int, 2>{{124, 1}}] = 89;
+  CN[std::array<int, 2>{{124, 2}}] = 92;
+  CN[std::array<int, 2>{{124, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{131, 0}}] = 81;
-  CN[std::array<Int, 2>{{131, 1}}] = 88;
-  CN[std::array<Int, 2>{{131, 2}}] = 91;
-  CN[std::array<Int, 2>{{131, 3}}] = 93;
+  CN[std::array<int, 2>{{131, 0}}] = 81;
+  CN[std::array<int, 2>{{131, 1}}] = 88;
+  CN[std::array<int, 2>{{131, 2}}] = 91;
+  CN[std::array<int, 2>{{131, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{132, 0}}] = 81;
-  CN[std::array<Int, 2>{{132, 1}}] = 88;
-  CN[std::array<Int, 2>{{132, 2}}] = 91;
-  CN[std::array<Int, 2>{{132, 3}}] = 93;
+  CN[std::array<int, 2>{{132, 0}}] = 81;
+  CN[std::array<int, 2>{{132, 1}}] = 88;
+  CN[std::array<int, 2>{{132, 2}}] = 91;
+  CN[std::array<int, 2>{{132, 3}}] = 93;
 
-  CN[std::array<Int, 2>{{133, 0}}] = 77;
-  CN[std::array<Int, 2>{{133, 1}}] = 86;
-  CN[std::array<Int, 2>{{133, 2}}] = 91;
-  CN[std::array<Int, 2>{{133, 3}}] = 94;
+  CN[std::array<int, 2>{{133, 0}}] = 77;
+  CN[std::array<int, 2>{{133, 1}}] = 86;
+  CN[std::array<int, 2>{{133, 2}}] = 91;
+  CN[std::array<int, 2>{{133, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{141, 0}}] = 49;
-  CN[std::array<Int, 2>{{141, 1}}] = 69;
-  CN[std::array<Int, 2>{{141, 2}}] = 79;
-  CN[std::array<Int, 2>{{141, 3}}] = 84;
+  CN[std::array<int, 2>{{141, 0}}] = 49;
+  CN[std::array<int, 2>{{141, 1}}] = 69;
+  CN[std::array<int, 2>{{141, 2}}] = 79;
+  CN[std::array<int, 2>{{141, 3}}] = 84;
 
-  CN[std::array<Int, 2>{{142, 0}}] = 49;
-  CN[std::array<Int, 2>{{142, 1}}] = 69;
-  CN[std::array<Int, 2>{{142, 2}}] = 79;
-  CN[std::array<Int, 2>{{142, 3}}] = 84;
+  CN[std::array<int, 2>{{142, 0}}] = 49;
+  CN[std::array<int, 2>{{142, 1}}] = 69;
+  CN[std::array<int, 2>{{142, 2}}] = 79;
+  CN[std::array<int, 2>{{142, 3}}] = 84;
 
-  CN[std::array<Int, 2>{{211, 0}}] = 60;
-  CN[std::array<Int, 2>{{211, 1}}] = 72;
-  CN[std::array<Int, 2>{{211, 2}}] = 80;
-  CN[std::array<Int, 2>{{211, 3}}] = 84;
+  CN[std::array<int, 2>{{211, 0}}] = 60;
+  CN[std::array<int, 2>{{211, 1}}] = 72;
+  CN[std::array<int, 2>{{211, 2}}] = 80;
+  CN[std::array<int, 2>{{211, 3}}] = 84;
 
-  CN[std::array<Int, 2>{{212, 0}}] = 60;
-  CN[std::array<Int, 2>{{212, 1}}] = 72;
-  CN[std::array<Int, 2>{{212, 2}}] = 80;
-  CN[std::array<Int, 2>{{212, 3}}] = 84;
+  CN[std::array<int, 2>{{212, 0}}] = 60;
+  CN[std::array<int, 2>{{212, 1}}] = 72;
+  CN[std::array<int, 2>{{212, 2}}] = 80;
+  CN[std::array<int, 2>{{212, 3}}] = 84;
 
-  CN[std::array<Int, 2>{{213, 0}}] = 62;
-  CN[std::array<Int, 2>{{213, 1}}] = 71;
-  CN[std::array<Int, 2>{{213, 2}}] = 78;
-  CN[std::array<Int, 2>{{213, 3}}] = 81;
+  CN[std::array<int, 2>{{213, 0}}] = 62;
+  CN[std::array<int, 2>{{213, 1}}] = 71;
+  CN[std::array<int, 2>{{213, 2}}] = 78;
+  CN[std::array<int, 2>{{213, 3}}] = 81;
 
-  CN[std::array<Int, 2>{{221, 0}}] = 43;
-  CN[std::array<Int, 2>{{221, 1}}] = 65;
-  CN[std::array<Int, 2>{{221, 2}}] = 76;
-  CN[std::array<Int, 2>{{221, 3}}] = 82;
+  CN[std::array<int, 2>{{221, 0}}] = 43;
+  CN[std::array<int, 2>{{221, 1}}] = 65;
+  CN[std::array<int, 2>{{221, 2}}] = 76;
+  CN[std::array<int, 2>{{221, 3}}] = 82;
 
-  CN[std::array<Int, 2>{{222, 0}}] = 43;
-  CN[std::array<Int, 2>{{222, 1}}] = 65;
-  CN[std::array<Int, 2>{{222, 2}}] = 76;
-  CN[std::array<Int, 2>{{222, 3}}] = 82;
+  CN[std::array<int, 2>{{222, 0}}] = 43;
+  CN[std::array<int, 2>{{222, 1}}] = 65;
+  CN[std::array<int, 2>{{222, 2}}] = 76;
+  CN[std::array<int, 2>{{222, 3}}] = 82;
 
-  CN[std::array<Int, 2>{{223, 0}}] = 43;
-  CN[std::array<Int, 2>{{223, 1}}] = 65;
-  CN[std::array<Int, 2>{{223, 2}}] = 76;
-  CN[std::array<Int, 2>{{223, 3}}] = 82;
+  CN[std::array<int, 2>{{223, 0}}] = 43;
+  CN[std::array<int, 2>{{223, 1}}] = 65;
+  CN[std::array<int, 2>{{223, 2}}] = 76;
+  CN[std::array<int, 2>{{223, 3}}] = 82;
 
-  CN[std::array<Int, 2>{{231, 0}}] = 30;
-  CN[std::array<Int, 2>{{231, 1}}] = 58;
-  CN[std::array<Int, 2>{{231, 2}}] = 71;
-  CN[std::array<Int, 2>{{231, 3}}] = 78;
+  CN[std::array<int, 2>{{231, 0}}] = 30;
+  CN[std::array<int, 2>{{231, 1}}] = 58;
+  CN[std::array<int, 2>{{231, 2}}] = 71;
+  CN[std::array<int, 2>{{231, 3}}] = 78;
 
-  CN[std::array<Int, 2>{{241, 0}}] = 58;
-  CN[std::array<Int, 2>{{241, 1}}] = 72;
-  CN[std::array<Int, 2>{{241, 2}}] = 81;
-  CN[std::array<Int, 2>{{241, 3}}] = 85;
+  CN[std::array<int, 2>{{241, 0}}] = 58;
+  CN[std::array<int, 2>{{241, 1}}] = 72;
+  CN[std::array<int, 2>{{241, 2}}] = 81;
+  CN[std::array<int, 2>{{241, 3}}] = 85;
 
-  CN[std::array<Int, 2>{{242, 0}}] = 59;
-  CN[std::array<Int, 2>{{242, 1}}] = 74;
-  CN[std::array<Int, 2>{{242, 2}}] = 82;
-  CN[std::array<Int, 2>{{242, 3}}] = 86;
+  CN[std::array<int, 2>{{242, 0}}] = 59;
+  CN[std::array<int, 2>{{242, 1}}] = 74;
+  CN[std::array<int, 2>{{242, 2}}] = 82;
+  CN[std::array<int, 2>{{242, 3}}] = 86;
 
-  CN[std::array<Int, 2>{{243, 0}}] = 59;
-  CN[std::array<Int, 2>{{243, 1}}] = 74;
-  CN[std::array<Int, 2>{{243, 2}}] = 82;
-  CN[std::array<Int, 2>{{243, 3}}] = 86;
+  CN[std::array<int, 2>{{243, 0}}] = 59;
+  CN[std::array<int, 2>{{243, 1}}] = 74;
+  CN[std::array<int, 2>{{243, 2}}] = 82;
+  CN[std::array<int, 2>{{243, 3}}] = 86;
 
-  CN[std::array<Int, 2>{{244, 0}}] = 43;
-  CN[std::array<Int, 2>{{244, 1}}] = 65;
-  CN[std::array<Int, 2>{{244, 2}}] = 76;
-  CN[std::array<Int, 2>{{244, 3}}] = 82;
+  CN[std::array<int, 2>{{244, 0}}] = 43;
+  CN[std::array<int, 2>{{244, 1}}] = 65;
+  CN[std::array<int, 2>{{244, 2}}] = 76;
+  CN[std::array<int, 2>{{244, 3}}] = 82;
 
-  CN[std::array<Int, 2>{{311, 0}}] = 36;
-  CN[std::array<Int, 2>{{311, 1}}] = 60;
-  CN[std::array<Int, 2>{{311, 2}}] = 73;
-  CN[std::array<Int, 2>{{311, 3}}] = 79;
+  CN[std::array<int, 2>{{311, 0}}] = 36;
+  CN[std::array<int, 2>{{311, 1}}] = 60;
+  CN[std::array<int, 2>{{311, 2}}] = 73;
+  CN[std::array<int, 2>{{311, 3}}] = 79;
 
-  CN[std::array<Int, 2>{{312, 0}}] = 36;
-  CN[std::array<Int, 2>{{312, 1}}] = 60;
-  CN[std::array<Int, 2>{{312, 2}}] = 73;
-  CN[std::array<Int, 2>{{312, 3}}] = 79;
+  CN[std::array<int, 2>{{312, 0}}] = 36;
+  CN[std::array<int, 2>{{312, 1}}] = 60;
+  CN[std::array<int, 2>{{312, 2}}] = 73;
+  CN[std::array<int, 2>{{312, 3}}] = 79;
 
-  CN[std::array<Int, 2>{{313, 0}}] = 36;
-  CN[std::array<Int, 2>{{313, 1}}] = 60;
-  CN[std::array<Int, 2>{{313, 2}}] = 73;
-  CN[std::array<Int, 2>{{313, 3}}] = 79;
+  CN[std::array<int, 2>{{313, 0}}] = 36;
+  CN[std::array<int, 2>{{313, 1}}] = 60;
+  CN[std::array<int, 2>{{313, 2}}] = 73;
+  CN[std::array<int, 2>{{313, 3}}] = 79;
 
-  CN[std::array<Int, 2>{{321, 0}}] = 39;
-  CN[std::array<Int, 2>{{321, 1}}] = 61;
-  CN[std::array<Int, 2>{{321, 2}}] = 74;
-  CN[std::array<Int, 2>{{321, 3}}] = 80;
+  CN[std::array<int, 2>{{321, 0}}] = 39;
+  CN[std::array<int, 2>{{321, 1}}] = 61;
+  CN[std::array<int, 2>{{321, 2}}] = 74;
+  CN[std::array<int, 2>{{321, 3}}] = 80;
 
-  CN[std::array<Int, 2>{{322, 0}}] = 77;
-  CN[std::array<Int, 2>{{322, 1}}] = 86;
-  CN[std::array<Int, 2>{{322, 2}}] = 91;
-  CN[std::array<Int, 2>{{322, 3}}] = 94;
+  CN[std::array<int, 2>{{322, 0}}] = 77;
+  CN[std::array<int, 2>{{322, 1}}] = 86;
+  CN[std::array<int, 2>{{322, 2}}] = 91;
+  CN[std::array<int, 2>{{322, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{323, 0}}] = 77;
-  CN[std::array<Int, 2>{{323, 1}}] = 86;
-  CN[std::array<Int, 2>{{323, 2}}] = 91;
-  CN[std::array<Int, 2>{{323, 3}}] = 94;
+  CN[std::array<int, 2>{{323, 0}}] = 77;
+  CN[std::array<int, 2>{{323, 1}}] = 86;
+  CN[std::array<int, 2>{{323, 2}}] = 91;
+  CN[std::array<int, 2>{{323, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{324, 0}}] = 35;
-  CN[std::array<Int, 2>{{324, 1}}] = 56;
-  CN[std::array<Int, 2>{{324, 2}}] = 70;
-  CN[std::array<Int, 2>{{324, 3}}] = 77;
+  CN[std::array<int, 2>{{324, 0}}] = 35;
+  CN[std::array<int, 2>{{324, 1}}] = 56;
+  CN[std::array<int, 2>{{324, 2}}] = 70;
+  CN[std::array<int, 2>{{324, 3}}] = 77;
 
-  CN[std::array<Int, 2>{{331, 0}}] = 55;
-  CN[std::array<Int, 2>{{331, 1}}] = 72;
-  CN[std::array<Int, 2>{{331, 2}}] = 81;
-  CN[std::array<Int, 2>{{331, 3}}] = 86;
+  CN[std::array<int, 2>{{331, 0}}] = 55;
+  CN[std::array<int, 2>{{331, 1}}] = 72;
+  CN[std::array<int, 2>{{331, 2}}] = 81;
+  CN[std::array<int, 2>{{331, 3}}] = 86;
 
-  CN[std::array<Int, 2>{{332, 0}}] = 77;
-  CN[std::array<Int, 2>{{332, 1}}] = 86;
-  CN[std::array<Int, 2>{{332, 2}}] = 91;
-  CN[std::array<Int, 2>{{332, 3}}] = 94;
+  CN[std::array<int, 2>{{332, 0}}] = 77;
+  CN[std::array<int, 2>{{332, 1}}] = 86;
+  CN[std::array<int, 2>{{332, 2}}] = 91;
+  CN[std::array<int, 2>{{332, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{333, 0}}] = 74;
-  CN[std::array<Int, 2>{{333, 1}}] = 83;
-  CN[std::array<Int, 2>{{333, 2}}] = 88;
-  CN[std::array<Int, 2>{{333, 3}}] = 90;
+  CN[std::array<int, 2>{{333, 0}}] = 74;
+  CN[std::array<int, 2>{{333, 1}}] = 83;
+  CN[std::array<int, 2>{{333, 2}}] = 88;
+  CN[std::array<int, 2>{{333, 3}}] = 90;
 
-  CN[std::array<Int, 2>{{334, 0}}] = 77;
-  CN[std::array<Int, 2>{{334, 1}}] = 86;
-  CN[std::array<Int, 2>{{334, 2}}] = 91;
-  CN[std::array<Int, 2>{{334, 3}}] = 94;
+  CN[std::array<int, 2>{{334, 0}}] = 77;
+  CN[std::array<int, 2>{{334, 1}}] = 86;
+  CN[std::array<int, 2>{{334, 2}}] = 91;
+  CN[std::array<int, 2>{{334, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{335, 0}}] = 77;
-  CN[std::array<Int, 2>{{335, 1}}] = 86;
-  CN[std::array<Int, 2>{{335, 2}}] = 91;
-  CN[std::array<Int, 2>{{335, 3}}] = 94;
+  CN[std::array<int, 2>{{335, 0}}] = 77;
+  CN[std::array<int, 2>{{335, 1}}] = 86;
+  CN[std::array<int, 2>{{335, 2}}] = 91;
+  CN[std::array<int, 2>{{335, 3}}] = 94;
 
-  CN[std::array<Int, 2>{{411, 0}}] = 98;
-  CN[std::array<Int, 2>{{411, 1}}] = 98;
-  CN[std::array<Int, 2>{{411, 2}}] = 98;
-  CN[std::array<Int, 2>{{411, 3}}] = 98;
+  CN[std::array<int, 2>{{411, 0}}] = 98;
+  CN[std::array<int, 2>{{411, 1}}] = 98;
+  CN[std::array<int, 2>{{411, 2}}] = 98;
+  CN[std::array<int, 2>{{411, 3}}] = 98;
 
-  CN[std::array<Int, 2>{{412, 0}}] = 98;
-  CN[std::array<Int, 2>{{412, 1}}] = 98;
-  CN[std::array<Int, 2>{{412, 2}}] = 98;
-  CN[std::array<Int, 2>{{412, 3}}] = 98;
+  CN[std::array<int, 2>{{412, 0}}] = 98;
+  CN[std::array<int, 2>{{412, 1}}] = 98;
+  CN[std::array<int, 2>{{412, 2}}] = 98;
+  CN[std::array<int, 2>{{412, 3}}] = 98;
 
-  CN[std::array<Int, 2>{{421, 0}}] = 98;
-  CN[std::array<Int, 2>{{421, 1}}] = 98;
-  CN[std::array<Int, 2>{{421, 2}}] = 98;
-  CN[std::array<Int, 2>{{421, 3}}] = 98;
+  CN[std::array<int, 2>{{421, 0}}] = 98;
+  CN[std::array<int, 2>{{421, 1}}] = 98;
+  CN[std::array<int, 2>{{421, 2}}] = 98;
+  CN[std::array<int, 2>{{421, 3}}] = 98;
 
-  CN[std::array<Int, 2>{{422, 0}}] = 98;
-  CN[std::array<Int, 2>{{422, 1}}] = 98;
-  CN[std::array<Int, 2>{{422, 2}}] = 98;
-  CN[std::array<Int, 2>{{422, 3}}] = 98;
+  CN[std::array<int, 2>{{422, 0}}] = 98;
+  CN[std::array<int, 2>{{422, 1}}] = 98;
+  CN[std::array<int, 2>{{422, 2}}] = 98;
+  CN[std::array<int, 2>{{422, 3}}] = 98;
 
-  CN[std::array<Int, 2>{{423, 0}}] = 98;
-  CN[std::array<Int, 2>{{423, 1}}] = 98;
-  CN[std::array<Int, 2>{{423, 2}}] = 98;
-  CN[std::array<Int, 2>{{423, 3}}] = 98;
+  CN[std::array<int, 2>{{423, 0}}] = 98;
+  CN[std::array<int, 2>{{423, 1}}] = 98;
+  CN[std::array<int, 2>{{423, 2}}] = 98;
+  CN[std::array<int, 2>{{423, 3}}] = 98;
 
-  CN[std::array<Int, 2>{{511, 0}}] = 100;
-  CN[std::array<Int, 2>{{511, 1}}] = 100;
-  CN[std::array<Int, 2>{{511, 2}}] = 100;
-  CN[std::array<Int, 2>{{511, 3}}] = 100;
+  CN[std::array<int, 2>{{511, 0}}] = 100;
+  CN[std::array<int, 2>{{511, 1}}] = 100;
+  CN[std::array<int, 2>{{511, 2}}] = 100;
+  CN[std::array<int, 2>{{511, 3}}] = 100;
 
-  CN[std::array<Int, 2>{{512, 0}}] = 100;
-  CN[std::array<Int, 2>{{512, 1}}] = 100;
-  CN[std::array<Int, 2>{{512, 2}}] = 100;
-  CN[std::array<Int, 2>{{512, 3}}] = 100;
+  CN[std::array<int, 2>{{512, 0}}] = 100;
+  CN[std::array<int, 2>{{512, 1}}] = 100;
+  CN[std::array<int, 2>{{512, 2}}] = 100;
+  CN[std::array<int, 2>{{512, 3}}] = 100;
 
-  CN[std::array<Int, 2>{{521, 0}}] = 100;
-  CN[std::array<Int, 2>{{521, 1}}] = 100;
-  CN[std::array<Int, 2>{{521, 2}}] = 100;
-  CN[std::array<Int, 2>{{521, 3}}] = 100;
+  CN[std::array<int, 2>{{521, 0}}] = 100;
+  CN[std::array<int, 2>{{521, 1}}] = 100;
+  CN[std::array<int, 2>{{521, 2}}] = 100;
+  CN[std::array<int, 2>{{521, 3}}] = 100;
 
-  CN[std::array<Int, 2>{{522, 0}}] = 100;
-  CN[std::array<Int, 2>{{522, 1}}] = 100;
-  CN[std::array<Int, 2>{{522, 2}}] = 100;
-  CN[std::array<Int, 2>{{522, 3}}] = 100;
+  CN[std::array<int, 2>{{522, 0}}] = 100;
+  CN[std::array<int, 2>{{522, 1}}] = 100;
+  CN[std::array<int, 2>{{522, 2}}] = 100;
+  CN[std::array<int, 2>{{522, 3}}] = 100;
 
-  CN[std::array<Int, 2>{{523, 0}}] = 100;
-  CN[std::array<Int, 2>{{523, 1}}] = 100;
-  CN[std::array<Int, 2>{{523, 2}}] = 100;
-  CN[std::array<Int, 2>{{523, 3}}] = 100;
+  CN[std::array<int, 2>{{523, 0}}] = 100;
+  CN[std::array<int, 2>{{523, 1}}] = 100;
+  CN[std::array<int, 2>{{523, 2}}] = 100;
+  CN[std::array<int, 2>{{523, 3}}] = 100;
 
   return CN;
 }
@@ -329,7 +328,7 @@ std::map<std::array<Int, 2>, Int> createCN_map() {
 Raster::Raster(const std::string &file) {
   std::cout << "Reading file, " << file << std::endl;
 
-  std::vector<Eigen::Triplet<Real>> cc;
+  std::vector<Eigen::Triplet<double>> cc;
 
   std::ifstream ff(file);
   if (ff.is_open()) {
@@ -379,13 +378,13 @@ Raster::Raster(const std::string &file) {
 
     cc.reserve(nrows * ncols);
 
-    Real value;
-    for (UInt i = 0; i < nrows; i++) {
-      for (UInt j = 0; j < ncols; j++) {
+    double value;
+    for (unsigned int i = 0; i < nrows; i++) {
+      for (unsigned int j = 0; j < ncols; j++) {
 
         ff >> value;
 
-        cc.push_back(Eigen::Triplet<Real>(i, j, value));
+        cc.push_back(Eigen::Triplet<double>(i, j, value));
       }
     }
   } else {
@@ -398,10 +397,10 @@ Raster::Raster(const std::string &file) {
   Coords.setFromTriplets(cc.begin(), cc.end());
 };
 
-Real signum(const Real &x) { return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0); }
+double signum(const double &x) { return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0); }
 
-Rain::Rain(const std::string &infiltrationModel, const UInt &N,
-           const bool &isInitialLoss, const Real &perc_initialLoss) {
+Rain::Rain(const std::string &infiltrationModel, const unsigned int &N,
+           const bool &isInitialLoss, const double &perc_initialLoss) {
   M_isInitialLoss = isInitialLoss;
   c = perc_initialLoss;
 
@@ -416,9 +415,9 @@ Rain::Rain(const std::string &infiltrationModel, const UInt &N,
   IDW_weights.resize(N);
 }
 
-void Rain::constant_precipitation(const std::string &file, const UInt &ndata,
+void Rain::constant_precipitation(const std::string &file, const unsigned int &ndata,
                                   const bool &is_precipitation,
-                                  const Real &time_spacing) {
+                                  const double &time_spacing) {
   M_time_spacing_vect.resize(1);
   M_time_spacing_vect[0] = time_spacing;
 
@@ -432,7 +431,7 @@ void Rain::constant_precipitation(const std::string &file, const UInt &ndata,
       std::string str;
       std::getline(ff, str);
 
-      for (UInt i = 0; i < ndata; i++) {
+      for (unsigned int i = 0; i < ndata; i++) {
         std::string str1;
         ff >> str1;
 
@@ -443,14 +442,14 @@ void Rain::constant_precipitation(const std::string &file, const UInt &ndata,
             minute_string(hour.begin() + 3, hour.begin() + 5),
             second_string(hour.begin() + 6, hour.begin() + 8);
 
-        const Int hour_number = std::stoi(hour_string),
+        const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string),
                   second_number = std::stoi(second_string);
 
-        const Real hour_full = Real(hour_number) + Real(minute_number) / 60 +
-                               Real(second_number) / 3600;
+        const double hour_full = double(hour_number) + double(minute_number) / 60 +
+                               double(second_number) / 3600;
 
-        Real value;
+        double value;
         ff >> value;
 
         const int rr = int(std::round(24. / time_spacing));
@@ -474,30 +473,30 @@ void Rain::constant_precipitation(const std::string &file, const UInt &ndata,
       exit(-1.);
     }
   } else {
-    for (UInt i = 0; i < ndata; i++) {
+    for (unsigned int i = 0; i < ndata; i++) {
       Hyetograph[0].push_back(0.);
     }
   }
 
-  for (UInt i = 0; i < IDW_weights.size(); i++) {
+  for (unsigned int i = 0; i < IDW_weights.size(); i++) {
     IDW_weights[i].push_back(1.);
   }
 }
 
 void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
-                             const std::vector<UInt> &ndata_vec,
-                             const std::vector<Real> &time_spacing_vect,
-                             const std::vector<Real> &X,
-                             const std::vector<Real> &Y, const Real &xllcorner,
-                             const Real &yllcorner, const Real &pixel_size,
-                             const UInt &N_rows, const UInt &N_cols,
-                             const std::vector<UInt> &idBasinVect) {
+                             const std::vector<unsigned int> &ndata_vec,
+                             const std::vector<double> &time_spacing_vect,
+                             const std::vector<double> &X,
+                             const std::vector<double> &Y, const double &xllcorner,
+                             const double &yllcorner, const double &pixel_size,
+                             const unsigned int &N_rows, const unsigned int &N_cols,
+                             const std::vector<unsigned int> &idBasinVect) {
 
   M_time_spacing_vect = time_spacing_vect;
 
   Hyetograph.resize(ndata_vec.size());
 
-  for (UInt k = 0; k < file_vect.size(); k++) {
+  for (unsigned int k = 0; k < file_vect.size(); k++) {
     const auto file = file_vect[k];
     const auto time_spacing = time_spacing_vect[k];
     std::ifstream ff(file);
@@ -507,7 +506,7 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
       std::string str;
       std::getline(ff, str);
 
-      for (UInt i = 0; i < ndata_vec[k]; i++) {
+      for (unsigned int i = 0; i < ndata_vec[k]; i++) {
         std::string Id_sensor;
         ff >> Id_sensor;
 
@@ -520,12 +519,12 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
         std::string hour_string(hour.begin(), hour.begin() + 2),
             minute_string(hour.begin() + 3, hour.begin() + 5);
 
-        const Int hour_number = std::stoi(hour_string),
+        const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string);
 
-        const Real hour_full = Real(hour_number) + Real(minute_number) / 60;
+        const double hour_full = double(hour_number) + double(minute_number) / 60;
 
-        Real value;
+        double value;
         ff >> value;
 
         const int rr = int(std::round(24. / time_spacing));
@@ -550,19 +549,19 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
   }
 
   // fill NO_DATA values
-  UInt k = 0;
+  unsigned int k = 0;
   for (auto &it : Hyetograph) {
 
-    for (UInt i = 0; i < ndata_vec[k]; i++) {
+    for (unsigned int i = 0; i < ndata_vec[k]; i++) {
       auto &value = it[i];
 
       if (value < 0) // -999.0 in ARPA files
       {
-        std::vector<Real> otherStationsRain;
-        UInt kk = 0;
+        std::vector<double> otherStationsRain;
+        unsigned int kk = 0;
         for (const auto &itt : Hyetograph) {
 
-          const Int ii =
+          const int ii =
               std::floor(i * (time_spacing_vect[k] / time_spacing_vect[kk]));
           if (itt[ii] >= 0.) {
             otherStationsRain.push_back(itt[ii]);
@@ -571,7 +570,7 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
         }
 
         if (otherStationsRain.size() != 0) {
-          Real sum = 0;
+          double sum = 0;
           for (const auto &iter : otherStationsRain) {
             sum += iter;
           }
@@ -595,13 +594,13 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
 
   // compute distances for IDW method
   for (const auto &IDcenter : idBasinVect) {
-    const Int i = IDcenter / N_cols, j = IDcenter % N_cols;
+    const int i = IDcenter / N_cols, j = IDcenter % N_cols;
 
-    const Real X_cell = j * pixel_size + xllcorner,
+    const double X_cell = j * pixel_size + xllcorner,
                Y_cell = -i * pixel_size + yllcorner + N_rows * pixel_size;
 
-    for (UInt ii = 0; ii < X.size(); ii++) {
-      const Real p = 3.;
+    for (unsigned int ii = 0; ii < X.size(); ii++) {
+      const double p = 3.;
 
       // divide by 1000 to obtain better number, the result does not change
       const auto delta_x = (X_cell - X[ii]) / 1000,
@@ -617,28 +616,28 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
       }
     }
 
-    Real sum = 0;
+    double sum = 0;
     for (const auto &iter : IDW_weights[IDcenter]) {
       sum += iter;
     }
 
-    for (UInt ii = 0; ii < IDW_weights[IDcenter].size(); ii++) {
+    for (unsigned int ii = 0; ii < IDW_weights[IDcenter].size(); ii++) {
       IDW_weights[IDcenter][ii] /= sum;
     }
   }
 }
 
-void Rain::computePrecipitation(const Real &time, const std::vector<Real> &S,
-                                const std::vector<Real> &melt_mask,
-                                const std::vector<Real> &h_G,
-                                const std::vector<Real> &H, const UInt &N_rows,
-                                const UInt &N_cols,
-                                const std::vector<UInt> &idBasinVect) {
+void Rain::computePrecipitation(const double &time, const std::vector<double> &S,
+                                const std::vector<double> &melt_mask,
+                                const std::vector<double> &h_G,
+                                const std::vector<double> &H, const unsigned int &N_rows,
+                                const unsigned int &N_cols,
+                                const std::vector<unsigned int> &idBasinVect) {
 
   // SCS-CN method and Initial and Constant Loss Model
-  for (UInt Id = 0; Id < Hyetograph.size(); Id++) {
+  for (unsigned int Id = 0; Id < Hyetograph.size(); Id++) {
 
-    const UInt i_index = std::floor(time / (M_time_spacing_vect[Id] * 3600));
+    const unsigned int i_index = std::floor(time / (M_time_spacing_vect[Id] * 3600));
 
     for (const auto &IDcenter : idBasinVect) {
 
@@ -650,9 +649,9 @@ void Rain::computePrecipitation(const Real &time, const std::vector<Real> &S,
 
       rainfall_intensity = Hyetograph[Id][i_index] * IDW_weights[IDcenter][Id];
 
-      const Real deltaSoilMoisture = h_G[IDcenter] - S[IDcenter];
+      const double deltaSoilMoisture = h_G[IDcenter] - S[IDcenter];
 
-      Real weight = 0.;
+      double weight = 0.;
       if (S[IDcenter] > 0 && deltaSoilMoisture < 0.) {
         weight = std::pow(deltaSoilMoisture / S[IDcenter], 2.);
       }
@@ -664,7 +663,7 @@ void Rain::computePrecipitation(const Real &time, const std::vector<Real> &S,
         exit(-1);
       }
 
-      Real infiltrationRate = weight * rainfall_intensity * melt_mask[IDcenter],
+      double infiltrationRate = weight * rainfall_intensity * melt_mask[IDcenter],
            potential_runoff = std::max(
                rainfall_intensity * melt_mask[IDcenter] - infiltrationRate, 0.);
 
@@ -682,11 +681,11 @@ void Rain::computePrecipitation(const Real &time, const std::vector<Real> &S,
   }
 }
 
-Temperature::Temperature(const std::string &file, const UInt &N,
-                         const UInt &max_Days, const Real &T_crit,
-                         const std::vector<Real> &orography, const UInt &ndata,
-                         const UInt &steps_per_hour, const Real &time_spacing,
-                         const Real &height_thermometer,
+Temperature::Temperature(const std::string &file, const unsigned int &N,
+                         const unsigned int &max_Days, const double &T_crit,
+                         const std::vector<double> &orography, const unsigned int &ndata,
+                         const unsigned int &steps_per_hour, const double &time_spacing,
+                         const double &height_thermometer,
                          const std::string format_temp)
     : T_crit(T_crit), height_th(height_thermometer) {
 
@@ -700,7 +699,7 @@ Temperature::Temperature(const std::string &file, const UInt &N,
 
   Temperature_Graph.reserve(ndata);
 
-  std::vector<Real> J_ndata;
+  std::vector<double> J_ndata;
   J_ndata.reserve(ndata);
 
   std::ifstream ff(file);
@@ -711,12 +710,12 @@ Temperature::Temperature(const std::string &file, const UInt &N,
       std::string str;
       std::getline(ff, str);
 
-      for (UInt i = 0; i < ndata; i++) {
+      for (unsigned int i = 0; i < ndata; i++) {
 
         std::string str1;
         ff >> str1;
 
-        std::vector<UInt> nn;
+        std::vector<unsigned int> nn;
 
         if (str1.length() != 10) {
           std::cout << str1 << std::endl;
@@ -728,10 +727,10 @@ Temperature::Temperature(const std::string &file, const UInt &N,
             month_string(str1.begin() + 3, str1.begin() + 5),
             year_string(str1.begin() + 6, str1.end());
 
-        const Int day = std::stoi(day_string), month = std::stoi(month_string),
+        const int day = std::stoi(day_string), month = std::stoi(month_string),
                   year = std::stoi(year_string);
 
-        for (UInt uu = 1; uu < month; uu++) {
+        for (unsigned int uu = 1; uu < month; uu++) {
           if (uu == 4 || uu == 6 || uu == 9 || uu == 11) {
             nn.push_back(30);
           } else if (uu != 2) {
@@ -746,8 +745,8 @@ Temperature::Temperature(const std::string &file, const UInt &N,
           }
         }
 
-        Real scalar_result = 0;
-        for (UInt uu = 0; uu < nn.size(); uu++) {
+        double scalar_result = 0;
+        for (unsigned int uu = 0; uu < nn.size(); uu++) {
           scalar_result += nn[uu];
         }
 
@@ -760,14 +759,14 @@ Temperature::Temperature(const std::string &file, const UInt &N,
             minute_string(hour.begin() + 3, hour.begin() + 5),
             second_string(hour.begin() + 6, hour.begin() + 8);
 
-        const Int hour_number = std::stoi(hour_string),
+        const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string),
                   second_number = std::stoi(second_string);
 
-        const Real hour_full = Real(hour_number) + Real(minute_number) / 60 +
-                               Real(second_number) / 3600;
+        const double hour_full = double(hour_number) + double(minute_number) / 60 +
+                               double(second_number) / 3600;
 
-        Real value; // temperature data
+        double value; // temperature data
         ff >> value;
 
         const int rr = int(std::round(24. / time_spacing));
@@ -804,15 +803,15 @@ Temperature::Temperature(const std::string &file, const UInt &N,
       std::string str;
       std::getline(ff, str);
 
-      for (UInt i = 0; i < ndata; i++) {
+      for (unsigned int i = 0; i < ndata; i++) {
 
-        UInt Id_sensor;
+        unsigned int Id_sensor;
         ff >> Id_sensor;
 
         std::string str1;
         ff >> str1;
 
-        std::vector<UInt> nn;
+        std::vector<unsigned int> nn;
 
         if (str1.length() != 10) {
           std::cout << str1 << std::endl;
@@ -824,10 +823,10 @@ Temperature::Temperature(const std::string &file, const UInt &N,
             month_string(str1.begin() + 5, str1.begin() + 7),
             day_string(str1.begin() + 8, str1.end());
 
-        const Int day = std::stoi(day_string), month = std::stoi(month_string),
+        const int day = std::stoi(day_string), month = std::stoi(month_string),
                   year = std::stoi(year_string);
 
-        for (UInt uu = 1; uu < month; uu++) {
+        for (unsigned int uu = 1; uu < month; uu++) {
           if (uu == 4 || uu == 6 || uu == 9 || uu == 11) {
             nn.push_back(30);
           } else if (uu != 2) {
@@ -842,8 +841,8 @@ Temperature::Temperature(const std::string &file, const UInt &N,
           }
         }
 
-        Real scalar_result = 0;
-        for (UInt uu = 0; uu < nn.size(); uu++) {
+        double scalar_result = 0;
+        for (unsigned int uu = 0; uu < nn.size(); uu++) {
           scalar_result += nn[uu];
         }
 
@@ -855,12 +854,12 @@ Temperature::Temperature(const std::string &file, const UInt &N,
         std::string hour_string(hour.begin(), hour.begin() + 2),
             minute_string(hour.begin() + 3, hour.begin() + 5);
 
-        const Int hour_number = std::stoi(hour_string),
+        const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string);
 
-        const Real hour_full = Real(hour_number) + Real(minute_number) / 60;
+        const double hour_full = double(hour_number) + double(minute_number) / 60;
 
-        Real value; // temperature data
+        double value; // temperature data
         ff >> value;
 
         const int rr = int(std::round(24. / time_spacing));
@@ -899,14 +898,14 @@ Temperature::Temperature(const std::string &file, const UInt &N,
   }
 
   // --------------------------------------------- //
-  for (UInt n = 1; n <= max_Days; n++) {
+  for (unsigned int n = 1; n <= max_Days; n++) {
 
     const auto i = std::floor((n - 1) * (24. / time_spacing));
 
-    UInt k = 0,
+    unsigned int k = 0,
          h = i; // i
 
-    while (k != UInt(std::round((24. / time_spacing)))) {
+    while (k != unsigned int(std::round((24. / time_spacing)))) {
 
       T_dailyMean[n - 1] += Temperature_Graph[h];
 
@@ -939,16 +938,16 @@ Temperature::Temperature(const std::string &file, const UInt &N,
   // --------------------------------------------- //
 
   // Now fill J starting from J_ndata
-  for (UInt n = 1; n <= max_Days; n++) {
-    const UInt i = std::floor((n - 1) * (24. / time_spacing));
+  for (unsigned int n = 1; n <= max_Days; n++) {
+    const unsigned int i = std::floor((n - 1) * (24. / time_spacing));
     J[n - 1] = J_ndata[i];
   }
 }
 
-void Temperature::computeTemperature(const UInt &i,
-                                     const std::vector<Real> &orography,
-                                     const std::vector<UInt> &idBasinVect) {
-  const Real T = Temperature_Graph[i];
+void Temperature::computeTemperature(const unsigned int &i,
+                                     const std::vector<double> &orography,
+                                     const std::vector<unsigned int> &idBasinVect) {
+  const double T = Temperature_Graph[i];
 
   if (std::isnan(T)) {
     std::cout << "nan in computeTemperature" << std::endl;
@@ -962,9 +961,9 @@ void Temperature::computeTemperature(const UInt &i,
 }
 
 evapoTranspiration::evapoTranspiration(
-    const std::string &ET_model, const UInt &N,
-    const std::vector<Real> &orography, const std::vector<Real> &J,
-    const UInt &max_Days, const Real &phi_rad, const Real &height_thermometer)
+    const std::string &ET_model, const unsigned int &N,
+    const std::vector<double> &orography, const std::vector<double> &J,
+    const unsigned int &max_Days, const double &phi_rad, const double &height_thermometer)
     : height_th(height_thermometer) {
 
   ET_vec.resize(N);
@@ -979,7 +978,7 @@ evapoTranspiration::evapoTranspiration(
   }
 
   Ra.resize(max_Days);
-  for (UInt n = 1; n <= max_Days; n++) {
+  for (unsigned int n = 1; n <= max_Days; n++) {
     const auto dr = 1 + .033 * std::cos(2 * M_PI * J[n - 1] / 365),
                delta = .409 * std::sin(2 * M_PI * J[n - 1] / 365 - 1.39),
                ws = std::acos(-std::tan(phi_rad) * std::tan(delta));
@@ -989,11 +988,11 @@ evapoTranspiration::evapoTranspiration(
   }
 }
 
-void evapoTranspiration::ET(const std::vector<Real> &T_mean,
-                            const std::vector<Real> &T_min,
-                            const std::vector<Real> &T_max, const Int &i,
-                            const std::vector<UInt> &idBasinVect,
-                            const std::vector<Real> &orography) {
+void evapoTranspiration::ET(const std::vector<double> &T_mean,
+                            const std::vector<double> &T_min,
+                            const std::vector<double> &T_max, const int &i,
+                            const std::vector<unsigned int> &idBasinVect,
+                            const std::vector<double> &orography) {
 
   switch (M_evapoTranspiration_model) {
   case 0:
@@ -1012,20 +1011,20 @@ void evapoTranspiration::ET(const std::vector<Real> &T_mean,
 }
 
 frictionClass::frictionClass(
-    const std::vector<Real> &H_interface_horizontal,
-    const std::vector<Real> &H_interface_vertical, const std::vector<Real> &u,
-    const std::vector<Real> &v,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::string &friction_model, const Real &n_manning,
-    const Real &dt_DSV, const std::vector<Real> &d_90,
-    const std::vector<Real> &rough, const Real &H_min, const UInt &N_rows,
-    const UInt &N_cols, const std::vector<Real> &S_x,
-    const std::vector<Real> &S_y)
+    const std::vector<double> &H_interface_horizontal,
+    const std::vector<double> &H_interface_vertical, const std::vector<double> &u,
+    const std::vector<double> &v,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::string &friction_model, const double &n_manning,
+    const double &dt_DSV, const std::vector<double> &d_90,
+    const std::vector<double> &rough, const double &H_min, const unsigned int &N_rows,
+    const unsigned int &N_cols, const std::vector<double> &S_x,
+    const std::vector<double> &S_y)
     : H_interface_horizontal(H_interface_horizontal),
       H_interface_vertical(H_interface_vertical), u(u), v(v),
       idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal),
@@ -1038,12 +1037,12 @@ frictionClass::frictionClass(
 
   M_H_min = std::pow(H_min, M_expo);
 
-  std::vector<Real> M_fc0_lower_x(S_x.size()), M_fc0_greater_x(S_x.size()),
+  std::vector<double> M_fc0_lower_x(S_x.size()), M_fc0_greater_x(S_x.size()),
       M_fc0_lower_y(S_y.size()), M_fc0_greater_y(S_y.size());
 
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDleft = IDcell + i,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDleft = IDcell + i,
                  IDright = IDleft + 1, IDup = IDcell, IDdown = IDcell + N_cols;
 
       const auto d_90_cell = rough[IDcell] * d_90[IDcell];
@@ -1075,7 +1074,7 @@ frictionClass::frictionClass(
 
   M_expo_r_x_vect.resize(S_x.size());
   M_gamma_dt_DSV_x_.resize(S_x.size());
-  for (UInt k = 0; k < S_x.size(); k++) {
+  for (unsigned int k = 0; k < S_x.size(); k++) {
     M_expo_r_x_vect[k] = M_expo_r1 * (std::abs(S_x[k]) > .006) +
                          M_expo_r2 * (std::abs(S_x[k]) <= .006);
     const auto M_Rick_x =
@@ -1088,7 +1087,7 @@ frictionClass::frictionClass(
 
   M_expo_r_y_vect.resize(S_y.size());
   M_gamma_dt_DSV_y_.resize(S_y.size());
-  for (UInt k = 0; k < S_y.size(); k++) {
+  for (unsigned int k = 0; k < S_y.size(); k++) {
     M_expo_r_y_vect[k] = M_expo_r1 * (std::abs(S_y[k]) > .006) +
                          M_expo_r2 * (std::abs(S_y[k]) <= .006);
     const auto M_Rick_y =
@@ -1114,7 +1113,7 @@ frictionClass::frictionClass(
 void frictionClass::f_x() {
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_horizontal[Id];
     const auto &exponent = M_expo_r_x_vect[Id];
@@ -1123,7 +1122,7 @@ void frictionClass::f_x() {
 
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
@@ -1135,7 +1134,7 @@ void frictionClass::f_x() {
   }
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_horizontal[Id];
     const auto &exponent = M_expo_r_x_vect[Id];
@@ -1144,7 +1143,7 @@ void frictionClass::f_x() {
 
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
@@ -1156,7 +1155,7 @@ void frictionClass::f_x() {
   }
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_horizontal[Id];
     const auto &exponent = M_expo_r_x_vect[Id];
@@ -1165,7 +1164,7 @@ void frictionClass::f_x() {
 
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
@@ -1180,7 +1179,7 @@ void frictionClass::f_x() {
 void frictionClass::f_y() {
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_vertical[Id];
     const auto &exponent = M_expo_r_y_vect[Id];
@@ -1190,7 +1189,7 @@ void frictionClass::f_y() {
     if (den > M_H_min) {
       const auto v_abs = std::abs(v[Id]);
 
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
@@ -1202,7 +1201,7 @@ void frictionClass::f_y() {
   }
 
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_vertical[Id];
     const auto &exponent = M_expo_r_y_vect[Id];
@@ -1211,7 +1210,7 @@ void frictionClass::f_y() {
 
     if (den > M_H_min) {
       const auto v_abs = std::abs(v[Id]);
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
@@ -1223,7 +1222,7 @@ void frictionClass::f_y() {
   }
 
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
-    Real alfa = 1.;
+    double alfa = 1.;
 
     const auto &H_int = H_interface_vertical[Id];
     const auto &exponent = M_expo_r_y_vect[Id];
@@ -1232,7 +1231,7 @@ void frictionClass::f_y() {
 
     if (den > M_H_min) {
       const auto v_abs = std::abs(v[Id]);
-      Real coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
                    (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
@@ -1247,25 +1246,25 @@ void frictionClass::f_y() {
 void upwind::computeHorizontal() {
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
-    const UInt i = Id / (N_cols + 1), // u
+    const unsigned int i = Id / (N_cols + 1), // u
         IDeast = Id - i,              // H
         IDwest = Id - i - 1;          // H
-    const Real &H_left = H[IDwest], &H_right = H[IDeast];
+    const double &H_left = H[IDwest], &H_right = H[IDeast];
     horizontal[Id] =
         (H_left + H_right) * .5 + signum(u[Id]) * (H_left - H_right) * .5;
   }
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
-    const UInt i = Id / (N_cols + 1);
-    const Real H_left = 0, &H_right = H[Id - i];
+    const unsigned int i = Id / (N_cols + 1);
+    const double H_left = 0, &H_right = H[Id - i];
     horizontal[Id] = (H_left + H_right) * .5 +
                      signum(u[Id + 1]) * (H_left - H_right) *
                          .5; // messo il segno della velocita' interna di fianco
   }
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
-    const UInt i = Id / (N_cols + 1);
-    const Real &H_left = H[Id - i - 1], H_right = 0;
+    const unsigned int i = Id / (N_cols + 1);
+    const double &H_left = H[Id - i - 1], H_right = 0;
     horizontal[Id] = (H_left + H_right) * .5 +
                      signum(u[Id - 1]) * (H_left - H_right) *
                          .5; // messo il segno della velocita' interna di fianco
@@ -1277,37 +1276,37 @@ void upwind::computeVertical() {
   for (const auto &Id : idStaggeredInternalVectVertical) {
     const auto IDsouth = Id,   // H
         IDnorth = Id - N_cols; // H
-    const Real &H_left = H[IDnorth], &H_right = H[IDsouth];
+    const double &H_left = H[IDnorth], &H_right = H[IDsouth];
     vertical[Id] =
         (H_left + H_right) * .5 + signum(v[Id]) * (H_left - H_right) * .5;
   }
 
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
-    const Real H_left = 0, &H_right = H[Id];
+    const double H_left = 0, &H_right = H[Id];
     vertical[Id] = (H_left + H_right) * .5 +
                    signum(v[Id + N_cols]) * (H_left - H_right) * .5;
   }
 
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
-    const Real &H_left = H[Id - N_cols], H_right = 0;
+    const double &H_left = H[Id - N_cols], H_right = 0;
     vertical[Id] = (H_left + H_right) * .5 +
                    signum(v[Id - N_cols]) * (H_left - H_right) * .5;
   }
 }
 
-void bilinearInterpolation(const std::vector<Real> &u,
-                           const std::vector<Real> &v,
-                           std::vector<Real> &u_star, std::vector<Real> &v_star,
-                           const UInt &nrows, const UInt &ncols, const Real &dt,
-                           const Real &pixel_size) {
+void bilinearInterpolation(const std::vector<double> &u,
+                           const std::vector<double> &v,
+                           std::vector<double> &u_star, std::vector<double> &v_star,
+                           const unsigned int &nrows, const unsigned int &ncols, const double &dt,
+                           const double &pixel_size) {
 
   // +-----------------------------------------------+
   // |              Horizontal Velocity              |
   // +-----------------------------------------------+
 
-  for (UInt i = 0; i < nrows; i++) {
+  for (unsigned int i = 0; i < nrows; i++) {
 
-    for (UInt j = 1; j < ncols; j++) {
+    for (unsigned int j = 1; j < ncols; j++) {
 
       const auto Id = j + i * (ncols + 1), // u
 
@@ -1317,13 +1316,13 @@ void bilinearInterpolation(const std::vector<Real> &u,
           ID_SE = ID_NE + ncols, // v
           ID_SW = ID_NW + ncols; // v
 
-      Vector2D vel(std::array<Real, 2>{
+      Vector2D vel(std::array<double, 2>{
           {u[Id], (v[ID_NE] + v[ID_NW] + v[ID_SE] + v[ID_SW]) / 4.}});
 
       const auto Dx = vel / pixel_size * dt;
 
       Vector2D xx(
-          std::array<Real, 2>{{Real(j), Real(i)}}); // Top-Left reference frame
+          std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
 
       xx = xx - Dx;
 
@@ -1369,7 +1368,7 @@ void bilinearInterpolation(const std::vector<Real> &u,
             Id_22 = x_2 + y_2 * (ncols + 1);        // u
 
         // compute weights
-        const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+        const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
                    w_y1 = y - y_1;
 
         const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
@@ -1382,8 +1381,8 @@ void bilinearInterpolation(const std::vector<Real> &u,
 
   // 1st column
   {
-    UInt j = 0;
-    for (UInt i = 0; i < nrows; i++) {
+    unsigned int j = 0;
+    for (unsigned int i = 0; i < nrows; i++) {
       const auto Id = j + i * (ncols + 1), Idd = Id + 1;
       u_star[Id] = u_star[Idd] * (u[Idd] < 0.);
     }
@@ -1391,8 +1390,8 @@ void bilinearInterpolation(const std::vector<Real> &u,
 
   // last column
   {
-    UInt j = ncols;
-    for (UInt i = 0; i < nrows; i++) {
+    unsigned int j = ncols;
+    for (unsigned int i = 0; i < nrows; i++) {
       const auto Id = j + i * (ncols + 1), Idd = Id - 1;
       u_star[Id] = u_star[Idd] * (u[Idd] > 0.);
     }
@@ -1402,9 +1401,9 @@ void bilinearInterpolation(const std::vector<Real> &u,
   // |              Vertical Velocity                |
   // +-----------------------------------------------+
 
-  for (UInt i = 1; i < nrows; i++) {
+  for (unsigned int i = 1; i < nrows; i++) {
 
-    for (UInt j = 0; j < ncols; j++) {
+    for (unsigned int j = 0; j < ncols; j++) {
 
       const auto Id = j + i * ncols, // v
 
@@ -1414,13 +1413,13 @@ void bilinearInterpolation(const std::vector<Real> &u,
           ID_NW = ID_SW - (ncols + 1), // u
           ID_NE = ID_NW + 1;           // u
 
-      Vector2D vel(std::array<Real, 2>{
+      Vector2D vel(std::array<double, 2>{
           {(u[ID_SW] + u[ID_SE] + u[ID_NW] + u[ID_NE]) / 4., v[Id]}});
 
       const auto Dx = vel / pixel_size * dt;
 
       Vector2D xx(
-          std::array<Real, 2>{{Real(j), Real(i)}}); // Top-Left reference frame
+          std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
 
       xx = xx - Dx;
 
@@ -1464,7 +1463,7 @@ void bilinearInterpolation(const std::vector<Real> &u,
                    Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
 
         // compute weights
-        const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+        const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
                    w_y1 = y - y_1;
 
         const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
@@ -1477,8 +1476,8 @@ void bilinearInterpolation(const std::vector<Real> &u,
 
   // 1st row
   {
-    UInt i = 0;
-    for (UInt j = 0; j < ncols; j++) {
+    unsigned int i = 0;
+    for (unsigned int j = 0; j < ncols; j++) {
       const auto Id = j + i * ncols, Idd = Id + ncols;
       v_star[Id] = v_star[Idd] * (v[Idd] < 0.);
     }
@@ -1486,8 +1485,8 @@ void bilinearInterpolation(const std::vector<Real> &u,
 
   // last row
   {
-    UInt i = nrows;
-    for (UInt j = 0; j < ncols; j++) {
+    unsigned int i = nrows;
+    for (unsigned int j = 0; j < ncols; j++) {
       const auto Id = j + i * ncols, Idd = Id - ncols;
       v_star[Id] = v_star[Idd] * (v[Idd] > 0.);
     }
@@ -1500,15 +1499,15 @@ bool is_file_exist(const char *fileName) {
 }
 
 void bilinearInterpolation(
-    const std::vector<Real> &u, const std::vector<Real> &v,
-    std::vector<Real> &u_star, std::vector<Real> &v_star, const UInt &nrows,
-    const UInt &ncols, const Real &dt_DSV, const Real &pixel_size,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth) {
+    const std::vector<double> &u, const std::vector<double> &v,
+    std::vector<double> &u_star, std::vector<double> &v_star, const unsigned int &nrows,
+    const unsigned int &ncols, const double &dt_DSV, const double &pixel_size,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth) {
 
   // +-----------------------------------------------+
   // |              Horizontal Velocity              |
@@ -1516,19 +1515,19 @@ void bilinearInterpolation(
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
-    const UInt i = Id / (ncols + 1), j = Id % (ncols + 1),
+    const unsigned int i = Id / (ncols + 1), j = Id % (ncols + 1),
                ID_NE = Id - i, // v
         ID_NW = ID_NE - 1,     // v
         ID_SE = ID_NE + ncols, // v
         ID_SW = ID_NW + ncols; // v
 
-    Vector2D vel(std::array<Real, 2>{
+    Vector2D vel(std::array<double, 2>{
         {u[Id], (v[ID_NE] + v[ID_NW] + v[ID_SE] + v[ID_SW]) / 4.}});
 
     const auto Dx = vel / pixel_size * dt_DSV;
 
     Vector2D xx(
-        std::array<Real, 2>{{Real(j), Real(i)}}); // Top-Left reference frame
+        std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
 
     xx = xx - Dx;
 
@@ -1574,7 +1573,7 @@ void bilinearInterpolation(
           Id_22 = x_2 + y_2 * (ncols + 1);        // u
 
       // compute weights
-      const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
 
       const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
                  b = u[Id_12] * w_x2 + u[Id_22] * w_x1;
@@ -1606,13 +1605,13 @@ void bilinearInterpolation(
         ID_NW = ID_SW - (ncols + 1), // u
         ID_NE = ID_NW + 1;           // u
 
-    Vector2D vel(std::array<Real, 2>{
+    Vector2D vel(std::array<double, 2>{
         {(u[ID_SW] + u[ID_SE] + u[ID_NW] + u[ID_NE]) / 4., v[Id]}});
 
     const auto Dx = vel / pixel_size * dt_DSV;
 
     Vector2D xx(
-        std::array<Real, 2>{{Real(j), Real(i)}}); // Top-Left reference frame
+        std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
 
     xx = xx - Dx;
 
@@ -1656,7 +1655,7 @@ void bilinearInterpolation(
                  Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
 
       // compute weights
-      const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
 
       const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
                  b = v[Id_12] * w_x2 + v[Id_22] * w_x1;
@@ -1676,13 +1675,13 @@ void bilinearInterpolation(
   }
 }
 
-Real bilinearInterpolation(const std::vector<Real> &u,
-                           const std::vector<Real> &v, const UInt &ncols,
-                           const UInt &nrows, const Vector2D &xx) {
+double bilinearInterpolation(const std::vector<double> &u,
+                           const std::vector<double> &v, const unsigned int &ncols,
+                           const unsigned int &nrows, const Vector2D &xx) {
 
   // horizontal
 
-  Real output_hor;
+  double output_hor;
   {
     auto x = xx(0), y = xx(1);
 
@@ -1714,7 +1713,7 @@ Real bilinearInterpolation(const std::vector<Real> &u,
                Id_21 = x_2 + y_1 * (ncols + 1), Id_22 = x_2 + y_2 * (ncols + 1);
 
     // compute weights
-    const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+    const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
 
     const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
                b = u[Id_12] * w_x2 + u[Id_22] * w_x1;
@@ -1723,7 +1722,7 @@ Real bilinearInterpolation(const std::vector<Real> &u,
   }
 
   // vertical
-  Real output_vert;
+  double output_vert;
   {
     auto x = xx(0), y = xx(1);
 
@@ -1755,7 +1754,7 @@ Real bilinearInterpolation(const std::vector<Real> &u,
                Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
 
     // compute weights
-    const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+    const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
 
     const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
                b = v[Id_12] * w_x2 + v[Id_22] * w_x1;
@@ -1766,8 +1765,8 @@ Real bilinearInterpolation(const std::vector<Real> &u,
   return (std::sqrt(output_hor * output_hor + output_vert * output_vert));
 }
 
-Real bilinearInterpolation(const std::vector<Real> &H, const UInt &ncols,
-                           const UInt &nrows, const Vector2D &xx) {
+double bilinearInterpolation(const std::vector<double> &H, const unsigned int &ncols,
+                           const unsigned int &nrows, const Vector2D &xx) {
 
   auto x = xx(0), y = xx(1);
 
@@ -1799,23 +1798,23 @@ Real bilinearInterpolation(const std::vector<Real> &H, const UInt &ncols,
              Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
 
   // compute weights
-  const Real w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+  const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
 
   const auto a = H[Id_11] * w_x2 + H[Id_21] * w_x1,
              b = H[Id_12] * w_x2 + H[Id_22] * w_x1;
 
-  Real output = a * w_y2 + b * w_y1;
+  double output = a * w_y2 + b * w_y1;
 
   return (output);
 }
 
-int computePourCell(const int &IDcell, const UInt &N_cols,
-                    const std::vector<Real> &oro,
-                    const std::set<UInt> &idBasinVect,
-                    const std::set<UInt> &idStaggeredBoundaryVectSouth,
-                    const std::set<UInt> &idStaggeredBoundaryVectNorth,
-                    const std::set<UInt> &idStaggeredBoundaryVectWest,
-                    const std::set<UInt> &idStaggeredBoundaryVectEast) {
+int computePourCell(const int &IDcell, const unsigned int &N_cols,
+                    const std::vector<double> &oro,
+                    const std::set<unsigned int> &idBasinVect,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectSouth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectNorth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectWest,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectEast) {
 
   int candidate_id = -1;
 
@@ -1833,7 +1832,7 @@ int computePourCell(const int &IDcell, const UInt &N_cols,
              iterator_west = idStaggeredBoundaryVectWest.find(IDwest),
              iterator_east = idStaggeredBoundaryVectEast.find(IDeast);
 
-  std::vector<UInt> candidates;
+  std::vector<unsigned int> candidates;
   candidates.reserve(8);
 
   bool is_north = false, is_south = false, is_west = false, is_east = false;
@@ -1910,7 +1909,7 @@ int computePourCell(const int &IDcell, const UInt &N_cols,
   // |       Compute min oro cell (pour point)       |
   // +-----------------------------------------------+
 
-  Real current_minimum_oro = oro[IDcell];
+  double current_minimum_oro = oro[IDcell];
   for (const auto &it : candidates) {
     const auto &candidate_minimum_oro = oro[it];
     if (candidate_minimum_oro < current_minimum_oro) {
@@ -1923,30 +1922,30 @@ int computePourCell(const int &IDcell, const UInt &N_cols,
 }
 
 void computeAdjacencies(
-    const std::vector<Real> &basin_mask_Vec_mpi,
-    const std::vector<Real> &basin_mask_Vec,
+    const std::vector<double> &basin_mask_Vec_mpi,
+    const std::vector<double> &basin_mask_Vec,
 
-    std::vector<UInt> &idStaggeredBoundaryVectSouth_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectNorth_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectWest_mpi,
-    std::vector<UInt> &idStaggeredBoundaryVectEast_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast_mpi,
 
-    std::vector<UInt> &idStaggeredInternalVectHorizontal_mpi,
-    std::vector<UInt> &idStaggeredInternalVectVertical_mpi,
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal_mpi,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical_mpi,
 
-    std::vector<UInt> &idBasinVectReIndex_mpi,
-    std::vector<UInt> &idBasinVectReIndex,
+    std::vector<unsigned int> &idBasinVectReIndex_mpi,
+    std::vector<unsigned int> &idBasinVectReIndex,
 
-    const UInt &N_rows, const UInt &N_cols) {
+    const unsigned int &N_rows, const unsigned int &N_cols) {
 
   // +-----------------------------------------------+
   // |                 Basin H IDs                   |
   // +-----------------------------------------------+
 
-  UInt h = 0, hh = 0;
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt k = j + i * N_cols;
+  unsigned int h = 0, hh = 0;
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int k = j + i * N_cols;
 
       idBasinVectReIndex.push_back(h);
       idBasinVectReIndex_mpi.push_back(hh);
@@ -1966,9 +1965,9 @@ void computeAdjacencies(
   // +-----------------------------------------------+
 
   // cycle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
                  IDvel = IDcell +
                          N_cols; // interface between IDcell and IDcell_south
 
@@ -2015,9 +2014,9 @@ void computeAdjacencies(
   // +-----------------------------------------------+
 
   // cycle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
                  IDvel =
                      IDcell + i + 1; // interface between IDcell and IDcell_east
 
@@ -2053,29 +2052,29 @@ void computeAdjacencies(
   }
 }
 
-void computeAdjacencies(const std::vector<Real> &basin_mask_Vec,
+void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
 
-                        std::vector<UInt> &idStaggeredBoundaryVectSouth,
-                        std::vector<UInt> &idStaggeredBoundaryVectNorth,
-                        std::vector<UInt> &idStaggeredBoundaryVectWest,
-                        std::vector<UInt> &idStaggeredBoundaryVectEast,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<UInt> &idStaggeredInternalVectHorizontal,
-                        std::vector<UInt> &idStaggeredInternalVectVertical,
+                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<UInt> &idBasinVect,
-                        std::vector<UInt> &idBasinVectReIndex,
+                        std::vector<unsigned int> &idBasinVect,
+                        std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const UInt &N_rows, const UInt &N_cols) {
+                        const unsigned int &N_rows, const unsigned int &N_cols) {
 
   // +-----------------------------------------------+
   // |                 Basin H IDs                   |
   // +-----------------------------------------------+
 
-  UInt h = 0;
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt k = j + i * N_cols;
+  unsigned int h = 0;
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int k = j + i * N_cols;
       idBasinVectReIndex.push_back(h);
 
       if (basin_mask_Vec[k] == 1) {
@@ -2090,9 +2089,9 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec,
   // +-----------------------------------------------+
 
   // cycle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
                  IDvel = IDcell +
                          N_cols; // interface between IDcell and IDcell_south
 
@@ -2133,9 +2132,9 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec,
   // +-----------------------------------------------+
 
   // cycle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
                  IDvel =
                      IDcell + i + 1; // interface between IDcell and IDcell_east
 
@@ -2167,25 +2166,25 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec,
   }
 }
 
-void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
+void computeAdjacencies(const std::vector<double> &basin_mask_Vec_input,
                         const std::vector<std::tuple<bool, int>> &excluded_ids,
 
-                        std::vector<UInt> &idStaggeredBoundaryVectSouth,
-                        std::vector<UInt> &idStaggeredBoundaryVectNorth,
-                        std::vector<UInt> &idStaggeredBoundaryVectWest,
-                        std::vector<UInt> &idStaggeredBoundaryVectEast,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<UInt> &idStaggeredInternalVectHorizontal,
-                        std::vector<UInt> &idStaggeredInternalVectVertical,
+                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<UInt> &idBasinVect,
-                        std::vector<UInt> &idBasinVectReIndex,
+                        std::vector<unsigned int> &idBasinVect,
+                        std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const UInt &N_rows, const UInt &N_cols) {
+                        const unsigned int &N_rows, const unsigned int &N_cols) {
 
-  std::vector<Real> basin_mask_Vec = basin_mask_Vec_input;
+  std::vector<double> basin_mask_Vec = basin_mask_Vec_input;
 
-  for (UInt i = 0; i < basin_mask_Vec.size(); i++) {
+  for (unsigned int i = 0; i < basin_mask_Vec.size(); i++) {
     if (std::get<0>(excluded_ids[i])) {
       basin_mask_Vec[i] = 0.;
     }
@@ -2195,10 +2194,10 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
   // |                 Basin H IDs                   |
   // +-----------------------------------------------+
 
-  UInt h = 0;
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt k = j + i * N_cols;
+  unsigned int h = 0;
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int k = j + i * N_cols;
 
       idBasinVectReIndex.push_back(h);
 
@@ -2214,9 +2213,9 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
   // +-----------------------------------------------+
 
   // cycle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
                  IDvel = IDcell +
                          N_cols; // interface between IDcell and IDcell_south
 
@@ -2258,9 +2257,9 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
   // +-----------------------------------------------+
 
   // cicle on centered cells
-  for (UInt i = 0; i < N_rows; i++) {
-    for (UInt j = 0; j < N_cols; j++) {
-      const UInt IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
                  IDvel =
                      IDcell + i + 1; // interface between IDcell and IDcell_east
 
@@ -2294,32 +2293,32 @@ void computeAdjacencies(const std::vector<Real> &basin_mask_Vec_input,
 }
 
 void buildMatrix(
-    const std::vector<Real> &H_int_x, const std::vector<Real> &H_int_y,
-    const std::vector<Real> &orography, const std::vector<Real> &u_star,
-    const std::vector<Real> &v_star, const std::vector<Real> &u,
-    const std::vector<Real> &v, const std::vector<Real> &H, const UInt &N_cols,
-    const UInt &N_rows, const UInt &N, const Real &c1, const Real &c3,
-    const Real &H_min, const std::vector<Real> &precipitation,
-    const Real &dt_DSV, const std::vector<Real> &alfa_x,
-    const std::vector<Real> &alfa_y,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect,
-    const std::vector<UInt> &idBasinVect_not_excluded,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal_not_excluded,
-    const std::vector<UInt> &idStaggeredInternalVectVertical_not_excluded,
-    const std::vector<UInt> &idBasinVectReIndex, const bool &isNonReflectingBC,
+    const std::vector<double> &H_int_x, const std::vector<double> &H_int_y,
+    const std::vector<double> &orography, const std::vector<double> &u_star,
+    const std::vector<double> &v_star, const std::vector<double> &u,
+    const std::vector<double> &v, const std::vector<double> &H, const unsigned int &N_cols,
+    const unsigned int &N_rows, const unsigned int &N, const double &c1, const double &c3,
+    const double &H_min, const std::vector<double> &precipitation,
+    const double &dt_DSV, const std::vector<double> &alfa_x,
+    const std::vector<double> &alfa_y,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect,
+    const std::vector<unsigned int> &idBasinVect_not_excluded,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal_not_excluded,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical_not_excluded,
+    const std::vector<unsigned int> &idBasinVectReIndex, const bool &isNonReflectingBC,
     const bool &isH,
 
     const std::vector<std::tuple<bool, int>>
-        &excluded_ids, // bool, value 1 in excluded ids  UInt, Id del pour point
-    std::vector<Real> &additional_source_term,
+        &excluded_ids, // bool, value 1 in excluded ids  unsigned int, Id del pour point
+    std::vector<double> &additional_source_term,
 
-    std::vector<Eigen::Triplet<Real>> &coefficients, Eigen::VectorXd &rhs) {
+    std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs) {
 
   // Be careful to the mass conservation
   // cycle over boundary interfaces and check if one of the left, right cells
@@ -2338,12 +2337,12 @@ void buildMatrix(
   for (const auto &Id : idBasinVect) {
     const auto IDreIndex = idBasinVectReIndex[Id];
 
-    coefficients.push_back(Eigen::Triplet<Real>(IDreIndex, IDreIndex, 1.));
+    coefficients.push_back(Eigen::Triplet<double>(IDreIndex, IDreIndex, 1.));
     rhs(IDreIndex) = H[Id] + precipitation[Id] * dt_DSV;
   }
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
-    const UInt i = Id / (N_cols + 1),
+    const unsigned int i = Id / (N_cols + 1),
                IDleft = Id - i - 1,                   // H
         IDright = Id - i,                             // H
         IDleftReIndex = idBasinVectReIndex[IDleft],   // H
@@ -2351,22 +2350,22 @@ void buildMatrix(
 
     // define H at interfaces
     const auto H_interface = H_int_x[Id];
-    const Real coeff_m = H_interface * alfa_x[Id];
+    const double coeff_m = H_interface * alfa_x[Id];
 
     if (H_interface > H_min) {
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
+          Eigen::Triplet<double>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
+          Eigen::Triplet<double>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
 
       rhs(IDleftReIndex) +=
           -c1 * (+coeff_m * u_star[Id]) -
           (orography[IDleft] - orography[IDright]) * c3 * coeff_m * isH;
 
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
+          Eigen::Triplet<double>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
+          Eigen::Triplet<double>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
 
       rhs(IDrightReIndex) +=
           -c1 * (-coeff_m * u_star[Id]) -
@@ -2375,14 +2374,14 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
-    const UInt i = Id / (N_cols + 1), IDright = Id - i,
+    const unsigned int i = Id / (N_cols + 1), IDright = Id - i,
                IDrightright = IDright + 1,            // H
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
 
     // define H at interfaces
     const auto H_interface = H_int_x[Id];
 
-    const Real coeff_m = H_interface * alfa_x[Id];
+    const double coeff_m = H_interface * alfa_x[Id];
 
     if (H_interface > H_min) {
       rhs(IDrightReIndex) +=
@@ -2391,14 +2390,14 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
-    const UInt i = Id / (N_cols + 1), IDleft = Id - i - 1,
+    const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1,
                IDleftleft = IDleft - 1,             // H
         IDleftReIndex = idBasinVectReIndex[IDleft]; // H
 
     // define H at interfaces
     const auto H_interface = H_int_x[Id];
 
-    const Real coeff_m = H_interface * alfa_x[Id];
+    const double coeff_m = H_interface * alfa_x[Id];
 
     if (H_interface > H_min) {
       rhs(IDleftReIndex) += isNonReflectingBC * (-c1 * (+coeff_m * u_star[Id]));
@@ -2406,7 +2405,7 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
-    const UInt IDleft = Id - N_cols,                  // H
+    const unsigned int IDleft = Id - N_cols,                  // H
         IDright = Id,                                 // H
         IDleftReIndex = idBasinVectReIndex[IDleft],   // H
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
@@ -2414,22 +2413,22 @@ void buildMatrix(
     // define H at interfaces
     const auto H_interface = H_int_y[Id];
 
-    const Real coeff_m = H_interface * alfa_y[Id];
+    const double coeff_m = H_interface * alfa_y[Id];
 
     if (H_interface > H_min) {
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
+          Eigen::Triplet<double>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
+          Eigen::Triplet<double>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
 
       rhs(IDleftReIndex) +=
           -c1 * (+coeff_m * v_star[Id]) -
           (orography[IDleft] - orography[IDright]) * c3 * coeff_m * isH;
 
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
+          Eigen::Triplet<double>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
       coefficients.push_back(
-          Eigen::Triplet<Real>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
+          Eigen::Triplet<double>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
 
       rhs(IDrightReIndex) +=
           -c1 * (-coeff_m * v_star[Id]) -
@@ -2438,14 +2437,14 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
-    const UInt IDright = Id,
+    const unsigned int IDright = Id,
                IDrightright = Id + N_cols,            //
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
 
     // define H at interfaces
     const auto H_interface = H_int_y[Id];
 
-    const Real coeff_m = H_interface * alfa_y[Id];
+    const double coeff_m = H_interface * alfa_y[Id];
 
     if (H_interface > H_min) {
       rhs(IDrightReIndex) +=
@@ -2454,14 +2453,14 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
-    const UInt IDleft = Id - N_cols,                // H
+    const unsigned int IDleft = Id - N_cols,                // H
         IDleftleft = IDleft - N_cols,               // H
         IDleftReIndex = idBasinVectReIndex[IDleft]; // H
 
     // define H at interfaces
     const auto H_interface = H_int_y[Id];
 
-    const Real coeff_m = H_interface * alfa_y[Id];
+    const double coeff_m = H_interface * alfa_y[Id];
 
     if (H_interface > H_min) {
       rhs(IDleftReIndex) += isNonReflectingBC * (-c1 * (+coeff_m * v_star[Id]));
@@ -2470,7 +2469,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredInternalVectHorizontal_not_excluded) {
 
-    const UInt i = Id / (N_cols + 1),
+    const unsigned int i = Id / (N_cols + 1),
                IDleft = Id - i - 1, // H
         IDright = Id - i;           // H
 
@@ -2495,7 +2494,7 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredInternalVectVertical_not_excluded) {
-    const UInt IDleft = Id - N_cols, // H
+    const unsigned int IDleft = Id - N_cols, // H
         IDright = Id;                // H
 
     // define H at interfaces
@@ -2527,18 +2526,18 @@ void buildMatrix(
 }
 
 void putDry_excludedNodes(
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect, const UInt &N_cols,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect, const unsigned int &N_cols,
     const std::vector<std::tuple<bool, int>> &excluded_ids,
 
     Eigen::VectorXd &H, Eigen::VectorXd &eta,
-    const std::vector<Real> &orography, std::vector<Real> &u,
-    std::vector<Real> &v) {
+    const std::vector<double> &orography, std::vector<double> &u,
+    std::vector<double> &v) {
 
   for (const auto &Id : idBasinVect) {
     const auto &current_tuple = excluded_ids[Id];
@@ -2549,7 +2548,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
-    const UInt i = Id / (N_cols + 1),
+    const unsigned int i = Id / (N_cols + 1),
 
                IDleft = Id - i - 1, // H
         IDright = Id - i;           // H
@@ -2564,7 +2563,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
-    const UInt i = Id / (N_cols + 1), IDright = Id - i;
+    const unsigned int i = Id / (N_cols + 1), IDright = Id - i;
 
     if (std::get<0>(excluded_ids[IDright])) {
       H(IDright) = 0.;
@@ -2573,7 +2572,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
-    const UInt i = Id / (N_cols + 1), IDleft = Id - i - 1;
+    const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1;
 
     if (std::get<0>(excluded_ids[IDleft])) {
       H(IDleft) = 0.;
@@ -2582,7 +2581,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
-    const UInt IDleft = Id - N_cols, // H
+    const unsigned int IDleft = Id - N_cols, // H
         IDright = Id;                // H
 
     if (std::get<0>(excluded_ids[IDleft]) &&
@@ -2595,7 +2594,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
-    const UInt IDright = Id;
+    const unsigned int IDright = Id;
 
     if (std::get<0>(excluded_ids[IDright])) // se entrambe le celle sono escluse
     {
@@ -2605,7 +2604,7 @@ void putDry_excludedNodes(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
-    const UInt IDleft = Id - N_cols;
+    const unsigned int IDleft = Id - N_cols;
 
     if (std::get<0>(excluded_ids[IDleft])) // se entrambe le celle sono escluse
     {
@@ -2615,18 +2614,18 @@ void putDry_excludedNodes(
   }
 }
 
-void updateVel(std::vector<Real> &u, std::vector<Real> &v,
-               const std::vector<Real> &u_star, const std::vector<Real> &v_star,
-               const std::vector<Real> &alfa_x, const std::vector<Real> &alfa_y,
-               const Real &N_rows, const Real &N_cols, const Real &c2,
-               const Real &H_min, const std::vector<Real> &eta,
-               const std::vector<Real> &H, const std::vector<Real> &orography,
-               const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-               const std::vector<UInt> &idStaggeredInternalVectVertical,
-               const std::vector<UInt> &idStaggeredBoundaryVectWest,
-               const std::vector<UInt> &idStaggeredBoundaryVectEast,
-               const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-               const std::vector<UInt> &idStaggeredBoundaryVectSouth,
+void updateVel(std::vector<double> &u, std::vector<double> &v,
+               const std::vector<double> &u_star, const std::vector<double> &v_star,
+               const std::vector<double> &alfa_x, const std::vector<double> &alfa_y,
+               const double &N_rows, const double &N_cols, const double &c2,
+               const double &H_min, const std::vector<double> &eta,
+               const std::vector<double> &H, const std::vector<double> &orography,
+               const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+               const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+               const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
                const bool &isNonReflectingBC) {
 
   // +-----------------------------------------------+
@@ -2634,7 +2633,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
   // +-----------------------------------------------+
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
-    const UInt IDsouth = Id, IDnorth = Id - N_cols;
+    const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
 
     const auto &H_interface =
         (H[IDsouth] + H[IDnorth]) * .5 +
@@ -2648,7 +2647,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
 
   // first row
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
-    const UInt IDsouth = Id + N_cols, IDnorth = Id;
+    const unsigned int IDsouth = Id + N_cols, IDnorth = Id;
 
     const auto &H_interface =
         (H[IDnorth]) * .5 +
@@ -2663,7 +2662,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
   // last row
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
 
-    const UInt IDsouth = Id - N_cols, IDnorth = Id - 2 * N_cols;
+    const unsigned int IDsouth = Id - N_cols, IDnorth = Id - 2 * N_cols;
 
     const auto &H_interface =
         (H[IDsouth]) * .5 +
@@ -2681,7 +2680,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
-    const UInt i = Id / (N_cols + 1), IDeast = Id - i, IDwest = Id - i - 1;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i, IDwest = Id - i - 1;
 
     const auto &H_interface =
         (H[IDeast] + H[IDwest]) * .5 +
@@ -2695,7 +2694,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
 
-    const UInt i = Id / (N_cols + 1), IDeast = Id - i + 1, IDwest = Id - i;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i + 1, IDwest = Id - i;
 
     const auto &H_interface =
         (H[IDwest]) * .5 +
@@ -2709,7 +2708,7 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
 
-    const UInt i = Id / (N_cols + 1), IDeast = Id - i - 1, IDwest = Id - i - 2;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i - 1, IDwest = Id - i - 2;
 
     const auto &H_interface =
         (H[IDeast]) * .5 +
@@ -2722,16 +2721,16 @@ void updateVel(std::vector<Real> &u, std::vector<Real> &v,
   }
 }
 
-void compute_dt_adaptive(const std::vector<Real> &H,
-                         const std::vector<Real> &H_old,
-                         const std::vector<Real> &H_oldold,
-                         const std::vector<UInt> &idBasinVect, Real &dt,
-                         const Real &local_estimator_time_tolerance,
-                         const Real &time, const Real &timed,
-                         const Real &timedd) {
-  Real dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
+void compute_dt_adaptive(const std::vector<double> &H,
+                         const std::vector<double> &H_old,
+                         const std::vector<double> &H_oldold,
+                         const std::vector<unsigned int> &idBasinVect, double &dt,
+                         const double &local_estimator_time_tolerance,
+                         const double &time, const double &timed,
+                         const double &timedd) {
+  double dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
   for (const auto &Id : idBasinVect) {
-    const Real &hcell = H[Id], &hcell_old = H_old[Id],
+    const double &hcell = H[Id], &hcell_old = H_old[Id],
                &hcell_oldd = H_oldold[Id];
 
     dh_t = (hcell - hcell_old) / (time - timed);
@@ -2751,7 +2750,7 @@ void compute_dt_adaptive(const std::vector<Real> &H,
     nu_htot += Nu_hmean_cell * (time - timed) * (time - timed);
   }
 
-  Real dt_candidate =
+  double dt_candidate =
       local_estimator_time_tolerance / std::sqrt(nu_htot) * (time - timed);
 
   dt_candidate = (nu_htot > 0 && dt_candidate < dt) ? dt_candidate : dt;
@@ -2759,14 +2758,14 @@ void compute_dt_adaptive(const std::vector<Real> &H,
   dt = dt_candidate;
 }
 
-Real maxdt(const std::vector<Real> &u, const std::vector<Real> &v,
-           const Real &gravity, const Real &Hmax, const Real &pixel_size) {
+double maxdt(const std::vector<double> &u, const std::vector<double> &v,
+           const double &gravity, const double &Hmax, const double &pixel_size) {
 
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
 
-  const Real vel_max_y =
+  const double vel_max_y =
       std::max(*std::max_element(v.begin(), v.end()),
                std::abs(*std::min_element(v.begin(), v.end())));
 
@@ -2774,16 +2773,16 @@ Real maxdt(const std::vector<Real> &u, const std::vector<Real> &v,
   // |    Estimate horizontal max Courant number     |
   // +-----------------------------------------------+
 
-  const Real vel_max_x =
+  const double vel_max_x =
       std::max(*std::max_element(u.begin(), u.end()),
                std::abs(*std::min_element(u.begin(), u.end())));
 
-  const Real Co = 2.;      // 0.9; // 0.3
-  const Real Co_cel = 1e4; // 10
+  const double Co = 2.;      // 0.9; // 0.3
+  const double Co_cel = 1e4; // 10
 
-  const Real cel = std::sqrt(Hmax * gravity);
+  const double cel = std::sqrt(Hmax * gravity);
 
-  Real dt_candidate =
+  double dt_candidate =
       Co * pixel_size /
       (std::max(vel_max_x, vel_max_y) + std::numeric_limits<double>::epsilon());
   dt_candidate = std::min(dt_candidate,
@@ -2793,14 +2792,14 @@ Real maxdt(const std::vector<Real> &u, const std::vector<Real> &v,
   return (dt_candidate);
 }
 
-Real maxCourant(const std::vector<Real> &u, const std::vector<Real> &v,
-                const Real &c1) {
+double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
+                const double &c1) {
 
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
 
-  const Real Courant_y =
+  const double Courant_y =
       std::max(*std::max_element(v.begin(), v.end()),
                std::abs(*std::min_element(v.begin(), v.end())));
 
@@ -2808,7 +2807,7 @@ Real maxCourant(const std::vector<Real> &u, const std::vector<Real> &v,
   // |    Estimate horizontal max Courant number     |
   // +-----------------------------------------------+
 
-  const Real Courant_x =
+  const double Courant_x =
       std::max(*std::max_element(u.begin(), u.end()),
                std::abs(*std::min_element(u.begin(), u.end())));
 
@@ -2816,23 +2815,23 @@ Real maxCourant(const std::vector<Real> &u, const std::vector<Real> &v,
   return (std::max(Courant_y, Courant_x) * c1);
 }
 
-Real maxCourant(const std::vector<Real> &H, const Real &gravity,
-                const Real &c1) {
-  const Real Courant_cel =
+double maxCourant(const std::vector<double> &H, const double &gravity,
+                const double &c1) {
+  const double Courant_cel =
       std::sqrt(*std::max_element(H.begin(), H.end()) * gravity);
   return (Courant_cel * c1);
 }
 
-Real compute_dt_sediment(const Real &alpha, const Real &beta, const Real &S_x,
-                         const Real &S_y, const std::vector<Real> &u,
-                         const std::vector<Real> &v, const Real &pixel_size,
-                         const Real &dt_DSV, UInt &numberOfSteps) {
-  const Real max_courant_number = .95;
+double compute_dt_sediment(const double alpha, const double beta, const double S_x,
+                         const double S_y, const std::vector<double> &u,
+                         const std::vector<double> &v, const double pixel_size,
+                         const double dt_DSV, unsigned int * numberOfSteps) {
+  const double max_courant_number = .95;
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
 
-  const Real dt_y = max_courant_number * pixel_size /
+  const double dt_y = max_courant_number * pixel_size /
                     (alpha * std::pow(S_y, beta) *
                      std::max(*std::max_element(v.begin(), v.end()),
                               std::abs(*std::min_element(v.begin(), v.end()))));
@@ -2841,16 +2840,16 @@ Real compute_dt_sediment(const Real &alpha, const Real &beta, const Real &S_x,
   // |    Estimate horizontal max Courant number     |
   // +-----------------------------------------------+
 
-  const Real dt_x = max_courant_number * pixel_size /
+  const double dt_x = max_courant_number * pixel_size /
                     (alpha * std::pow(S_x, beta) *
                      std::max(*std::max_element(u.begin(), u.end()),
                               std::abs(*std::min_element(u.begin(), u.end()))));
 
-  Real dt_sed = std::min(dt_y, dt_x);
+  double dt_sed = std::min(dt_y, dt_x);
 
   dt_sed = std::min(dt_DSV / std::floor(dt_DSV / dt_sed), dt_DSV);
 
-  numberOfSteps = std::floor(dt_DSV / dt_sed);
+  *numberOfSteps = std::floor(dt_DSV / dt_sed);
 
   return (dt_sed);
 }
@@ -2869,16 +2868,16 @@ int current_start_chunk(const int &rank,
 
 void saveVector(const Eigen::VectorXd &b, const std::string &Name) {
   std::ofstream ff(Name);
-  for (UInt k = 0; k < b.size(); k++) {
+  for (unsigned int k = 0; k < b.size(); k++) {
     ff << b(k) << " ";
     ff << std::endl;
   }
   ff.close();
 }
 
-void saveMatrix(const SpMat &A, const std::string &Name) {
+void saveMatrix(const Eigen::SparseMatrix<double> &A, const std::string &Name) {
   std::ofstream ff(Name);
-  for (UInt k = 0; k < A.outerSize(); ++k) {
+  for (unsigned int k = 0; k < A.outerSize(); ++k) {
     for (SpMat::InnerIterator it(A, k); it; ++it) {
       ff << it.row() + 1 << " " << it.col() + 1 << " " << it.value()
          << std::endl; // row index
@@ -2888,9 +2887,9 @@ void saveMatrix(const SpMat &A, const std::string &Name) {
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
                   const Eigen::VectorXd &H) // it is H or orography
 {
 
@@ -2940,9 +2939,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   if (flag == "u") {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int j = 0; j <= N_cols; j++) {
 
         const auto Id = j + i * (N_cols + 1);
 
@@ -2954,9 +2953,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   } else if (flag == "v") {
 
-    for (UInt i = 0; i <= N_rows; i++) {
+    for (unsigned int i = 0; i <= N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto Id = j + i * N_cols;
 
@@ -2969,9 +2968,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
   } else // H or orography
   {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -2985,10 +2984,10 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
-void saveSolution(const std::string &preName, const UInt &N_rows,
-                  const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
+void saveSolution(const std::string &preName, const unsigned int &N_rows,
+                  const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
                   const std::vector<std::tuple<bool, int>>
                       excluded_ids) // excluded regions, high slopes I hope
 {
@@ -3020,9 +3019,9 @@ void saveSolution(const std::string &preName, const UInt &N_rows,
     ff << NODATA_value;
     ff << std::endl;
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -3061,9 +3060,9 @@ void saveSolution(const std::string &preName, const UInt &N_rows,
   ff << NODATA_value;
   ff << std::endl;
 
-  for (UInt i = 0; i < N_rows; i++) {
+  for (unsigned int i = 0; i < N_rows; i++) {
 
-    for (UInt j = 0; j < N_cols; j++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
 
       const auto k = j + i * N_cols; // H
 
@@ -3077,10 +3076,10 @@ void saveSolution(const std::string &preName, const UInt &N_rows,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
-                  const std::vector<Real> &H) // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
+                  const std::vector<double> &H) // it is H or orography
 {
 
   std::ofstream ff(preName + ".asc");
@@ -3129,9 +3128,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   if (flag == "u") {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int j = 0; j <= N_cols; j++) {
 
         const auto Id = j + i * (N_cols + 1);
 
@@ -3143,9 +3142,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   } else if (flag == "v") {
 
-    for (UInt i = 0; i <= N_rows; i++) {
+    for (unsigned int i = 0; i <= N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto Id = j + i * N_cols;
 
@@ -3158,9 +3157,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
   } else // H or orography
   {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -3175,10 +3174,10 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value,
-                  const std::vector<Int> &H) // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
+                  const std::vector<int> &H) // it is H or orography
 {
 
   std::ofstream ff(preName + ".asc");
@@ -3227,9 +3226,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   if (flag == "u") {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int j = 0; j <= N_cols; j++) {
 
         const auto Id = j + i * (N_cols + 1);
 
@@ -3241,9 +3240,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   } else if (flag == "v") {
 
-    for (UInt i = 0; i <= N_rows; i++) {
+    for (unsigned int i = 0; i <= N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto Id = j + i * N_cols;
 
@@ -3256,9 +3255,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
   } else // H or orography
   {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -3273,10 +3272,10 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value, const UInt &n,
-                  const std::vector<Real> &u, const std::vector<Real> &v,
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value, const unsigned int &n,
+                  const std::vector<double> &u, const std::vector<double> &v,
                   const Eigen::VectorXd &H) // it is H or orography
 {
 
@@ -3326,9 +3325,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   if (flag == "u") {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int j = 0; j <= N_cols; j++) {
 
         const auto Id = j + i * (N_cols + 1);
 
@@ -3340,9 +3339,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   } else if (flag == "v") {
 
-    for (UInt i = 0; i <= N_rows; i++) {
+    for (unsigned int i = 0; i <= N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto Id = j + i * N_cols;
 
@@ -3355,9 +3354,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
   } else // H or orography
   {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -3372,11 +3371,11 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const UInt &N_rows, const UInt &N_cols, const Real &xllcorner,
-                  const Real &yllcorner, const Real &cellsize,
-                  const Real &NODATA_value, const UInt &n,
-                  const std::vector<Real> &u, const std::vector<Real> &v,
-                  const std::vector<Real> &H) // it is H or orography
+                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value, const unsigned int &n,
+                  const std::vector<double> &u, const std::vector<double> &v,
+                  const std::vector<double> &H) // it is H or orography
 {
 
   std::ofstream ff(preName + std::to_string(n) + ".asc");
@@ -3425,9 +3424,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   if (flag == "u") {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j <= N_cols; j++) {
+      for (unsigned int j = 0; j <= N_cols; j++) {
 
         const auto Id = j + i * (N_cols + 1);
 
@@ -3439,9 +3438,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   } else if (flag == "v") {
 
-    for (UInt i = 0; i <= N_rows; i++) {
+    for (unsigned int i = 0; i <= N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto Id = j + i * N_cols;
 
@@ -3454,9 +3453,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
   } else // H or orography
   {
 
-    for (UInt i = 0; i < N_rows; i++) {
+    for (unsigned int i = 0; i < N_rows; i++) {
 
-      for (UInt j = 0; j < N_cols; j++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
 
         const auto k = j + i * N_cols; // H
 
@@ -3470,15 +3469,15 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
-void saveTemporalSequence(const Vector2D &X_gauges, const Real &time,
-                          const std::string &preName, const Real &H) {
+void saveTemporalSequence(const Vector2D &X_gauges, const double &time,
+                          const std::string &preName, const double &H) {
   std::ofstream ff(preName + ".txt", std::ofstream::out | std::ofstream::app);
   ff << H << " " << time << std::endl;
   ff.close();
 }
 
-void saveTemporalSequence(const Real &time, const std::string &preName,
-                          const Real &H) {
+void saveTemporalSequence(const double &time, const std::string &preName,
+                          const double &H) {
   std::ofstream ff(preName + ".txt", std::ofstream::out | std::ofstream::app);
   ff << H << " " << time << std::endl;
   ff.close();
@@ -3486,31 +3485,31 @@ void saveTemporalSequence(const Real &time, const std::string &preName,
 
 // For gravitational layer
 void computeResiduals(
-    const std::vector<Real> &n_x, const std::vector<Real> &n_y,
-    const UInt &N_cols, const UInt &N_rows, const std::vector<Real> &h,
-    const std::vector<Real> &coeff, // hydraulic conductivity
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    const std::vector<UInt> &idBasinVect, std::vector<Real> &h_interface_x,
-    std::vector<Real> &h_interface_y, std::vector<Real> &Res_x,
-    std::vector<Real> &Res_y) {
+    const std::vector<double> &n_x, const std::vector<double> &n_y,
+    const unsigned int &N_cols, const unsigned int &N_rows, const std::vector<double> &h,
+    const std::vector<double> &coeff, // hydraulic conductivity
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect, std::vector<double> &h_interface_x,
+    std::vector<double> &h_interface_y, std::vector<double> &Res_x,
+    std::vector<double> &Res_y) {
 
   // +-----------------------------------------------+
   // |                  Horizontal                   |
   // +-----------------------------------------------+
 
-  for (const UInt &Id : idStaggeredInternalVectHorizontal) {
-    const UInt i = Id / (N_cols + 1), // u
+  for (const unsigned int &Id : idStaggeredInternalVectHorizontal) {
+    const unsigned int i = Id / (N_cols + 1), // u
         IDeast = Id - i,              // H
         IDwest = Id - i - 1;          // H
 
-    const Real &h_left = h[IDwest], &h_right = h[IDeast];
+    const double &h_left = h[IDwest], &h_right = h[IDeast];
 
-    const Real k_c_left = coeff[IDwest], k_c_right = coeff[IDeast];
+    const double k_c_left = coeff[IDwest], k_c_right = coeff[IDeast];
 
     h_interface_x[Id] = n_x[Id] *
                         ((k_c_left * h_left + k_c_right * h_right) +
@@ -3518,28 +3517,28 @@ void computeResiduals(
                         .5;
   }
 
-  for (const UInt &Id : idStaggeredBoundaryVectWest) {
-    const UInt i = Id / (N_cols + 1);
-    const Real h_left = 0, h_right = h[Id - i];
-    const Real k_c_left = 0., k_c_right = coeff[Id - i];
+  for (const unsigned int &Id : idStaggeredBoundaryVectWest) {
+    const unsigned int i = Id / (N_cols + 1);
+    const double h_left = 0, h_right = h[Id - i];
+    const double k_c_left = 0., k_c_right = coeff[Id - i];
     h_interface_x[Id] = n_x[Id] *
                         ((k_c_left * h_left + k_c_right * h_right) +
                          n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
                         .5;
   }
 
-  for (const UInt &Id : idStaggeredBoundaryVectEast) {
-    const UInt i = Id / (N_cols + 1);
-    const Real h_left = h[Id - i - 1], h_right = 0;
-    const Real k_c_left = coeff[Id - i - 1], k_c_right = 0.;
+  for (const unsigned int &Id : idStaggeredBoundaryVectEast) {
+    const unsigned int i = Id / (N_cols + 1);
+    const double h_left = h[Id - i - 1], h_right = 0;
+    const double k_c_left = coeff[Id - i - 1], k_c_right = 0.;
     h_interface_x[Id] = n_x[Id] *
                         ((k_c_left * h_left + k_c_right * h_right) +
                          n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
                         .5;
   }
 
-  for (const UInt &Id : idBasinVect) {
-    const UInt i = Id / N_cols;
+  for (const unsigned int &Id : idBasinVect) {
+    const unsigned int i = Id / N_cols;
     Res_x[Id] = h_interface_x[Id + 1 + i] - h_interface_x[Id + i];
   }
 
@@ -3547,24 +3546,13 @@ void computeResiduals(
   // |                   Vertical                    |
   // +-----------------------------------------------+
 
-  for (const UInt &Id : idStaggeredInternalVectVertical) {
-    const UInt IDsouth = Id,   // H
+  for (const unsigned int &Id : idStaggeredInternalVectVertical) {
+    const unsigned int IDsouth = Id,   // H
         IDnorth = Id - N_cols; // H
 
-    const Real h_left = h[IDnorth], h_right = h[IDsouth];
+    const double h_left = h[IDnorth], h_right = h[IDsouth];
 
-    const Real k_c_left = coeff[IDnorth], k_c_right = coeff[IDsouth];
-
-    h_interface_y[Id] = n_y[Id] *
-                        ((k_c_left * h_left + k_c_right * h_right) +
-                         n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
-                        .5;
-  }
-
-  for (const UInt &Id : idStaggeredBoundaryVectNorth) {
-    const Real h_left = 0, h_right = h[Id];
-
-    const Real k_c_left = 0., k_c_right = coeff[Id];
+    const double k_c_left = coeff[IDnorth], k_c_right = coeff[IDsouth];
 
     h_interface_y[Id] = n_y[Id] *
                         ((k_c_left * h_left + k_c_right * h_right) +
@@ -3572,10 +3560,10 @@ void computeResiduals(
                         .5;
   }
 
-  for (const UInt &Id : idStaggeredBoundaryVectSouth) {
-    const Real h_left = h[Id - N_cols], h_right = 0;
+  for (const unsigned int &Id : idStaggeredBoundaryVectNorth) {
+    const double h_left = 0, h_right = h[Id];
 
-    const Real k_c_left = coeff[Id - N_cols], k_c_right = 0.;
+    const double k_c_left = 0., k_c_right = coeff[Id];
 
     h_interface_y[Id] = n_y[Id] *
                         ((k_c_left * h_left + k_c_right * h_right) +
@@ -3583,30 +3571,41 @@ void computeResiduals(
                         .5;
   }
 
-  for (const UInt &Id : idBasinVect) {
+  for (const unsigned int &Id : idStaggeredBoundaryVectSouth) {
+    const double h_left = h[Id - N_cols], h_right = 0;
+
+    const double k_c_left = coeff[Id - N_cols], k_c_right = 0.;
+
+    h_interface_y[Id] = n_y[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  for (const unsigned int &Id : idBasinVect) {
     Res_y[Id] = h_interface_y[Id + N_cols] - h_interface_y[Id];
   }
 }
 
 // For sediment transport
 void computeResidualsTruncated(
-    const std::vector<Real> &u, const std::vector<Real> &v, const UInt &N_cols,
-    const UInt &N_rows, const UInt &N, const Real &c1,
-    const std::vector<Real> &S_x, const std::vector<Real> &S_y,
-    const Real &alpha, const Real &beta, const Real &gamma,
-    const std::vector<UInt> &idStaggeredInternalVectHorizontal,
-    const std::vector<UInt> &idStaggeredInternalVectVertical,
-    const std::vector<UInt> &idStaggeredBoundaryVectWest,
-    const std::vector<UInt> &idStaggeredBoundaryVectEast,
-    const std::vector<UInt> &idStaggeredBoundaryVectNorth,
-    const std::vector<UInt> &idStaggeredBoundaryVectSouth,
-    std::vector<std::array<Real, 2>> &Gamma_x,
-    std::vector<std::array<Real, 2>> &Gamma_y) {
+    const std::vector<double> &u, const std::vector<double> &v, const unsigned int &N_cols,
+    const unsigned int &N_rows, const unsigned int &N, const double &c1,
+    const std::vector<double> &S_x, const std::vector<double> &S_y,
+    const double &alpha, const double &beta, const double &gamma,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<std::array<double, 2>> &Gamma_x,
+    std::vector<std::array<double, 2>> &Gamma_y) {
 
   for (int ii = 0; ii < idStaggeredInternalVectHorizontal.size(); ii++) {
     const auto &Id = idStaggeredInternalVectHorizontal[ii];
 
-    const Real coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
                              u[Id] * (.5 - .5 * signum(u[Id])),
 
                coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
@@ -3619,7 +3618,7 @@ void computeResidualsTruncated(
   for (int ii = 0; ii < idStaggeredBoundaryVectWest.size(); ii++) {
     const auto &Id = idStaggeredBoundaryVectWest[ii];
 
-    const Real coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
                              u[Id] * (.5 - .5 * signum(u[Id])),
 
                coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
@@ -3633,47 +3632,47 @@ void computeResidualsTruncated(
 
     const auto &Id = idStaggeredInternalVectVertical[ii];
 
-    const Real coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                              v[Id] * (.5 - .5 * signum(v[Id])),
 
                coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                             v[Id] * (.5 + .5 * signum(v[Id]));
 
-    Gamma_y[Id] = std::array<Real, 2>{{coeff_right, coeff_left}};
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
 
   for (int ii = 0; ii < idStaggeredBoundaryVectNorth.size(); ii++) {
     const auto &Id = idStaggeredBoundaryVectNorth[ii];
 
-    const Real coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                              v[Id] * (.5 - .5 * signum(v[Id])),
 
                coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                             v[Id] * (.5 + .5 * signum(v[Id]));
 
-    Gamma_y[Id] = std::array<Real, 2>{{coeff_right, coeff_left}};
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
 
   for (int ii = 0; ii < idStaggeredBoundaryVectSouth.size(); ii++) {
     const auto &Id = idStaggeredBoundaryVectSouth[ii];
 
-    const Real coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                              v[Id] * (.5 - .5 * signum(v[Id])),
 
                coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
                             v[Id] * (.5 + .5 * signum(v[Id]));
 
-    Gamma_y[Id] = std::array<Real, 2>{{coeff_right, coeff_left}};
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
 }
 
-std::vector<Real> compute_d_perc(const std::vector<Real> &clay,
-                                 const std::vector<Real> &sand,
-                                 const Real &perc) {
+std::vector<double> compute_d_perc(const std::vector<double> &clay,
+                                 const std::vector<double> &sand,
+                                 const double &perc) {
   // linear interpolation in log10 x-scale
-  std::vector<Real> d_perc(clay.size());
+  std::vector<double> d_perc(clay.size());
 
-  for (UInt i = 0; i < clay.size(); i++) {
+  for (unsigned int i = 0; i < clay.size(); i++) {
     auto &d_perc_cell = d_perc[i];
 
     const auto &sand_cell = sand[i];
@@ -3684,15 +3683,15 @@ std::vector<Real> compute_d_perc(const std::vector<Real> &clay,
     const auto Y_2 = 100;
 
     if (perc <= Y_0) {
-      const Real angular_coeff =
+      const double angular_coeff =
           (Y_0 - Y_1) / (std::log10(25.)); // 50 \mu m / 2 \mu m
-      const Real DY = perc - Y_0;
+      const double DY = perc - Y_0;
 
       d_perc_cell = 50.e-6 * std::pow(10, DY / angular_coeff);
     } else {
-      const Real angular_coeff =
+      const double angular_coeff =
           (Y_2 - Y_0) / (std::log10(40)); // 2 mm / 50 \mu m
-      const Real DY = perc - Y_0;
+      const double DY = perc - Y_0;
 
       d_perc_cell = 50.e-6 * std::pow(10, DY / angular_coeff);
     }
