@@ -42,9 +42,8 @@
 // i: row    index
 // j: column index
 
-
-#include "utils_H.h"
 #include "code_init.h"
+#include "utils_H.h"
 
 //! Parse library
 #include "GetPot.hpp"
@@ -57,9 +56,9 @@
 #ifndef NO_GPU
 
 // Thrust
+#include <thrust/copy.h>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include <thrust/copy.h>
 
 // cuSPARSE
 
@@ -88,24 +87,25 @@ int main(int argc, char **argv) {
   const double height_thermometer =
       dataFile("files/meteo_data/height_thermometer", 200.);
 
-  const unsigned int steps_per_hour = dataFile("discretization/steps_per_hour", 10);
+  const unsigned int steps_per_hour =
+      dataFile("discretization/steps_per_hour", 10);
   const double max_Days = dataFile("discretization/max_Days", 20.);
   const double starting_day = dataFile("discretization/starting_day", 0);
   const double H_min = dataFile("discretization/H_min", 0.001);
   const double T_thr = dataFile("discretization/T_thr", 0);
 
   const double time_spacing_temp =
-        dataFile("files/meteo_data/time_spacing_temp", 1.);
+      dataFile("files/meteo_data/time_spacing_temp", 1.);
   const std::string format_temp =
-        dataFile("files/meteo_data/format_temp", "arpa");
+      dataFile("files/meteo_data/format_temp", "arpa");
   const double dt_temp = time_spacing_temp * 3600;
 
   const bool direct_method = dataFile("linear_solver/direct_method", true);
 
   const bool is_precipitation =
-        dataFile("files/meteo_data/precipitation", true);
+      dataFile("files/meteo_data/precipitation", true);
   const bool constant_precipitation =
-        dataFile("files/meteo_data/constant_precipitation", true);
+      dataFile("files/meteo_data/constant_precipitation", true);
 
   const bool save_temporal_sequence =
       dataFile("discretization/save_temporal_sequence", false);
@@ -126,13 +126,12 @@ int main(int argc, char **argv) {
   const double frequency_save = dataFile("debug/frequency_save", 24.);
 
   const std::string precipitation_file =
-          dataFile("files/meteo_data/rain_file", " ");
+      dataFile("files/meteo_data/rain_file", " ");
 
   const double time_spacing_rain =
-          dataFile("files/meteo_data/time_spacing_rain", 1.);
+      dataFile("files/meteo_data/time_spacing_rain", 1.);
 
-  const int number_stations =
-          dataFile("files/meteo_data/number_stations", 1);
+  const int number_stations = dataFile("files/meteo_data/number_stations", 1);
 
   const int number_gauges = dataFile("discretization/number_gauges", 1);
 
@@ -163,8 +162,7 @@ int main(int argc, char **argv) {
         std::string("Rscript "
                     "../Geostatistics/Downscaling_Simulation_SoilGrids/"
                     "Downscaling/DownscalingAitchisonSmartSed_2020.R ") +
-        std::to_string(totSimNumber) + " " +
-        std::to_string(scaling_factor);
+        std::to_string(totSimNumber) + " " + std::to_string(scaling_factor);
     std::system(bashCommand.c_str());
   }
   MPI_Barrier(MPI_COMM_WORLD);
@@ -179,19 +177,15 @@ int main(int argc, char **argv) {
     std::cout << "n_manning              = " << n_manning << std::endl;
     std::cout << "steps_per_hour         = " << steps_per_hour << std::endl;
     std::cout << "max_Days               = " << max_Days << std::endl;
-    std::cout << "t_final                = " << t_final << " sec."
-              << std::endl;
-    std::cout << "dt_DSV_given           = " << dt_DSV << " sec."
-              << std::endl;
+    std::cout << "t_final                = " << t_final << " sec." << std::endl;
+    std::cout << "dt_DSV_given           = " << dt_DSV << " sec." << std::endl;
     std::cout << "H_min                  = " << H_min << std::endl;
     std::cout << "------------------------ " << std::endl;
   }
 
-
   // +-----------------------------------------------+
   // |                Start MC sim                   |
   // +-----------------------------------------------+
-
 
   // Starts the Monte Carlo simulation
   for (int currentSimNumber =
@@ -234,93 +228,49 @@ int main(int argc, char **argv) {
 
     double pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
-        xllcorner_staggered_v, yllcorner_staggered_v, NODATA_value, phi_rad, dt_min, c1_sed, dt_sed, slope_x_max, slope_y_max;
+        xllcorner_staggered_v, yllcorner_staggered_v, NODATA_value, phi_rad,
+        dt_min, c1_sed, dt_sed, slope_x_max, slope_y_max;
 
     int iter = 0;
     double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
 
     /*                   */
 
+    resize_rasters(
+        dataFile, N_rows, N_cols, N,
 
-    resize_rasters( dataFile, N_rows, N_cols, N,
+        idStaggeredBoundaryVectSouth, idStaggeredBoundaryVectNorth,
+        idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+        idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
+        idBasinVect, idBasinVectReIndex,
 
-                    idStaggeredBoundaryVectSouth,
-    idStaggeredBoundaryVectNorth, 
-    idStaggeredBoundaryVectWest,
-    idStaggeredBoundaryVectEast, 
-    idStaggeredInternalVectHorizontal,
-    idStaggeredInternalVectVertical, 
-    idBasinVect, 
-    idBasinVectReIndex,
+        idStaggeredBoundaryVectSouth_excluded,
+        idStaggeredBoundaryVectNorth_excluded,
+        idStaggeredBoundaryVectWest_excluded,
+        idStaggeredBoundaryVectEast_excluded,
+        idStaggeredInternalVectHorizontal_excluded,
+        idStaggeredInternalVectVertical_excluded, idBasinVect_excluded,
+        idBasinVectReIndex_excluded,
 
-    idStaggeredBoundaryVectSouth_excluded,
-    idStaggeredBoundaryVectNorth_excluded,
-    idStaggeredBoundaryVectWest_excluded,
-    idStaggeredBoundaryVectEast_excluded,
-    idStaggeredInternalVectHorizontal_excluded,
-    idStaggeredInternalVectVertical_excluded, 
-    idBasinVect_excluded,
-    idBasinVectReIndex_excluded,
+        Gamma_vect_x, Gamma_vect_y,
 
-    Gamma_vect_x, 
-    Gamma_vect_y,
+        excluded_ids, additional_source_term,
 
-    excluded_ids,
-    additional_source_term,
+        basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff, W_Gav, W_Gav_cum,
+        hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u, v, n_x, n_y,
+        u_star, v_star, h_interface_x, h_interface_y, slope_x, slope_y,
+        slope_cell, soilMoistureRetention, roughness_vect, eta, H,
 
-    basin_mask_Vec, 
-    orography, 
-    h_G, 
-    h_sd, 
-    h_sn, 
-    S_coeff,
-    W_Gav, 
-    W_Gav_cum, 
-    hydraulic_conductivity, 
-    Z_Gav, 
-    d_90, 
-    Res_x, 
-    Res_y, 
-    u,
-    v, 
-    n_x, 
-    n_y, 
-    u_star, 
-    v_star, 
-    h_interface_x, 
-    h_interface_y, 
-    slope_x,
-    slope_y, 
-    slope_cell, 
-    soilMoistureRetention, 
-    roughness_vect, 
-    eta, 
-    H,
+        H_basin, rhs,
 
-    H_basin, rhs,
+        pixel_size, // meter/pixel
+        xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
+        xllcorner_staggered_v, yllcorner_staggered_v, NODATA_value,
 
-    pixel_size, // meter/pixel
-    xllcorner, 
-    yllcorner, 
-    xllcorner_staggered_u, 
-    yllcorner_staggered_u,
-    xllcorner_staggered_v, 
-    yllcorner_staggered_v, 
-    NODATA_value,
-   
-    currentSimNumber,
-    rank,
-    scaling_factor,
-    friction_model,
-    output_dir, file_dir,
-    save_temporal_sequence,
-    max_Days,
-    temperature_file,
-    ET_model,
-    infiltrationModel,
-    phi_rad,
-    dt_min,
-    dt_temp, slope_x_max, slope_y_max, number_gauges, kk_gauges );
+        currentSimNumber, rank, scaling_factor, friction_model, output_dir,
+        file_dir, save_temporal_sequence, max_Days, temperature_file, ET_model,
+        infiltrationModel, phi_rad, dt_min, dt_temp, slope_x_max, slope_y_max,
+        number_gauges, kk_gauges);
 
     // +-----------------------------------------------+
     // |                    Rain                       |
@@ -329,11 +279,10 @@ int main(int argc, char **argv) {
     Rain precipitation(infiltrationModel, N,
                        dataFile("files/infiltration/isInitialLoss", false),
                        dataFile("files/infiltration/perc_initialLoss", 0.05),
-		       is_precipitation, constant_precipitation,
-		       precipitation_file, file_dir, time_spacing_rain,
-                       number_stations, max_Days, dataFile,
-		       xllcorner, yllcorner, pixel_size,
-                       N_rows, N_cols, idBasinVect);
+                       is_precipitation, constant_precipitation,
+                       precipitation_file, file_dir, time_spacing_rain,
+                       number_stations, max_Days, dataFile, xllcorner,
+                       yllcorner, pixel_size, N_rows, N_cols, idBasinVect);
 
     dt_min = std::min(precipitation.dt_rain, dt_temp);
     for (const auto &kk : hydraulic_conductivity) {
@@ -365,7 +314,7 @@ int main(int argc, char **argv) {
     // +-----------------------------------------------+
     // |                   Runoff                      |
     // +-----------------------------------------------+
-    
+
     upwind H_interface(H, u, v, idStaggeredInternalVectHorizontal_excluded,
                        idStaggeredBoundaryVectWest_excluded,
                        idStaggeredBoundaryVectEast_excluded,
@@ -384,7 +333,7 @@ int main(int argc, char **argv) {
                        N_cols, slope_x, slope_y);
 
     H_basin.resize(idBasinVect_excluded.size());
-    rhs.resize(idBasinVect_excluded.size()); 
+    rhs.resize(idBasinVect_excluded.size());
 
     const double c1_min = dt_min / pixel_size;
     static constexpr double gravity = 9.81;
@@ -393,13 +342,9 @@ int main(int argc, char **argv) {
       return dt_DSV / pixel_size;
     };
 
-    auto c2_DSV = [](double c1) {
-      return gravity * c1;
-    };
+    auto c2_DSV = [](double c1) { return gravity * c1; };
 
-    auto c3_DSV = [](double c1) {
-      return gravity * c1 * c1;
-    };
+    auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
 
     const double area = std::pow(pixel_size, 2) * 1.e-6; // km^2
 
@@ -408,7 +353,8 @@ int main(int argc, char **argv) {
     for (unsigned int i = 0; i < rhs.size(); i++)
       rhs(i) = 0.;
 
-    Eigen::SparseMatrix<double> A(idBasinVect_excluded.size(), idBasinVect_excluded.size());
+    Eigen::SparseMatrix<double> A(idBasinVect_excluded.size(),
+                                  idBasinVect_excluded.size());
 
     // row, column and value in the Triplet
     std::vector<Eigen::Triplet<double>> coefficients;
@@ -436,8 +382,8 @@ int main(int argc, char **argv) {
     // +-----------------------------------------------+
     // |   Copy to Device all the needed objects       |
     // +-----------------------------------------------+
-    
-    // From this part on we just perform all the computations on the device, 
+
+    // From this part on we just perform all the computations on the device,
     // the CPU is used only to save the current solution on the disk
     /*
     auto size = 100*sizeof(double); // size in bytes of 100 doubles
@@ -452,8 +398,7 @@ int main(int argc, char **argv) {
     */
 
     // Host -> Device, if h_std is a std::vector<float>
-    //thrust::device_vector<double> H_device(H.begin(), H.end());
-
+    // thrust::device_vector<double> H_device(H.begin(), H.end());
 
     while (!is_last_step) {
 
@@ -564,9 +509,8 @@ int main(int argc, char **argv) {
 
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, N_rows, N, c1_DSV_, c3_DSV_,
-                  0, 
-                  precipitation.DP_cumulative, dt_DSV, alfa.alfa_x, alfa.alfa_y,
-                  idStaggeredInternalVectHorizontal_excluded,
+                  0, precipitation.DP_cumulative, dt_DSV, alfa.alfa_x,
+                  alfa.alfa_y, idStaggeredInternalVectHorizontal_excluded,
                   idStaggeredInternalVectVertical_excluded,
                   idStaggeredBoundaryVectWest_excluded,
                   idStaggeredBoundaryVectEast_excluded,
@@ -719,9 +663,10 @@ int main(int argc, char **argv) {
           additional_source_term.assign(N, 0.);
 
           // assemble horizontal fluxes
-          for (const unsigned int &Id : idStaggeredInternalVectHorizontal_excluded) {
+          for (const unsigned int &Id :
+               idStaggeredInternalVectHorizontal_excluded) {
             const unsigned int i = Id / (N_cols + 1), IDeast = Id - i,
-                       IDwest = Id - i - 1;
+                               IDwest = Id - i - 1;
 
             const double &h_left = h_sd[IDwest], &h_right = h_sd[IDeast];
 
@@ -756,7 +701,8 @@ int main(int argc, char **argv) {
           }
 
           // assemble vertical fluxes
-          for (const unsigned int &Id : idStaggeredInternalVectVertical_excluded) {
+          for (const unsigned int &Id :
+               idStaggeredInternalVectVertical_excluded) {
             const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
 
             const double &h_left = h_sd[IDnorth], &h_right = h_sd[IDsouth];
@@ -790,7 +736,7 @@ int main(int argc, char **argv) {
           for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
             const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1,
-                       IDright = Id - i;
+                               IDright = Id - i;
 
             if (std::get<0>(excluded_ids[IDleft])) {
               const auto &k_pour = std::get<1>(excluded_ids[IDleft]);
@@ -874,9 +820,9 @@ int main(int argc, char **argv) {
           double H_current = 0., H_candidate = 0., mass_flux_candidate = 0.,
                  solid_flux_candidate = 0.;
           unsigned int kk_gauges_max = 0;
-          for (const auto & candidate : kk_gauges[number - 1]) {
+          for (const auto &candidate : kk_gauges[number - 1]) {
             const unsigned int i = candidate / N_cols;
-            const auto & cc = H[candidate];
+            const auto &cc = H[candidate];
 
             const auto velo = std::sqrt(
                 std::pow(((v[candidate] + v[candidate + N_cols]) * .5), 2.) +

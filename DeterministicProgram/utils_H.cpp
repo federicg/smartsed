@@ -397,17 +397,20 @@ Raster::Raster(const std::string &file) {
   Coords.setFromTriplets(cc.begin(), cc.end());
 };
 
-double signum(const double &x) { return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0); }
+double signum(const double &x) {
+  return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0);
+}
 
 Rain::Rain(const std::string &infiltrationModel, const unsigned int &N,
            const bool &isInitialLoss, const double &perc_initialLoss,
-	   const bool is_precipitation, const bool constant_precipitation,
-	   const std::string precipitation_file, const std::string file_dir, const double time_spacing_rain,
-	   const int number_stations, const double max_Days, const GetPot& dataFile,
-	   const double &xllcorner,
-           const double &yllcorner, const double &pixel_size,
-           const unsigned int &N_rows, const unsigned int &N_cols,
-           const std::vector<unsigned int> &idBasinVect ) {
+           const bool is_precipitation, const bool constant_precipitation,
+           const std::string precipitation_file, const std::string file_dir,
+           const double time_spacing_rain, const int number_stations,
+           const double max_Days, const GetPot &dataFile,
+           const double &xllcorner, const double &yllcorner,
+           const double &pixel_size, const unsigned int &N_rows,
+           const unsigned int &N_cols,
+           const std::vector<unsigned int> &idBasinVect) {
   M_isInitialLoss = isInitialLoss;
   c = perc_initialLoss;
 
@@ -421,64 +424,61 @@ Rain::Rain(const std::string &infiltrationModel, const unsigned int &N,
   DP_infiltrated.resize(N);
   IDW_weights.resize(N);
 
-
   dt_rain = 0;
 
-    if (constant_precipitation || !is_precipitation) {
-      dt_rain = time_spacing_rain * 3600;
+  if (constant_precipitation || !is_precipitation) {
+    dt_rain = time_spacing_rain * 3600;
 
-      const auto ndata_rain = std::round(max_Days * 24 / time_spacing_rain);
+    const auto ndata_rain = std::round(max_Days * 24 / time_spacing_rain);
 
-      this->constant_precipitation(file_dir + precipitation_file,
-                                           ndata_rain, is_precipitation,
-                                           time_spacing_rain);
-    } else // IDW
-    {
-      std::vector<std::string> precipitation_file;
-      std::vector<double> time_spacing_rain, X, Y;
-      std::vector<unsigned int> ndata_rain;
+    this->constant_precipitation(file_dir + precipitation_file, ndata_rain,
+                                 is_precipitation, time_spacing_rain);
+  } else // IDW
+  {
+    std::vector<std::string> precipitation_file;
+    std::vector<double> time_spacing_rain, X, Y;
+    std::vector<unsigned int> ndata_rain;
 
-      for (int number = 1; number <= number_stations; number++) {
-        std::string filename = "files/meteo_data/rain_file_";
-        filename += std::to_string(number);
-        const std::string precipitation_file_current =
-            dataFile(filename.c_str(), " ");
+    for (int number = 1; number <= number_stations; number++) {
+      std::string filename = "files/meteo_data/rain_file_";
+      filename += std::to_string(number);
+      const std::string precipitation_file_current =
+          dataFile(filename.c_str(), " ");
 
-        filename = "files/meteo_data/time_spacing_rain_";
-        filename += std::to_string(number);
-        const double time_spacing_rain_current = dataFile(filename.c_str(), 1.);
+      filename = "files/meteo_data/time_spacing_rain_";
+      filename += std::to_string(number);
+      const double time_spacing_rain_current = dataFile(filename.c_str(), 1.);
 
-        filename = "files/meteo_data/X_";
-        filename += std::to_string(number);
-        const double X_current = dataFile(filename.c_str(), 1.);
+      filename = "files/meteo_data/X_";
+      filename += std::to_string(number);
+      const double X_current = dataFile(filename.c_str(), 1.);
 
-        filename = "files/meteo_data/Y_";
-        filename += std::to_string(number);
-        const double Y_current = dataFile(filename.c_str(), 1.);
+      filename = "files/meteo_data/Y_";
+      filename += std::to_string(number);
+      const double Y_current = dataFile(filename.c_str(), 1.);
 
-        const unsigned int ndata_rain_current =
-            std::round(max_Days * 24 / time_spacing_rain_current);
+      const unsigned int ndata_rain_current =
+          std::round(max_Days * 24 / time_spacing_rain_current);
 
-        precipitation_file.push_back(file_dir + precipitation_file_current);
-        time_spacing_rain.push_back(time_spacing_rain_current);
-        X.push_back(X_current);
-        Y.push_back(Y_current);
-        ndata_rain.push_back(ndata_rain_current);
-      }
-
-      dt_rain = *std::min_element(time_spacing_rain.begin(),
-                                  time_spacing_rain.end()) *
-                3600;
-
-      this->IDW_precipitation(
-          precipitation_file, ndata_rain, time_spacing_rain, X, Y, xllcorner,
-          yllcorner, pixel_size, N_rows, N_cols, idBasinVect);
+      precipitation_file.push_back(file_dir + precipitation_file_current);
+      time_spacing_rain.push_back(time_spacing_rain_current);
+      X.push_back(X_current);
+      Y.push_back(Y_current);
+      ndata_rain.push_back(ndata_rain_current);
     }
 
+    dt_rain =
+        *std::min_element(time_spacing_rain.begin(), time_spacing_rain.end()) *
+        3600;
 
+    this->IDW_precipitation(precipitation_file, ndata_rain, time_spacing_rain,
+                            X, Y, xllcorner, yllcorner, pixel_size, N_rows,
+                            N_cols, idBasinVect);
+  }
 }
 
-void Rain::constant_precipitation(const std::string &file, const unsigned int &ndata,
+void Rain::constant_precipitation(const std::string &file,
+                                  const unsigned int &ndata,
                                   const bool &is_precipitation,
                                   const double &time_spacing) {
   M_time_spacing_vect.resize(1);
@@ -509,8 +509,9 @@ void Rain::constant_precipitation(const std::string &file, const unsigned int &n
                   minute_number = std::stoi(minute_string),
                   second_number = std::stoi(second_string);
 
-        const double hour_full = double(hour_number) + double(minute_number) / 60 +
-                               double(second_number) / 3600;
+        const double hour_full = double(hour_number) +
+                                 double(minute_number) / 60 +
+                                 double(second_number) / 3600;
 
         double value;
         ff >> value;
@@ -550,9 +551,11 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
                              const std::vector<unsigned int> &ndata_vec,
                              const std::vector<double> &time_spacing_vect,
                              const std::vector<double> &X,
-                             const std::vector<double> &Y, const double &xllcorner,
-                             const double &yllcorner, const double &pixel_size,
-                             const unsigned int &N_rows, const unsigned int &N_cols,
+                             const std::vector<double> &Y,
+                             const double &xllcorner, const double &yllcorner,
+                             const double &pixel_size,
+                             const unsigned int &N_rows,
+                             const unsigned int &N_cols,
                              const std::vector<unsigned int> &idBasinVect) {
 
   M_time_spacing_vect = time_spacing_vect;
@@ -585,7 +588,8 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
         const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string);
 
-        const double hour_full = double(hour_number) + double(minute_number) / 60;
+        const double hour_full =
+            double(hour_number) + double(minute_number) / 60;
 
         double value;
         ff >> value;
@@ -660,7 +664,7 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
     const int i = IDcenter / N_cols, j = IDcenter % N_cols;
 
     const double X_cell = j * pixel_size + xllcorner,
-               Y_cell = -i * pixel_size + yllcorner + N_rows * pixel_size;
+                 Y_cell = -i * pixel_size + yllcorner + N_rows * pixel_size;
 
     for (unsigned int ii = 0; ii < X.size(); ii++) {
       const double p = 3.;
@@ -690,17 +694,17 @@ void Rain::IDW_precipitation(const std::vector<std::string> &file_vect,
   }
 }
 
-void Rain::computePrecipitation(const double &time, const std::vector<double> &S,
-                                const std::vector<double> &melt_mask,
-                                const std::vector<double> &h_G,
-                                const std::vector<double> &H, const unsigned int &N_rows,
-                                const unsigned int &N_cols,
-                                const std::vector<unsigned int> &idBasinVect) {
+void Rain::computePrecipitation(
+    const double &time, const std::vector<double> &S,
+    const std::vector<double> &melt_mask, const std::vector<double> &h_G,
+    const std::vector<double> &H, const unsigned int &N_rows,
+    const unsigned int &N_cols, const std::vector<unsigned int> &idBasinVect) {
 
   // SCS-CN method and Initial and Constant Loss Model
   for (unsigned int Id = 0; Id < Hyetograph.size(); Id++) {
 
-    const unsigned int i_index = std::floor(time / (M_time_spacing_vect[Id] * 3600));
+    const unsigned int i_index =
+        std::floor(time / (M_time_spacing_vect[Id] * 3600));
 
     for (const auto &IDcenter : idBasinVect) {
 
@@ -726,9 +730,11 @@ void Rain::computePrecipitation(const double &time, const std::vector<double> &S
         exit(-1);
       }
 
-      double infiltrationRate = weight * rainfall_intensity * melt_mask[IDcenter],
-           potential_runoff = std::max(
-               rainfall_intensity * melt_mask[IDcenter] - infiltrationRate, 0.);
+      double infiltrationRate =
+                 weight * rainfall_intensity * melt_mask[IDcenter],
+             potential_runoff = std::max(
+                 rainfall_intensity * melt_mask[IDcenter] - infiltrationRate,
+                 0.);
 
       if (((H[IDcenter] + h_G[IDcenter]) < (c * S[IDcenter])) &&
           M_isInitialLoss) // initial loss
@@ -746,8 +752,10 @@ void Rain::computePrecipitation(const double &time, const std::vector<double> &S
 
 Temperature::Temperature(const std::string &file, const unsigned int &N,
                          const unsigned int &max_Days, const double &T_crit,
-                         const std::vector<double> &orography, const unsigned int &ndata,
-                         const unsigned int &steps_per_hour, const double &time_spacing,
+                         const std::vector<double> &orography,
+                         const unsigned int &ndata,
+                         const unsigned int &steps_per_hour,
+                         const double &time_spacing,
                          const double &height_thermometer,
                          const std::string format_temp)
     : T_crit(T_crit), height_th(height_thermometer) {
@@ -826,8 +834,9 @@ Temperature::Temperature(const std::string &file, const unsigned int &N,
                   minute_number = std::stoi(minute_string),
                   second_number = std::stoi(second_string);
 
-        const double hour_full = double(hour_number) + double(minute_number) / 60 +
-                               double(second_number) / 3600;
+        const double hour_full = double(hour_number) +
+                                 double(minute_number) / 60 +
+                                 double(second_number) / 3600;
 
         double value; // temperature data
         ff >> value;
@@ -920,7 +929,8 @@ Temperature::Temperature(const std::string &file, const unsigned int &N,
         const int hour_number = std::stoi(hour_string),
                   minute_number = std::stoi(minute_string);
 
-        const double hour_full = double(hour_number) + double(minute_number) / 60;
+        const double hour_full =
+            double(hour_number) + double(minute_number) / 60;
 
         double value; // temperature data
         ff >> value;
@@ -966,7 +976,7 @@ Temperature::Temperature(const std::string &file, const unsigned int &N,
     const auto i = std::floor((n - 1) * (24. / time_spacing));
 
     unsigned int k = 0,
-         h = i; // i
+                 h = i; // i
 
     while (k != static_cast<unsigned int>(std::round((24. / time_spacing)))) {
 
@@ -1007,9 +1017,9 @@ Temperature::Temperature(const std::string &file, const unsigned int &N,
   }
 }
 
-void Temperature::computeTemperature(const unsigned int &i,
-                                     const std::vector<double> &orography,
-                                     const std::vector<unsigned int> &idBasinVect) {
+void Temperature::computeTemperature(
+    const unsigned int &i, const std::vector<double> &orography,
+    const std::vector<unsigned int> &idBasinVect) {
   const double T = Temperature_Graph[i];
 
   if (std::isnan(T)) {
@@ -1023,10 +1033,13 @@ void Temperature::computeTemperature(const unsigned int &i,
   }
 }
 
-evapoTranspiration::evapoTranspiration(
-    const std::string &ET_model, const unsigned int &N,
-    const std::vector<double> &orography, const std::vector<double> &J,
-    const unsigned int &max_Days, const double &phi_rad, const double &height_thermometer)
+evapoTranspiration::evapoTranspiration(const std::string &ET_model,
+                                       const unsigned int &N,
+                                       const std::vector<double> &orography,
+                                       const std::vector<double> &J,
+                                       const unsigned int &max_Days,
+                                       const double &phi_rad,
+                                       const double &height_thermometer)
     : height_th(height_thermometer) {
 
   ET_vec.resize(N);
@@ -1075,8 +1088,8 @@ void evapoTranspiration::ET(const std::vector<double> &T_mean,
 
 frictionClass::frictionClass(
     const std::vector<double> &H_interface_horizontal,
-    const std::vector<double> &H_interface_vertical, const std::vector<double> &u,
-    const std::vector<double> &v,
+    const std::vector<double> &H_interface_vertical,
+    const std::vector<double> &u, const std::vector<double> &v,
     const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
     const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
     const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
@@ -1085,9 +1098,9 @@ frictionClass::frictionClass(
     const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
     const std::string &friction_model, const double &n_manning,
     const double &dt_DSV, const std::vector<double> &d_90,
-    const std::vector<double> &rough, const double &H_min, const unsigned int &N_rows,
-    const unsigned int &N_cols, const std::vector<double> &S_x,
-    const std::vector<double> &S_y)
+    const std::vector<double> &rough, const double &H_min,
+    const unsigned int &N_rows, const unsigned int &N_cols,
+    const std::vector<double> &S_x, const std::vector<double> &S_y)
     : H_interface_horizontal(H_interface_horizontal),
       H_interface_vertical(H_interface_vertical), u(u), v(v),
       idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal),
@@ -1106,7 +1119,8 @@ frictionClass::frictionClass(
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
       const unsigned int IDcell = j + i * N_cols, IDleft = IDcell + i,
-                 IDright = IDleft + 1, IDup = IDcell, IDdown = IDcell + N_cols;
+                         IDright = IDleft + 1, IDup = IDcell,
+                         IDdown = IDcell + N_cols;
 
       const auto d_90_cell = rough[IDcell] * d_90[IDcell];
 
@@ -1186,7 +1200,7 @@ void frictionClass::f_x() {
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
                      std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1207,7 +1221,7 @@ void frictionClass::f_x() {
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
                      std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1228,7 +1242,7 @@ void frictionClass::f_x() {
     if (den > M_H_min) {
       const auto u_abs = std::abs(u[Id]);
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
                      std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1253,7 +1267,7 @@ void frictionClass::f_y() {
       const auto v_abs = std::abs(v[Id]);
 
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
                      std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1274,7 +1288,7 @@ void frictionClass::f_y() {
     if (den > M_H_min) {
       const auto v_abs = std::abs(v[Id]);
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
                      std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1295,7 +1309,7 @@ void frictionClass::f_y() {
     if (den > M_H_min) {
       const auto v_abs = std::abs(v[Id]);
       double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-                   (M_frictionModel > 0);
+                     (M_frictionModel > 0);
       coeff = std::max(
           coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
                      std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
@@ -1310,8 +1324,8 @@ void upwind::computeHorizontal() {
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
     const unsigned int i = Id / (N_cols + 1), // u
-        IDeast = Id - i,              // H
-        IDwest = Id - i - 1;          // H
+        IDeast = Id - i,                      // H
+        IDwest = Id - i - 1;                  // H
     const double &H_left = H[IDwest], &H_right = H[IDeast];
     horizontal[Id] =
         (H_left + H_right) * .5 + signum(u[Id]) * (H_left - H_right) * .5;
@@ -1359,9 +1373,10 @@ void upwind::computeVertical() {
 
 void bilinearInterpolation(const std::vector<double> &u,
                            const std::vector<double> &v,
-                           std::vector<double> &u_star, std::vector<double> &v_star,
-                           const unsigned int &nrows, const unsigned int &ncols, const double &dt,
-                           const double &pixel_size) {
+                           std::vector<double> &u_star,
+                           std::vector<double> &v_star,
+                           const unsigned int &nrows, const unsigned int &ncols,
+                           const double &dt, const double &pixel_size) {
 
   // +-----------------------------------------------+
   // |              Horizontal Velocity              |
@@ -1384,8 +1399,8 @@ void bilinearInterpolation(const std::vector<double> &u,
 
       const auto Dx = vel / pixel_size * dt;
 
-      Vector2D xx(
-          std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
+      Vector2D xx(std::array<double, 2>{
+          {double(j), double(i)}}); // Top-Left reference frame
 
       xx = xx - Dx;
 
@@ -1432,7 +1447,7 @@ void bilinearInterpolation(const std::vector<double> &u,
 
         // compute weights
         const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
-                   w_y1 = y - y_1;
+                     w_y1 = y - y_1;
 
         const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
                    b = u[Id_12] * w_x2 + u[Id_22] * w_x1;
@@ -1481,8 +1496,8 @@ void bilinearInterpolation(const std::vector<double> &u,
 
       const auto Dx = vel / pixel_size * dt;
 
-      Vector2D xx(
-          std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
+      Vector2D xx(std::array<double, 2>{
+          {double(j), double(i)}}); // Top-Left reference frame
 
       xx = xx - Dx;
 
@@ -1527,7 +1542,7 @@ void bilinearInterpolation(const std::vector<double> &u,
 
         // compute weights
         const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
-                   w_y1 = y - y_1;
+                     w_y1 = y - y_1;
 
         const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
                    b = v[Id_12] * w_x2 + v[Id_22] * w_x1;
@@ -1563,8 +1578,9 @@ bool is_file_exist(const char *fileName) {
 
 void bilinearInterpolation(
     const std::vector<double> &u, const std::vector<double> &v,
-    std::vector<double> &u_star, std::vector<double> &v_star, const unsigned int &nrows,
-    const unsigned int &ncols, const double &dt_DSV, const double &pixel_size,
+    std::vector<double> &u_star, std::vector<double> &v_star,
+    const unsigned int &nrows, const unsigned int &ncols, const double &dt_DSV,
+    const double &pixel_size,
     const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
     const std::vector<unsigned int> &idStaggeredInternalVectVertical,
     const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
@@ -1579,18 +1595,18 @@ void bilinearInterpolation(
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
     const unsigned int i = Id / (ncols + 1), j = Id % (ncols + 1),
-               ID_NE = Id - i, // v
-        ID_NW = ID_NE - 1,     // v
-        ID_SE = ID_NE + ncols, // v
-        ID_SW = ID_NW + ncols; // v
+                       ID_NE = Id - i, // v
+        ID_NW = ID_NE - 1,             // v
+        ID_SE = ID_NE + ncols,         // v
+        ID_SW = ID_NW + ncols;         // v
 
     Vector2D vel(std::array<double, 2>{
         {u[Id], (v[ID_NE] + v[ID_NW] + v[ID_SE] + v[ID_SW]) / 4.}});
 
     const auto Dx = vel / pixel_size * dt_DSV;
 
-    Vector2D xx(
-        std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
+    Vector2D xx(std::array<double, 2>{
+        {double(j), double(i)}}); // Top-Left reference frame
 
     xx = xx - Dx;
 
@@ -1636,7 +1652,8 @@ void bilinearInterpolation(
           Id_22 = x_2 + y_2 * (ncols + 1);        // u
 
       // compute weights
-      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+                   w_y1 = y - y_1;
 
       const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
                  b = u[Id_12] * w_x2 + u[Id_22] * w_x1;
@@ -1673,8 +1690,8 @@ void bilinearInterpolation(
 
     const auto Dx = vel / pixel_size * dt_DSV;
 
-    Vector2D xx(
-        std::array<double, 2>{{double(j), double(i)}}); // Top-Left reference frame
+    Vector2D xx(std::array<double, 2>{
+        {double(j), double(i)}}); // Top-Left reference frame
 
     xx = xx - Dx;
 
@@ -1718,7 +1735,8 @@ void bilinearInterpolation(
                  Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
 
       // compute weights
-      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y, w_y1 = y - y_1;
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+                   w_y1 = y - y_1;
 
       const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
                  b = v[Id_12] * w_x2 + v[Id_22] * w_x1;
@@ -1739,8 +1757,9 @@ void bilinearInterpolation(
 }
 
 double bilinearInterpolation(const std::vector<double> &u,
-                           const std::vector<double> &v, const unsigned int &ncols,
-                           const unsigned int &nrows, const Vector2D &xx) {
+                             const std::vector<double> &v,
+                             const unsigned int &ncols,
+                             const unsigned int &nrows, const Vector2D &xx) {
 
   // horizontal
 
@@ -1828,8 +1847,9 @@ double bilinearInterpolation(const std::vector<double> &u,
   return (std::sqrt(output_hor * output_hor + output_vert * output_vert));
 }
 
-double bilinearInterpolation(const std::vector<double> &H, const unsigned int &ncols,
-                           const unsigned int &nrows, const Vector2D &xx) {
+double bilinearInterpolation(const std::vector<double> &H,
+                             const unsigned int &ncols,
+                             const unsigned int &nrows, const Vector2D &xx) {
 
   auto x = xx(0), y = xx(1);
 
@@ -2030,9 +2050,10 @@ void computeAdjacencies(
   // cycle on centered cells
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
-      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
-                 IDvel = IDcell +
-                         N_cols; // interface between IDcell and IDcell_south
+      const unsigned int
+          IDcell = j + i * N_cols,
+          IDcell_south = IDcell + N_cols,
+          IDvel = IDcell + N_cols; // interface between IDcell and IDcell_south
 
       if (i != (N_rows - 1)) {
         if ((basin_mask_Vec_mpi[IDcell] + basin_mask_Vec_mpi[IDcell_south]) ==
@@ -2080,8 +2101,8 @@ void computeAdjacencies(
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
       const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
-                 IDvel =
-                     IDcell + i + 1; // interface between IDcell and IDcell_east
+                         IDvel = IDcell + i +
+                                 1; // interface between IDcell and IDcell_east
 
       if (j != (N_cols - 1)) {
         if ((basin_mask_Vec_mpi[IDcell] + basin_mask_Vec_mpi[IDcell_east]) ==
@@ -2115,20 +2136,21 @@ void computeAdjacencies(
   }
 }
 
-void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
+void computeAdjacencies(
+    const std::vector<double> &basin_mask_Vec,
 
-                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<unsigned int> &idBasinVect,
-                        std::vector<unsigned int> &idBasinVectReIndex,
+    std::vector<unsigned int> &idBasinVect,
+    std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const unsigned int &N_rows, const unsigned int &N_cols) {
+    const unsigned int &N_rows, const unsigned int &N_cols) {
 
   // +-----------------------------------------------+
   // |                 Basin H IDs                   |
@@ -2154,9 +2176,10 @@ void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
   // cycle on centered cells
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
-      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
-                 IDvel = IDcell +
-                         N_cols; // interface between IDcell and IDcell_south
+      const unsigned int
+          IDcell = j + i * N_cols,
+          IDcell_south = IDcell + N_cols,
+          IDvel = IDcell + N_cols; // interface between IDcell and IDcell_south
 
       if (i != (N_rows - 1)) {
         if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) ==
@@ -2198,8 +2221,8 @@ void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
       const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
-                 IDvel =
-                     IDcell + i + 1; // interface between IDcell and IDcell_east
+                         IDvel = IDcell + i +
+                                 1; // interface between IDcell and IDcell_east
 
       if (j != (N_cols - 1)) {
         if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 1) {
@@ -2229,21 +2252,22 @@ void computeAdjacencies(const std::vector<double> &basin_mask_Vec,
   }
 }
 
-void computeAdjacencies(const std::vector<double> &basin_mask_Vec_input,
-                        const std::vector<std::tuple<bool, int>> &excluded_ids,
+void computeAdjacencies(
+    const std::vector<double> &basin_mask_Vec_input,
+    const std::vector<std::tuple<bool, int>> &excluded_ids,
 
-                        std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-                        std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
 
-                        std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-                        std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical,
 
-                        std::vector<unsigned int> &idBasinVect,
-                        std::vector<unsigned int> &idBasinVectReIndex,
+    std::vector<unsigned int> &idBasinVect,
+    std::vector<unsigned int> &idBasinVectReIndex,
 
-                        const unsigned int &N_rows, const unsigned int &N_cols) {
+    const unsigned int &N_rows, const unsigned int &N_cols) {
 
   std::vector<double> basin_mask_Vec = basin_mask_Vec_input;
 
@@ -2278,9 +2302,10 @@ void computeAdjacencies(const std::vector<double> &basin_mask_Vec_input,
   // cycle on centered cells
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
-      const unsigned int IDcell = j + i * N_cols, IDcell_south = IDcell + N_cols,
-                 IDvel = IDcell +
-                         N_cols; // interface between IDcell and IDcell_south
+      const unsigned int
+          IDcell = j + i * N_cols,
+          IDcell_south = IDcell + N_cols,
+          IDvel = IDcell + N_cols; // interface between IDcell and IDcell_south
 
       if (i != (N_rows - 1)) {
         if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) ==
@@ -2323,8 +2348,8 @@ void computeAdjacencies(const std::vector<double> &basin_mask_Vec_input,
   for (unsigned int i = 0; i < N_rows; i++) {
     for (unsigned int j = 0; j < N_cols; j++) {
       const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
-                 IDvel =
-                     IDcell + i + 1; // interface between IDcell and IDcell_east
+                         IDvel = IDcell + i +
+                                 1; // interface between IDcell and IDcell_east
 
       if (j != (N_cols - 1)) {
         if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 1) {
@@ -2359,8 +2384,9 @@ void buildMatrix(
     const std::vector<double> &H_int_x, const std::vector<double> &H_int_y,
     const std::vector<double> &orography, const std::vector<double> &u_star,
     const std::vector<double> &v_star, const std::vector<double> &u,
-    const std::vector<double> &v, const std::vector<double> &H, const unsigned int &N_cols,
-    const unsigned int &N_rows, const unsigned int &N, const double &c1, const double &c3,
+    const std::vector<double> &v, const std::vector<double> &H,
+    const unsigned int &N_cols, const unsigned int &N_rows,
+    const unsigned int &N, const double &c1, const double &c3,
     const double &H_min, const std::vector<double> &precipitation,
     const double &dt_DSV, const std::vector<double> &alfa_x,
     const std::vector<double> &alfa_y,
@@ -2372,13 +2398,16 @@ void buildMatrix(
     const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
     const std::vector<unsigned int> &idBasinVect,
     const std::vector<unsigned int> &idBasinVect_not_excluded,
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal_not_excluded,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical_not_excluded,
-    const std::vector<unsigned int> &idBasinVectReIndex, const bool &isNonReflectingBC,
-    const bool &isH,
+    const std::vector<unsigned int>
+        &idStaggeredInternalVectHorizontal_not_excluded,
+    const std::vector<unsigned int>
+        &idStaggeredInternalVectVertical_not_excluded,
+    const std::vector<unsigned int> &idBasinVectReIndex,
+    const bool &isNonReflectingBC, const bool &isH,
 
     const std::vector<std::tuple<bool, int>>
-        &excluded_ids, // bool, value 1 in excluded ids  unsigned int, Id del pour point
+        &excluded_ids, // bool, value 1 in excluded ids  unsigned int, Id del
+                       // pour point
     std::vector<double> &additional_source_term,
 
     std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs) {
@@ -2406,7 +2435,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
     const unsigned int i = Id / (N_cols + 1),
-               IDleft = Id - i - 1,                   // H
+                       IDleft = Id - i - 1,           // H
         IDright = Id - i,                             // H
         IDleftReIndex = idBasinVectReIndex[IDleft],   // H
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
@@ -2438,7 +2467,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
     const unsigned int i = Id / (N_cols + 1), IDright = Id - i,
-               IDrightright = IDright + 1,            // H
+                       IDrightright = IDright + 1,    // H
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
 
     // define H at interfaces
@@ -2454,7 +2483,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
     const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1,
-               IDleftleft = IDleft - 1,             // H
+                       IDleftleft = IDleft - 1,     // H
         IDleftReIndex = idBasinVectReIndex[IDleft]; // H
 
     // define H at interfaces
@@ -2468,7 +2497,7 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
-    const unsigned int IDleft = Id - N_cols,                  // H
+    const unsigned int IDleft = Id - N_cols,          // H
         IDright = Id,                                 // H
         IDleftReIndex = idBasinVectReIndex[IDleft],   // H
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
@@ -2501,7 +2530,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredBoundaryVectNorth) {
     const unsigned int IDright = Id,
-               IDrightright = Id + N_cols,            //
+                       IDrightright = Id + N_cols,    //
         IDrightReIndex = idBasinVectReIndex[IDright]; // H
 
     // define H at interfaces
@@ -2516,7 +2545,7 @@ void buildMatrix(
   }
 
   for (const auto &Id : idStaggeredBoundaryVectSouth) {
-    const unsigned int IDleft = Id - N_cols,                // H
+    const unsigned int IDleft = Id - N_cols,        // H
         IDleftleft = IDleft - N_cols,               // H
         IDleftReIndex = idBasinVectReIndex[IDleft]; // H
 
@@ -2533,8 +2562,8 @@ void buildMatrix(
   for (const auto &Id : idStaggeredInternalVectHorizontal_not_excluded) {
 
     const unsigned int i = Id / (N_cols + 1),
-               IDleft = Id - i - 1, // H
-        IDright = Id - i;           // H
+                       IDleft = Id - i - 1, // H
+        IDright = Id - i;                   // H
 
     // define H at interfaces
     const auto H_interface = H_int_x[Id];
@@ -2558,7 +2587,7 @@ void buildMatrix(
 
   for (const auto &Id : idStaggeredInternalVectVertical_not_excluded) {
     const unsigned int IDleft = Id - N_cols, // H
-        IDright = Id;                // H
+        IDright = Id;                        // H
 
     // define H at interfaces
     const auto H_interface = H_int_y[Id];
@@ -2613,8 +2642,8 @@ void putDry_excludedNodes(
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
     const unsigned int i = Id / (N_cols + 1),
 
-               IDleft = Id - i - 1, // H
-        IDright = Id - i;           // H
+                       IDleft = Id - i - 1, // H
+        IDright = Id - i;                   // H
 
     if (std::get<0>(excluded_ids[IDleft]) &&
         std::get<0>(excluded_ids[IDright])) // se entrambe le celle sono escluse
@@ -2645,7 +2674,7 @@ void putDry_excludedNodes(
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
     const unsigned int IDleft = Id - N_cols, // H
-        IDright = Id;                // H
+        IDright = Id;                        // H
 
     if (std::get<0>(excluded_ids[IDleft]) &&
         std::get<0>(excluded_ids[IDright])) // se entrambe le celle sono escluse
@@ -2677,19 +2706,20 @@ void putDry_excludedNodes(
   }
 }
 
-void updateVel(std::vector<double> &u, std::vector<double> &v,
-               const std::vector<double> &u_star, const std::vector<double> &v_star,
-               const std::vector<double> &alfa_x, const std::vector<double> &alfa_y,
-               const double &N_rows, const double &N_cols, const double &c2,
-               const double &H_min, const std::vector<double> &eta,
-               const std::vector<double> &H, const std::vector<double> &orography,
-               const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-               const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-               const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-               const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-               const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-               const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-               const bool &isNonReflectingBC) {
+void updateVel(
+    std::vector<double> &u, std::vector<double> &v,
+    const std::vector<double> &u_star, const std::vector<double> &v_star,
+    const std::vector<double> &alfa_x, const std::vector<double> &alfa_y,
+    const double &N_rows, const double &N_cols, const double &c2,
+    const double &H_min, const std::vector<double> &eta,
+    const std::vector<double> &H, const std::vector<double> &orography,
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const bool &isNonReflectingBC) {
 
   // +-----------------------------------------------+
   // |              Update Vertical Velocity         |
@@ -2743,7 +2773,8 @@ void updateVel(std::vector<double> &u, std::vector<double> &v,
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {
 
-    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i, IDwest = Id - i - 1;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i,
+                       IDwest = Id - i - 1;
 
     const auto &H_interface =
         (H[IDeast] + H[IDwest]) * .5 +
@@ -2757,7 +2788,8 @@ void updateVel(std::vector<double> &u, std::vector<double> &v,
 
   for (const auto &Id : idStaggeredBoundaryVectWest) {
 
-    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i + 1, IDwest = Id - i;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i + 1,
+                       IDwest = Id - i;
 
     const auto &H_interface =
         (H[IDwest]) * .5 +
@@ -2771,7 +2803,8 @@ void updateVel(std::vector<double> &u, std::vector<double> &v,
 
   for (const auto &Id : idStaggeredBoundaryVectEast) {
 
-    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i - 1, IDwest = Id - i - 2;
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i - 1,
+                       IDwest = Id - i - 2;
 
     const auto &H_interface =
         (H[IDeast]) * .5 +
@@ -2787,14 +2820,15 @@ void updateVel(std::vector<double> &u, std::vector<double> &v,
 void compute_dt_adaptive(const std::vector<double> &H,
                          const std::vector<double> &H_old,
                          const std::vector<double> &H_oldold,
-                         const std::vector<unsigned int> &idBasinVect, double &dt,
+                         const std::vector<unsigned int> &idBasinVect,
+                         double &dt,
                          const double &local_estimator_time_tolerance,
                          const double &time, const double &timed,
                          const double &timedd) {
   double dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
   for (const auto &Id : idBasinVect) {
     const double &hcell = H[Id], &hcell_old = H_old[Id],
-               &hcell_oldd = H_oldold[Id];
+                 &hcell_oldd = H_oldold[Id];
 
     dh_t = (hcell - hcell_old) / (time - timed);
 
@@ -2822,7 +2856,7 @@ void compute_dt_adaptive(const std::vector<double> &H,
 }
 
 double maxdt(const std::vector<double> &u, const std::vector<double> &v,
-          const double &Hmax, const double &pixel_size) {
+             const double &Hmax, const double &pixel_size) {
 
   static constexpr double gravity = 9.81;
   // +-----------------------------------------------+
@@ -2857,7 +2891,7 @@ double maxdt(const std::vector<double> &u, const std::vector<double> &v,
 }
 
 double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
-                const double &c1) {
+                  const double &c1) {
 
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
@@ -2879,36 +2913,39 @@ double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
   return (std::max(Courant_y, Courant_x) * c1);
 }
 
-double maxCourant(const std::vector<double> &H, 
-                const double &c1) {
+double maxCourant(const std::vector<double> &H, const double &c1) {
   static constexpr double gravity = 9.81;
   const double Courant_cel =
       std::sqrt(*std::max_element(H.begin(), H.end()) * gravity);
   return (Courant_cel * c1);
 }
 
-double compute_dt_sediment(const double alpha, const double beta, const double S_x,
-                         const double S_y, const std::vector<double> &u,
-                         const std::vector<double> &v, const double pixel_size,
-                         const double dt_DSV, unsigned int * numberOfSteps) {
+double compute_dt_sediment(const double alpha, const double beta,
+                           const double S_x, const double S_y,
+                           const std::vector<double> &u,
+                           const std::vector<double> &v,
+                           const double pixel_size, const double dt_DSV,
+                           unsigned int *numberOfSteps) {
   static constexpr double max_courant_number = .95;
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
 
-  const double dt_y = max_courant_number * pixel_size /
-                    (alpha * std::pow(S_y, beta) *
-                     std::max(*std::max_element(v.begin(), v.end()),
-                              std::abs(*std::min_element(v.begin(), v.end()))));
+  const double dt_y =
+      max_courant_number * pixel_size /
+      (alpha * std::pow(S_y, beta) *
+       std::max(*std::max_element(v.begin(), v.end()),
+                std::abs(*std::min_element(v.begin(), v.end()))));
 
   // +-----------------------------------------------+
   // |    Estimate horizontal max Courant number     |
   // +-----------------------------------------------+
 
-  const double dt_x = max_courant_number * pixel_size /
-                    (alpha * std::pow(S_x, beta) *
-                     std::max(*std::max_element(u.begin(), u.end()),
-                              std::abs(*std::min_element(u.begin(), u.end()))));
+  const double dt_x =
+      max_courant_number * pixel_size /
+      (alpha * std::pow(S_x, beta) *
+       std::max(*std::max_element(u.begin(), u.end()),
+                std::abs(*std::min_element(u.begin(), u.end()))));
 
   double dt_sed = std::min(dt_y, dt_x);
 
@@ -2952,9 +2989,9 @@ void saveMatrix(const Eigen::SparseMatrix<double> &A, const std::string &Name) {
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
-                  const double &yllcorner, const double &cellsize,
-                  const double &NODATA_value,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
                   const Eigen::VectorXd &H) // it is H or orography
 {
 
@@ -3141,9 +3178,9 @@ void saveSolution(const std::string &preName, const unsigned int &N_rows,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
-                  const double &yllcorner, const double &cellsize,
-                  const double &NODATA_value,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
                   const std::vector<double> &H) // it is H or orography
 {
 
@@ -3239,9 +3276,9 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
-                  const double &yllcorner, const double &cellsize,
-                  const double &NODATA_value,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
                   const std::vector<int> &H) // it is H or orography
 {
 
@@ -3337,10 +3374,11 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
-                  const double &yllcorner, const double &cellsize,
-                  const double &NODATA_value, const unsigned int &n,
-                  const std::vector<double> &u, const std::vector<double> &v,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const unsigned int &n, const std::vector<double> &u,
+                  const std::vector<double> &v,
                   const Eigen::VectorXd &H) // it is H or orography
 {
 
@@ -3436,10 +3474,11 @@ void saveSolution(const std::string &preName, const std::string &flag,
 }
 
 void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols, const double &xllcorner,
-                  const double &yllcorner, const double &cellsize,
-                  const double &NODATA_value, const unsigned int &n,
-                  const std::vector<double> &u, const std::vector<double> &v,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const unsigned int &n, const std::vector<double> &u,
+                  const std::vector<double> &v,
                   const std::vector<double> &H) // it is H or orography
 {
 
@@ -3551,7 +3590,8 @@ void saveTemporalSequence(const double &time, const std::string &preName,
 // For gravitational layer
 void computeResiduals(
     const std::vector<double> &n_x, const std::vector<double> &n_y,
-    const unsigned int &N_cols, const unsigned int &N_rows, const std::vector<double> &h,
+    const unsigned int &N_cols, const unsigned int &N_rows,
+    const std::vector<double> &h,
     const std::vector<double> &coeff, // hydraulic conductivity
     const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
     const std::vector<unsigned int> &idStaggeredInternalVectVertical,
@@ -3559,9 +3599,9 @@ void computeResiduals(
     const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
     const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
     const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    const std::vector<unsigned int> &idBasinVect, std::vector<double> &h_interface_x,
-    std::vector<double> &h_interface_y, std::vector<double> &Res_x,
-    std::vector<double> &Res_y) {
+    const std::vector<unsigned int> &idBasinVect,
+    std::vector<double> &h_interface_x, std::vector<double> &h_interface_y,
+    std::vector<double> &Res_x, std::vector<double> &Res_y) {
 
   // +-----------------------------------------------+
   // |                  Horizontal                   |
@@ -3569,8 +3609,8 @@ void computeResiduals(
 
   for (const unsigned int &Id : idStaggeredInternalVectHorizontal) {
     const unsigned int i = Id / (N_cols + 1), // u
-        IDeast = Id - i,              // H
-        IDwest = Id - i - 1;          // H
+        IDeast = Id - i,                      // H
+        IDwest = Id - i - 1;                  // H
 
     const double &h_left = h[IDwest], &h_right = h[IDeast];
 
@@ -3612,8 +3652,8 @@ void computeResiduals(
   // +-----------------------------------------------+
 
   for (const unsigned int &Id : idStaggeredInternalVectVertical) {
-    const unsigned int IDsouth = Id,   // H
-        IDnorth = Id - N_cols; // H
+    const unsigned int IDsouth = Id, // H
+        IDnorth = Id - N_cols;       // H
 
     const double h_left = h[IDnorth], h_right = h[IDsouth];
 
@@ -3654,10 +3694,11 @@ void computeResiduals(
 
 // For sediment transport
 void computeResidualsTruncated(
-    const std::vector<double> &u, const std::vector<double> &v, const unsigned int &N_cols,
-    const unsigned int &N_rows, const unsigned int &N, const double &c1,
-    const std::vector<double> &S_x, const std::vector<double> &S_y,
-    const double &alpha, const double &beta, const double &gamma,
+    const std::vector<double> &u, const std::vector<double> &v,
+    const unsigned int &N_cols, const unsigned int &N_rows,
+    const unsigned int &N, const double &c1, const std::vector<double> &S_x,
+    const std::vector<double> &S_y, const double &alpha, const double &beta,
+    const double &gamma,
     const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
     const std::vector<unsigned int> &idStaggeredInternalVectVertical,
     const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
@@ -3671,10 +3712,10 @@ void computeResidualsTruncated(
     const auto &Id = idStaggeredInternalVectHorizontal[ii];
 
     const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
-                             u[Id] * (.5 - .5 * signum(u[Id])),
+                               u[Id] * (.5 - .5 * signum(u[Id])),
 
-               coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
-                            u[Id] * (.5 + .5 * signum(u[Id]));
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                              u[Id] * (.5 + .5 * signum(u[Id]));
 
     Gamma_x[Id][0] = coeff_right;
     Gamma_x[Id][1] = coeff_left;
@@ -3684,10 +3725,10 @@ void computeResidualsTruncated(
     const auto &Id = idStaggeredBoundaryVectWest[ii];
 
     const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
-                             u[Id] * (.5 - .5 * signum(u[Id])),
+                               u[Id] * (.5 - .5 * signum(u[Id])),
 
-               coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
-                            u[Id] * (.5 + .5 * signum(u[Id]));
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                              u[Id] * (.5 + .5 * signum(u[Id]));
 
     Gamma_x[Id][0] = coeff_right;
     Gamma_x[Id][1] = coeff_left;
@@ -3698,10 +3739,10 @@ void computeResidualsTruncated(
     const auto &Id = idStaggeredInternalVectVertical[ii];
 
     const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                             v[Id] * (.5 - .5 * signum(v[Id])),
+                               v[Id] * (.5 - .5 * signum(v[Id])),
 
-               coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                            v[Id] * (.5 + .5 * signum(v[Id]));
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
 
     Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
@@ -3710,10 +3751,10 @@ void computeResidualsTruncated(
     const auto &Id = idStaggeredBoundaryVectNorth[ii];
 
     const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                             v[Id] * (.5 - .5 * signum(v[Id])),
+                               v[Id] * (.5 - .5 * signum(v[Id])),
 
-               coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                            v[Id] * (.5 + .5 * signum(v[Id]));
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
 
     Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
@@ -3722,18 +3763,18 @@ void computeResidualsTruncated(
     const auto &Id = idStaggeredBoundaryVectSouth[ii];
 
     const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                             v[Id] * (.5 - .5 * signum(v[Id])),
+                               v[Id] * (.5 - .5 * signum(v[Id])),
 
-               coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
-                            v[Id] * (.5 + .5 * signum(v[Id]));
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
 
     Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
   }
 }
 
 std::vector<double> compute_d_perc(const std::vector<double> &clay,
-                                 const std::vector<double> &sand,
-                                 const double &perc) {
+                                   const std::vector<double> &sand,
+                                   const double &perc) {
   // linear interpolation in log10 x-scale
   std::vector<double> d_perc(clay.size());
 
