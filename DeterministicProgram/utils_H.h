@@ -15,6 +15,9 @@
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
 
+//! Parse library
+#include "GetPot.hpp"
+
 //! IML++ CG template
 #include "cg.hpp" 
 
@@ -183,7 +186,14 @@ class Rain // Previous interpolation not Linear
 
 public:
   Rain(const std::string &infiltrationModel, const unsigned int &N,
-       const bool &isInitialLoss, const double &perc_initialLoss);
+       const bool &isInitialLoss, const double &perc_initialLoss,
+       const bool is_precipitation, const bool constant_precipitation,
+       const std::string precipitation_file, const std::string file_dir, const double time_spacing_rain,
+       const int number_stations, const double max_Days, const GetPot& dataFile,
+       const double &xllcorner,
+       const double &yllcorner, const double &pixel_size,
+       const unsigned int &N_rows, const unsigned int &N_cols,
+       const std::vector<unsigned int> &idBasinVect);
 
   Rain() = delete;
   ~Rain() = default;
@@ -209,6 +219,8 @@ public:
                             const std::vector<unsigned int> &idBasinVect);
 
   std::vector<double> DP_total, DP_cumulative, DP_infiltrated;
+
+  double dt_rain;
 
 private:
   std::vector<std::vector<double>> Hyetograph, // # station times ndata
@@ -534,12 +546,12 @@ void compute_dt_adaptive(const std::vector<double> &H,
                          const double &timedd);
 
 double maxdt(const std::vector<double> &u, const std::vector<double> &v,
-           const double &gravity, const double &Hmax, const double &pixel_size);
+           const double &Hmax, const double &pixel_size);
 
 double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
                 const double &c1);
 
-double maxCourant(const std::vector<double> &H, const double &gravity,
+double maxCourant(const std::vector<double> &H, 
                 const double &c1);
 
 double compute_dt_sediment(const double alpha, const double beta, const double S_x,

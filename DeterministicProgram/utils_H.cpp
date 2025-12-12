@@ -400,7 +400,14 @@ Raster::Raster(const std::string &file) {
 double signum(const double &x) { return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0); }
 
 Rain::Rain(const std::string &infiltrationModel, const unsigned int &N,
-           const bool &isInitialLoss, const double &perc_initialLoss) {
+           const bool &isInitialLoss, const double &perc_initialLoss,
+	   const bool is_precipitation, const bool constant_precipitation,
+	   const std::string precipitation_file, const std::string file_dir, const double time_spacing_rain,
+	   const int number_stations, const double max_Days, const GetPot& dataFile,
+	   const double &xllcorner,
+           const double &yllcorner, const double &pixel_size,
+           const unsigned int &N_rows, const unsigned int &N_cols,
+           const std::vector<unsigned int> &idBasinVect ) {
   M_isInitialLoss = isInitialLoss;
   c = perc_initialLoss;
 
@@ -413,6 +420,62 @@ Rain::Rain(const std::string &infiltrationModel, const unsigned int &N,
   DP_cumulative.resize(N);
   DP_infiltrated.resize(N);
   IDW_weights.resize(N);
+
+
+  dt_rain = 0;
+
+    if (constant_precipitation || !is_precipitation) {
+      dt_rain = time_spacing_rain * 3600;
+
+      const auto ndata_rain = std::round(max_Days * 24 / time_spacing_rain);
+
+      this->constant_precipitation(file_dir + precipitation_file,
+                                           ndata_rain, is_precipitation,
+                                           time_spacing_rain);
+    } else // IDW
+    {
+      std::vector<std::string> precipitation_file;
+      std::vector<double> time_spacing_rain, X, Y;
+      std::vector<unsigned int> ndata_rain;
+
+      for (int number = 1; number <= number_stations; number++) {
+        std::string filename = "files/meteo_data/rain_file_";
+        filename += std::to_string(number);
+        const std::string precipitation_file_current =
+            dataFile(filename.c_str(), " ");
+
+        filename = "files/meteo_data/time_spacing_rain_";
+        filename += std::to_string(number);
+        const double time_spacing_rain_current = dataFile(filename.c_str(), 1.);
+
+        filename = "files/meteo_data/X_";
+        filename += std::to_string(number);
+        const double X_current = dataFile(filename.c_str(), 1.);
+
+        filename = "files/meteo_data/Y_";
+        filename += std::to_string(number);
+        const double Y_current = dataFile(filename.c_str(), 1.);
+
+        const unsigned int ndata_rain_current =
+            std::round(max_Days * 24 / time_spacing_rain_current);
+
+        precipitation_file.push_back(file_dir + precipitation_file_current);
+        time_spacing_rain.push_back(time_spacing_rain_current);
+        X.push_back(X_current);
+        Y.push_back(Y_current);
+        ndata_rain.push_back(ndata_rain_current);
+      }
+
+      dt_rain = *std::min_element(time_spacing_rain.begin(),
+                                  time_spacing_rain.end()) *
+                3600;
+
+      this->IDW_precipitation(
+          precipitation_file, ndata_rain, time_spacing_rain, X, Y, xllcorner,
+          yllcorner, pixel_size, N_rows, N_cols, idBasinVect);
+    }
+
+
 }
 
 void Rain::constant_precipitation(const std::string &file, const unsigned int &ndata,
@@ -905,7 +968,7 @@ Temperature::Temperature(const std::string &file, const unsigned int &N,
     unsigned int k = 0,
          h = i; // i
 
-    while (k != unsigned int(std::round((24. / time_spacing)))) {
+    while (k != static_cast<unsigned int>(std::round((24. / time_spacing)))) {
 
       T_dailyMean[n - 1] += Temperature_Graph[h];
 
@@ -2759,8 +2822,9 @@ void compute_dt_adaptive(const std::vector<double> &H,
 }
 
 double maxdt(const std::vector<double> &u, const std::vector<double> &v,
-           const double &gravity, const double &Hmax, const double &pixel_size) {
+          const double &Hmax, const double &pixel_size) {
 
+  static constexpr double gravity = 9.81;
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
@@ -2815,8 +2879,9 @@ double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
   return (std::max(Courant_y, Courant_x) * c1);
 }
 
-double maxCourant(const std::vector<double> &H, const double &gravity,
+double maxCourant(const std::vector<double> &H, 
                 const double &c1) {
+  static constexpr double gravity = 9.81;
   const double Courant_cel =
       std::sqrt(*std::max_element(H.begin(), H.end()) * gravity);
   return (Courant_cel * c1);
@@ -2826,7 +2891,7 @@ double compute_dt_sediment(const double alpha, const double beta, const double S
                          const double S_y, const std::vector<double> &u,
                          const std::vector<double> &v, const double pixel_size,
                          const double dt_DSV, unsigned int * numberOfSteps) {
-  const double max_courant_number = .95;
+  static constexpr double max_courant_number = .95;
   // +-----------------------------------------------+
   // |      Estimate vertical max Courant number     |
   // +-----------------------------------------------+
@@ -2878,7 +2943,7 @@ void saveVector(const Eigen::VectorXd &b, const std::string &Name) {
 void saveMatrix(const Eigen::SparseMatrix<double> &A, const std::string &Name) {
   std::ofstream ff(Name);
   for (unsigned int k = 0; k < A.outerSize(); ++k) {
-    for (SpMat::InnerIterator it(A, k); it; ++it) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(A, k); it; ++it) {
       ff << it.row() + 1 << " " << it.col() + 1 << " " << it.value()
          << std::endl; // row index
     }
