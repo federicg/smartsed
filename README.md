@@ -14,3 +14,23 @@ to solve the linear suystem arising in the discretization of the superficial run
 From vim type this to format to a given file formatting style
 :!clang-format -i %
 
+
+- Release build (optimized, default)
+cmake -S . -B build
+cmake --build build -j
+
+- Debug build
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug -j
+
+- Enable CUDA
+cmake -S . -B build-cuda -DENABLE_CUDA=ON
+cmake --build build-cuda -j
+
+- Debug + CUDA
+cmake -S . -B build-cuda-debug \
+      -DENABLE_CUDA=ON \
+      -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-cuda-debug -j
+
+
