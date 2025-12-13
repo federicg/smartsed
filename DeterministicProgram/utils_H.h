@@ -1,5 +1,4 @@
-#ifndef UTILS_H_H
-#define UTILS_H_H
+#pragma once
 
 //! std library
 #include <array>
@@ -668,5 +667,3 @@ void computeResidualsTruncated(
 std::vector<double> compute_d_perc(const std::vector<double> &clay,
                                    const std::vector<double> &sand,
                                    const double &perc);
-
-#endif

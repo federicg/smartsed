@@ -1,2 +1,0 @@
-Installare pacchetti python3 localmente:
-pip3 install numpy -t .

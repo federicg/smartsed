@@ -1,5 +1,4 @@
-#ifndef CODE_INIT_H
-#define CODE_INIT_H
+#pragma once
 
 //! std library
 #include <array>
@@ -14,6 +13,9 @@
 //! Eigen library
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
+
+//!
+#include "utils_H.h"
 
 template <class T>
 void resize_rasters(
@@ -1147,4 +1149,3 @@ void resize_rasters(
                yllcorner, pixel_size, NODATA_value, excluded_ids);
 }
 
-#endif

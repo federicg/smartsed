@@ -1,46 +1,6 @@
-/*
-*******************************************************************************
-
-    Copyright (C) 2019 Politecnico di Milano
-
-    This file is part of SMART-SED.
-
-    SMART-SED is free software; you can redistribute it and/or modify
-    it under the terms of the GNU Lesser General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    SMART-SED is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
-
-    You should have received a copy of the GNU Lesser General Public License
-    along with SMART-SED.  If not, see <http://www.gnu.org/licenses/>.
-
-*******************************************************************************
-*/
-
 /*!
-    @file main.cpp
-    @brief
-
-    @author      Federico     Gatti        MOX Politecnico di Milano
-   <federico.gatti@polimi.it>
-    @mantainer
-
-    @supervisors Luca         Bonaventura  MOX Politecnico di Milano
-   <luca.bonaventura@polimi.it> Alessandra   Menafoglio   MOX Politecnico di
-   Milano               <alessandra.menafoglio@polimi.it> Laura        Longoni
-   Applied Geology Politecnico di Milano   <laura.longoni@polimi.it>
-
-    @date 20-06-2020
-
-
- */
-
-// i: row    index
-// j: column index
+    @author Federico Gatti   <federico.gatti@math.ethz.ch>
+*/
 
 #include "code_init.h"
 #include "utils_H.h"
@@ -53,7 +13,12 @@
 
 #include <mpi.h>
 
+
+//! set CUDA headers
 #ifndef NO_GPU
+
+//! CUDA utils kernels
+#include "cuda_utils_loop_H.cuh"
 
 // Thrust
 #include <thrust/copy.h>
@@ -61,6 +26,10 @@
 #include <thrust/host_vector.h>
 
 // cuSPARSE
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
+#include <cusparse.h>
+#include <cuda_runtime_api.h>
 
 #endif
 
@@ -168,7 +137,7 @@ int main(int argc, char **argv) {
   MPI_Barrier(MPI_COMM_WORLD);
 
   if (rank == 0)
-    std::cout << "mean # of simulations per rank, " << chunk_length
+    std::cout << "mean # of simulations per MPI rank, " << chunk_length
               << std::endl;
 
   if (rank == 0) {
@@ -222,9 +191,11 @@ int main(int argc, char **argv) {
     std::vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
         W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u,
         v, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
-        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, H;
+        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, H, H_old, H_oldold;
 
+    Eigen::SparseMatrix<double> A;
     Eigen::VectorXd H_basin, rhs;
+    std::vector<Eigen::Triplet<double>> coefficients;
 
     double pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
@@ -232,7 +203,9 @@ int main(int argc, char **argv) {
         dt_min, c1_sed, dt_sed, slope_x_max, slope_y_max;
 
     int iter = 0;
-    double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH;
+    double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, time, timed, timedd, area, c1_min;
+    bool is_last_step = false, check_last = false;
+    static constexpr double gravity = 9.81;
 
     /*                   */
 
@@ -331,12 +304,17 @@ int main(int argc, char **argv) {
                        idStaggeredBoundaryVectSouth_excluded, friction_model,
                        n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows,
                        N_cols, slope_x, slope_y);
+ 
+    // +-----------------------------------------------+
+    // |             Start the time loop               |
+    // +-----------------------------------------------+
+    
+    A.resize(idBasinVect_excluded.size(), idBasinVect_excluded.size());
+    A.setZero();
+    H_basin.setZero(idBasinVect_excluded.size());
+    rhs.setZero(idBasinVect_excluded.size());
 
-    H_basin.resize(idBasinVect_excluded.size());
-    rhs.resize(idBasinVect_excluded.size());
-
-    const double c1_min = dt_min / pixel_size;
-    static constexpr double gravity = 9.81;
+    c1_min = dt_min / pixel_size;
 
     auto c1_DSV = [](double dt_DSV, double pixel_size) {
       return dt_DSV / pixel_size;
@@ -346,18 +324,9 @@ int main(int argc, char **argv) {
 
     auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
 
-    const double area = std::pow(pixel_size, 2) * 1.e-6; // km^2
-
-    for (unsigned int i = 0; i < H_basin.size(); i++)
-      H_basin(i) = 0.;
-    for (unsigned int i = 0; i < rhs.size(); i++)
-      rhs(i) = 0.;
-
-    Eigen::SparseMatrix<double> A(idBasinVect_excluded.size(),
-                                  idBasinVect_excluded.size());
+    area = pixel_size*pixel_size * 1.e-6; // km^2
 
     // row, column and value in the Triplet
-    std::vector<Eigen::Triplet<double>> coefficients;
     maxH = *std::max_element(H.begin(), H.end());
 
     dt_DSV = maxdt(u, v, maxH, pixel_size);
@@ -368,16 +337,13 @@ int main(int argc, char **argv) {
     c2_DSV_ = c2_DSV(c1_DSV_);
     c3_DSV_ = c3_DSV(c1_DSV_);
 
-    // +-----------------------------------------------+
-    // |             Start the time loop               |
-    // +-----------------------------------------------+
-
     // set initial quantities for the time step adaptation
-    auto H_old = H;
-    auto H_oldold = H;
+    H_old = H;
+    H_oldold = H;
 
-    double time = 0., timed = -dt_DSV, timedd = -2. * dt_DSV;
-    bool is_last_step = false, check_last = false;
+    time = 0.; 
+    timed = -dt_DSV;
+    timedd = -2. * dt_DSV;
 
     // +-----------------------------------------------+
     // |   Copy to Device all the needed objects       |
@@ -385,6 +351,7 @@ int main(int argc, char **argv) {
 
     // From this part on we just perform all the computations on the device,
     // the CPU is used only to save the current solution on the disk
+#ifndef NO_GPU
     /*
     auto size = 100*sizeof(double); // size in bytes of 100 doubles
     double *v_d;
@@ -399,8 +366,14 @@ int main(int argc, char **argv) {
 
     // Host -> Device, if h_std is a std::vector<float>
     // thrust::device_vector<double> H_device(H.begin(), H.end());
+#endif
 
     while (!is_last_step) {
+
+#ifndef NO_GPU
+
+
+#else
 
       if (rank == 0) {
         std::cout << "Simulation progress: " << time / t_final * 100 << " %"
@@ -485,7 +458,6 @@ int main(int argc, char **argv) {
       // |               De Saint Venant                 |
       // +-----------------------------------------------+
 
-      // tic();
       //  fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation(u, v, u_star, v_star, N_rows, N_cols, dt_DSV,
                             pixel_size,
@@ -495,10 +467,6 @@ int main(int argc, char **argv) {
                             idStaggeredBoundaryVectEast_excluded,
                             idStaggeredBoundaryVectNorth_excluded,
                             idStaggeredBoundaryVectSouth_excluded);
-
-      // toc ("bilinearInterpolation");
-
-      // tic();
 
       coefficients.reserve(
           idBasinVect_excluded.size() +
@@ -525,7 +493,6 @@ int main(int argc, char **argv) {
       A.makeCompressed();
       coefficients.clear();
 
-      // toc ("assemble matrix");
 
       if (spit_out_matrix) {
         tmpname = matrix_name + std::to_string(iter);
@@ -782,7 +749,6 @@ int main(int argc, char **argv) {
                         additional_source_term[Id];
           }
         }
-        // toc ("advance");
 
       } // End of if(sediment_transport)
 
@@ -977,6 +943,8 @@ int main(int argc, char **argv) {
         check_last = true;
       }
 
+#endif
+
     } // End Time Loop
 
   } // End Monte Carlo loop
@@ -987,5 +955,5 @@ int main(int argc, char **argv) {
   }
   MPI_Finalize();
 
-  return (EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 }
