@@ -1,5 +1,11 @@
 #include "cuda_utils_loop_H.cuh"
 
+__device__ __forceinline__
+double M_gamma_dt_DSV(double dt, double coeff)
+{
+  return dt * coeff;
+}
+
 //==============================================================================
 // Horizontal upwind
 __global__ void computeHorizontalInternalKernel_interface(
@@ -74,6 +80,42 @@ __global__ void computeHorizontalEastKernel_interface(
         0.5 * (H_left + H_right + s * (H_left - H_right));
 }
 
+void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<double>& H, const thrust::device_vector<double>& u, thrust::device_vector<double>& horizontal, const unsigned int N_cols) {
+
+    launch_kernel(
+      computeHorizontalInternalKernel_interface,
+      idStaggeredInternalVectHorizontal.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeHorizontalWestKernel_interface,
+      idStaggeredBoundaryVectWest.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeHorizontalEastKernel_interface,
+      idStaggeredBoundaryVectEast.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+}
+
 // Vertical upwind
 __global__ void computeVerticalInternalKernel_interface(
     const unsigned int* ids,
@@ -123,7 +165,7 @@ __global__ void computeVerticalNorthKernel_interface(
 
 }
 
-__global__ void computeVerticalSouthKernel(
+__global__ void computeVerticalSouthKernel_interface(
     const unsigned int* ids,
     const double* H,
     const double* v,
@@ -146,6 +188,42 @@ __global__ void computeVerticalSouthKernel(
 
 }
 
+void compute_vertical_interface_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<double>& H, const thrust::device_vector<double>& v, thrust::device_vector<double>& vertical, const unsigned int N_cols) {
+
+    launch_kernel(
+      computeVerticalInternalKernel_interface,
+      idStaggeredInternalVectVertical.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeVerticalNorthKernel_interface,
+      idStaggeredBoundaryVectNorth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeVerticalSouthKernel_interface,
+      idStaggeredBoundaryVectSouth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+}
+
+
 //==============================================================================
 // Horizontal friction
 __global__ void computeHorizontalInternalKernel_friction(
@@ -154,55 +232,351 @@ __global__ void computeHorizontalInternalKernel_friction(
     const double* u,
     const double* M_expo_r_x_vect,
     double* alfa_x,
+    const double* M_gamma_dt_DSV_x_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
     unsigned int n)
 {
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
- 
-  unsigned int Id = ids[i];  
-  double alfa = 1.;
-    
-  const auto H_int = H_interface_horizontal[Id];
-  const auto exponent = M_expo_r_x_vect[Id];
-  const auto den =
-      std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
-    
-  if (den > M_H_min) {
-    const auto u_abs = std::abs(u[Id]);
-    double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-                   (M_frictionModel > 0);
-    coeff = std::max(
-       coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
-                   std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
-                   den);
-    alfa = 1. / (1. + coeff);
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_x_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_u = __expf(expo2 * __logf(u_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+            pow_u / den);
+
+    alfa = 1.0 / (1.0 + coeff);
   }
   alfa_x[Id] = alfa;
-
 }
 
 __global__ void computeHorizontalWestKernel_friction(
     const unsigned int* ids,
-    const double* H,
+    const double* H_interface_horizontal,
     const double* u,
-    double* horizontal,
-    unsigned int N_cols,
+    const double* M_expo_r_x_vect,
+    double* alfa_x,
+    const double* M_gamma_dt_DSV_x_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
     unsigned int n)
 {
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_x_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_u = __expf(expo2 * __logf(u_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+            pow_u / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_x[Id] = alfa;
 }
 
 __global__ void computeHorizontalEastKernel_friction(
     const unsigned int* ids,
-    const double* H,
+    const double* H_interface_horizontal,
     const double* u,
-    double* horizontal,
-    unsigned int N_cols,
+    const double* M_expo_r_x_vect,
+    double* alfa_x,
+    const double* M_gamma_dt_DSV_x_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
     unsigned int n)
 {
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_x_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_u = __expf(expo2 * __logf(u_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+            pow_u / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_x[Id] = alfa;
+}
+
+void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<double>& H_interface_horizontal, const thrust::device_vector<double>& u, const thrust::device_vector<double>& M_expo_r_x_vect, 
+		      thrust::device_vector<double>& alfa_x, const thrust::device_vector<double>& M_gamma_dt_DSV_x_, double M_dt_DSV, double M_coeff, double M_H_min, 
+                double M_expo, unsigned int M_frictionModel) {
+
+    launch_kernel(
+      computeHorizontalInternalKernel_friction,
+      idStaggeredInternalVectHorizontal.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(H_interface_horizontal.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
+      thrust::raw_pointer_cast(alfa_x.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
+    launch_kernel(
+      computeHorizontalWestKernel_friction,
+      idStaggeredBoundaryVectWest.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(H_interface_horizontal.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
+      thrust::raw_pointer_cast(alfa_x.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
+    launch_kernel(
+      computeHorizontalEastKernel_friction,
+      idStaggeredBoundaryVectEast.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(H_interface_horizontal.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
+      thrust::raw_pointer_cast(alfa_x.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
+}
+
+// Vertical friction
+__global__ void computeVerticalInternalKernel_friction(
+    const unsigned int* ids,
+    const double* H_interface_vertical,
+    const double* v,
+    const double* M_expo_r_y_vect,
+    double* alfa_y,
+    const double* M_gamma_dt_DSV_y_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
+    unsigned int n)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_y_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_v = __expf(expo2 * __logf(v_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+            pow_v / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_y[Id] = alfa;
+}
+
+__global__ void computeVerticalNorthKernel_friction(
+    const unsigned int* ids,
+    const double* H_interface_vertical,
+    const double* v,
+    const double* M_expo_r_y_vect,
+    double* alfa_y,
+    const double* M_gamma_dt_DSV_y_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
+    unsigned int n)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_y_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_v = __expf(expo2 * __logf(v_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+            pow_v / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_y[Id] = alfa;
+}
+
+__global__ void computeVerticalSouthKernel_friction(
+    const unsigned int* ids,
+    const double* H_interface_vertical,
+    const double* v,
+    const double* M_expo_r_y_vect,
+    double* alfa_y,
+    const double* M_gamma_dt_DSV_y_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
+    unsigned int n)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_y_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_v = __expf(expo2 * __logf(v_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+            pow_v / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_y[Id] = alfa;
+}
+
+void compute_vertical_friction_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<double>& H_interface_vertical, const thrust::device_vector<double>& v, const thrust::device_vector<double>& M_expo_r_y_vect, 
+		      thrust::device_vector<double>& alfa_y, const thrust::device_vector<double>& M_gamma_dt_DSV_y_, double M_dt_DSV, double M_coeff, double M_H_min, 
+                double M_expo, unsigned int M_frictionModel) {
+
+    launch_kernel(
+      computeVerticalInternalKernel_friction,
+      idStaggeredInternalVectVertical.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(H_interface_vertical.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
+      thrust::raw_pointer_cast(alfa_y.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
+    launch_kernel(
+      computeVerticalNorthKernel_friction,
+      idStaggeredBoundaryVectNorth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(H_interface_vertical.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
+      thrust::raw_pointer_cast(alfa_y.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
+    launch_kernel(
+      computeVerticalSouthKernel_friction,
+      idStaggeredBoundaryVectSouth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(H_interface_vertical.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
+      thrust::raw_pointer_cast(alfa_y.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
+      M_dt_DSV, M_coeff, M_H_min, 
+      M_expo, M_frictionModel
+    );
+
 }
 
 //==============================================================================

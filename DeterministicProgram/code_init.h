@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils_H.h"
+
 //! std library
 #include <array>
 #include <cstdint>
@@ -11,8 +13,267 @@
 #include <vector>
 #include <type_traits>
 
-//!
-#include "utils_H.h"
+//! Eigen library
+#include <Eigen/Sparse>
+#include <Eigen/SparseCholesky>
+#include <unsupported/Eigen/SparseExtra>
+
+//==============================================================================
+
+class Vector2D {
+
+public:
+  //! Empty constructor (all components are set to zero)
+  Vector2D() {}
+
+  Vector2D(
+      std::array<double, 2> const &indices) // Note the use of double indices
+      : M_coords(indices) {}
+
+  //! Copy constructor
+  Vector2D(Vector2D const &vector) { *this = vector; }
+
+  ~Vector2D() = default;
+
+  //! Operator +=
+  Vector2D &operator+=(Vector2D const &vector) {
+    for (unsigned int i = 0; i < 2; i++)
+      M_coords[i] += vector.M_coords[i];
+    return *this;
+  }
+
+  //! Assignment operator
+  Vector2D &operator=(Vector2D const &vector) {
+    for (unsigned int i = 0; i < 2; i++)
+      M_coords[i] = vector.M_coords[i];
+    return *this;
+  }
+
+  Vector2D operator+(Vector2D const &vector) const {
+    Vector2D tmp(*this);
+    return tmp += vector;
+  }
+
+  //! Operator -=
+  Vector2D &operator-=(Vector2D const &vector) {
+    for (unsigned int i = 0; i < 2; i++)
+      M_coords[i] -= vector.M_coords[i];
+    return *this;
+  }
+
+  //! Operator -
+  Vector2D operator-(Vector2D const &vector) const {
+    Vector2D tmp(*this);
+    return tmp -= vector;
+  }
+
+  //! Operator *= (multiplication by scalar)
+  Vector2D &operator*=(double const &factor) {
+    for (unsigned int i = 0; i < 2; i++)
+      M_coords[i] *= factor;
+    return *this;
+  }
+
+  //! Operator /= (division by scalar)
+  Vector2D &operator/=(double const &factor) {
+    *this *= 1. / factor;
+    return *this;
+  }
+
+  //! Operator / (division by scalar)
+  Vector2D operator/(double const &factor) const {
+    Vector2D tmp(*this);
+    return tmp /= factor;
+  }
+
+  Vector2D operator*(double const &factor) {
+    Vector2D tmp(*this);
+    return tmp *= factor;
+  }
+
+  double dot(Vector2D const &vector) const {
+    double scalarProduct = 0.;
+    for (unsigned int i = 0; i < 2; i++)
+      scalarProduct += M_coords[i] * vector.M_coords[i];
+    return scalarProduct;
+  }
+
+  double norm() const { return std::sqrt(this->dot(*this)); }
+
+  //! Operator ()b
+  double const &operator()(unsigned int const &i) const { return M_coords[i]; }
+
+  //! Operator ()
+  double &operator()(unsigned int const &i) { return M_coords[i]; }
+
+private:
+  std::array<double, 2> M_coords;
+};
+
+//! Operator * (multiplication by scalar on the right)
+Vector2D operator*(Vector2D const &vector, double const &factor);
+
+//! Operator * (multiplication by scalar on the left)
+Vector2D operator*(double const &factor, Vector2D const &vector);
+
+//==============================================================================
+
+int computePourCell(const int &IDcell, const unsigned int &N_cols,
+                    const std::vector<double> &oro,
+                    const std::set<unsigned int> &idBasinVect,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectSouth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectNorth,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectWest,
+                    const std::set<unsigned int> &idStaggeredBoundaryVectEast);
+
+//==============================================================================
+
+void computeAdjacencies(
+    const std::vector<double> &basin_mask_Vec_mpi,
+    const std::vector<double> &basin_mask_Vec,
+
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest_mpi,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast_mpi,
+
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal_mpi,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical_mpi,
+
+    std::vector<unsigned int> &idBasinVectReIndex_mpi,
+    std::vector<unsigned int> &idBasinVectReIndex,
+
+    const unsigned int &N_rows, const unsigned int &N_cols);
+
+//==============================================================================
+
+void computeAdjacencies(
+    const std::vector<double> &basin_mask_Vec,
+
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical,
+
+    std::vector<unsigned int> &idBasinVect,
+    std::vector<unsigned int> &idBasinVectReIndex,
+
+    const unsigned int &N_rows, const unsigned int &N_cols);
+
+//==============================================================================
+
+void computeAdjacencies(
+    const std::vector<double> &basin_mask_Vec_input,
+    const std::vector<std::tuple<bool, int>> &excluded_ids,
+
+    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+
+    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    std::vector<unsigned int> &idStaggeredInternalVectVertical,
+
+    std::vector<unsigned int> &idBasinVect,
+    std::vector<unsigned int> &idBasinVectReIndex,
+
+    const unsigned int &N_rows, const unsigned int &N_cols);
+
+
+
+bool is_file_exist(const char *fileName);
+
+std::vector<double> compute_d_perc(const std::vector<double> &clay,
+                                   const std::vector<double> &sand,
+                                   const double &perc);
+
+void saveSolution(const std::string &preName, const std::string &flag,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const Eigen::VectorXd &H); // it is H or orography
+
+void saveSolution(const std::string &preName, const std::string &flag,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const std::vector<double> &H); // it is H or orography
+
+void saveSolution(const std::string &preName, const std::string &flag,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const std::vector<int> &H); // it is H or orography
+
+void saveSolution(const std::string &preName, const std::string &flag,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const unsigned int &n, const std::vector<double> &u,
+                  const std::vector<double> &v,
+                  const Eigen::VectorXd &H); // it is H or orography
+
+void saveSolution(const std::string &preName, const unsigned int &N_rows,
+                  const unsigned int &N_cols, const double &xllcorner,
+                  const double &yllcorner, const double &cellsize,
+                  const double &NODATA_value,
+                  const std::vector<std::tuple<bool, int>>
+                      excluded_ids); // excluded regions, high slopes I hope
+
+void saveSolution(const std::string &preName, const std::string &flag,
+                  const unsigned int &N_rows, const unsigned int &N_cols,
+                  const double &xllcorner, const double &yllcorner,
+                  const double &cellsize, const double &NODATA_value,
+                  const unsigned int &n, const std::vector<double> &u,
+                  const std::vector<double> &v,
+                  const std::vector<double> &H); // it is H or orography
+
+void putDry_excludedNodes(
+    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
+    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
+    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const std::vector<unsigned int> &idBasinVect, const unsigned int &N_cols,
+    const std::vector<std::tuple<bool, int>> &excluded_ids,
+
+    Eigen::VectorXd &H, Eigen::VectorXd &eta,
+    const std::vector<double> &orography, std::vector<double> &u,
+    std::vector<double> &v);
+
+void saveVector(const Eigen::VectorXd &b, const std::string &Name);
+
+void saveMatrix(const Eigen::SparseMatrix<double> &A, const std::string &Name);
+
+void saveTemporalSequence(const Vector2D &X_gauges, const double &time,
+                          const std::string &preName, const double &H);
+
+void saveTemporalSequence(const double &time, const std::string &preName,
+                          const double &H);
+
+class Raster {
+
+public:
+  Raster(const std::string &file);
+
+  ~Raster() = default;
+
+  unsigned int ncols, nrows;
+
+  double xllcorner, yllcorner, cellsize, NODATA_value;
+
+  Eigen::SparseMatrix<double> Coords; // forse mettere una matrice densa
+};
+
+std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file);
+
+std::map<std::array<int, 2>, int> createCN_map();
+
+//==============================================================================
 
 template <class T_type, class U_type, class V_type>
 void resize_rasters(
@@ -27,7 +288,6 @@ void resize_rasters(
     U_type&idStaggeredInternalVectHorizontal,
     U_type&idStaggeredInternalVectVertical,
     U_type&idBasinVect,
-    U_type&idBasinVectReIndex,
 
     U_type&idStaggeredBoundaryVectSouth_excluded,
     U_type&idStaggeredBoundaryVectNorth_excluded,
@@ -44,7 +304,7 @@ void resize_rasters(
     std::vector<std::tuple<bool, int>> &excluded_ids,
     V_type&additional_source_term,
 
-    V_type&basin_mask_Vec, V_type&orography,
+    V_type&orography,
     V_type&h_G, V_type&h_sd,
     V_type&h_sn, V_type&S_coeff,
     V_type&W_Gav, V_type&W_Gav_cum,
@@ -55,7 +315,7 @@ void resize_rasters(
     V_type&u_star, V_type&v_star,
     V_type&h_interface_x, V_type&h_interface_y,
     V_type&slope_x, V_type&slope_y,
-    V_type&slope_cell, V_type&soilMoistureRetention,
+    V_type&soilMoistureRetention,
     V_type&roughness_vect, V_type&eta,
     V_type&H,
 
@@ -83,6 +343,9 @@ void resize_rasters(
     std::is_same<typename V_type::value_type, double>::value,
     "V_type must contain double"
   );
+
+  V_type basin_mask_Vec, slope_cell;
+  U_type idBasinVectReIndex;
 
   output_dir = "../Outputs/" + std::to_string(currentSimNumber) + "/";
 
@@ -1157,4 +1420,6 @@ void resize_rasters(
   saveSolution(output_dir + "excluded_ids", N_rows, N_cols, xllcorner,
                yllcorner, pixel_size, NODATA_value, excluded_ids);
 }
+
+//==============================================================================
 

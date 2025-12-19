@@ -1,36 +1,18 @@
-/*!
+/*
     @author Federico Gatti   <federico.gatti@math.ethz.ch>
+    The GPU implementation works just for CUDA, so NVIDIA GPUs,
+    in the future there could be an implemnetation to work with HIP for AMD GPUs
 */
 
-#include "code_init.h"
+//! Utility CPU header
 #include "utils_H.h"
-
-//! Parse library
-#include "GetPot.hpp"
 
 //! for simple profiling
 #include "timing.h"
 
+//! MPI
 #include <mpi.h>
 
-//! set CUDA headers
-#ifdef ENABLE_CUDA
-
-//! CUDA utils kernels
-#include "cuda_utils_loop_H.cuh"
-
-// Thrust
-#include <thrust/copy.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
-
-// cuSPARSE
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
-#include <cusparse.h>
-#include <cuda_runtime_api.h>
-
-#endif
 
 int main(int argc, char **argv) {
 
@@ -178,24 +160,24 @@ int main(int argc, char **argv) {
  * use the cuSPARSE lib
  */
 
-    thrust::host_vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
-        W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot,
-        v_pot, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
-        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, 
-	H_pot, additional_source_term;
+    thrust::host_vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot,
+        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot,
+        v_pot, n_x_pot, n_y_pot, u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot,
+        slope_y_pot, soilMoistureRetention_pot, roughness_vect, eta_pot, 
+	H_pot, additional_source_term_pot;
 
-    thrust::host_vector<unsigned int> idStaggeredBoundaryVectSouth,
-        idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectWest,
-        idStaggeredBoundaryVectEast, idStaggeredInternalVectHorizontal,
-        idStaggeredInternalVectVertical, idBasinVect, idBasinVectReIndex,
+    thrust::host_vector<unsigned int> idStaggeredBoundaryVectSouth_pot,
+        idStaggeredBoundaryVectNorth_pot, idStaggeredBoundaryVectWest_pot,
+        idStaggeredBoundaryVectEast_pot, idStaggeredInternalVectHorizontal_pot,
+        idStaggeredInternalVectVertical_pot, idBasinVect_pot, 
 
         idStaggeredBoundaryVectSouth_excluded_pot,
         idStaggeredBoundaryVectNorth_excluded_pot,
         idStaggeredBoundaryVectWest_excluded_pot,
         idStaggeredBoundaryVectEast_excluded_pot,
         idStaggeredInternalVectHorizontal_excluded_pot,
-        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
-        idBasinVectReIndex_excluded;
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
+        idBasinVectReIndex_excluded_pot;
 
 
 #else
@@ -204,24 +186,24 @@ int main(int argc, char **argv) {
     Eigen::VectorXd H_basin, rhs;
     std::vector<Eigen::Triplet<double>> coefficients;
 
-    std::vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
-        W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot,
-        v_pot, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
-        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, 
-	H_pot, additional_source_term;
+    std::vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot,
+        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot,
+        v_pot, n_x_pot, n_y_pot, u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot,
+        slope_y_pot, soilMoistureRetention_pot, roughness_vect, eta_pot, 
+	H_pot, additional_source_term_pot;
 
-    std::vector<unsigned int> idStaggeredBoundaryVectSouth,
-        idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectWest,
-        idStaggeredBoundaryVectEast, idStaggeredInternalVectHorizontal,
-        idStaggeredInternalVectVertical, idBasinVect, idBasinVectReIndex,
+    std::vector<unsigned int> idStaggeredBoundaryVectSouth_pot,
+        idStaggeredBoundaryVectNorth_pot, idStaggeredBoundaryVectWest_pot,
+        idStaggeredBoundaryVectEast_pot, idStaggeredInternalVectHorizontal_pot,
+        idStaggeredInternalVectVertical_pot, idBasinVect_pot,
 
         idStaggeredBoundaryVectSouth_excluded_pot,
         idStaggeredBoundaryVectNorth_excluded_pot,
         idStaggeredBoundaryVectWest_excluded_pot,
         idStaggeredBoundaryVectEast_excluded_pot,
         idStaggeredInternalVectHorizontal_excluded_pot,
-        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
-        idBasinVectReIndex_excluded;
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
+        idBasinVectReIndex_excluded_pot;
 
 
 #endif
@@ -233,14 +215,10 @@ int main(int argc, char **argv) {
         c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, time, timed, timedd, area, c1_min;
 
     bool is_last_step = false, check_last = false;
+
     static constexpr double gravity = 9.81;
-
-    auto c1_DSV = [](double dt_DSV, double pixel_size) {
-      return dt_DSV / pixel_size;
-    };
-
+    auto c1_DSV = [](double dt_DSV, double pixel_size) { return dt_DSV / pixel_size; };
     auto c2_DSV = [](double c1) { return gravity * c1; };
-
     auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
 
 
@@ -249,27 +227,27 @@ int main(int argc, char **argv) {
     resize_rasters(
         dataFile, N_rows, N_cols, N,
 
-        idStaggeredBoundaryVectSouth, idStaggeredBoundaryVectNorth,
-        idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
-        idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
-        idBasinVect, idBasinVectReIndex,
+        idStaggeredBoundaryVectSouth_pot, idStaggeredBoundaryVectNorth_pot,
+        idStaggeredBoundaryVectWest_pot, idStaggeredBoundaryVectEast_pot,
+        idStaggeredInternalVectHorizontal_pot, idStaggeredInternalVectVertical_pot,
+        idBasinVect_pot, 
 
         idStaggeredBoundaryVectSouth_excluded_pot,
         idStaggeredBoundaryVectNorth_excluded_pot,
         idStaggeredBoundaryVectWest_excluded_pot,
         idStaggeredBoundaryVectEast_excluded_pot,
         idStaggeredInternalVectHorizontal_excluded_pot,
-        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
-        idBasinVectReIndex_excluded,
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
+        idBasinVectReIndex_excluded_pot,
 
         Gamma_vect_x, Gamma_vect_y,
 
-        excluded_ids, additional_source_term,
+        excluded_ids, additional_source_term_pot,
 
-        basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff, W_Gav, W_Gav_cum,
-        hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot, v_pot, n_x, n_y,
-        u_star, v_star, h_interface_x, h_interface_y, slope_x, slope_y,
-        slope_cell, soilMoistureRetention, roughness_vect, eta, H_pot,
+        orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot, W_Gav_pot, W_Gav_cum_pot,
+        hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot, v_pot, n_x_pot, n_y_pot,
+        u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot, slope_y_pot,
+        soilMoistureRetention_pot, roughness_vect, eta_pot, H_pot,
 
         pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
@@ -291,25 +269,90 @@ int main(int argc, char **argv) {
     thrust::device_vector<double> H = H_pot;
     thrust::device_vector<double> u = u_pot;
     thrust::device_vector<double> v = v_pot;
+    thrust::device_vector<double> additional_source_term = additional_source_term_pot;
+    thrust::device_vector<double> orography = orography_pot;
+    thrust::device_vector<double> h_G = h_G_pot;
+    thrust::device_vector<double> h_sd = h_sd_pot;
+    thrust::device_vector<double> h_sn = h_sn_pot;
+    thrust::device_vector<double> S_coeff = S_coeff_pot;
+    thrust::device_vector<double> W_Gav = W_Gav_pot;
+    thrust::device_vector<double> W_Gav_cum = W_Gav_cum_pot;
+    thrust::device_vector<double> hydraulic_conductivity = hydraulic_conductivity_pot;
+    thrust::device_vector<double> Z_Gav = Z_Gav_pot;
+    thrust::device_vector<double> Res_x = Res_x_pot;
+    thrust::device_vector<double> Res_y = Res_y_pot;
+    thrust::device_vector<double> n_x = n_x_pot;
+    thrust::device_vector<double> n_y = n_y_pot;
+    thrust::device_vector<double> u_star = u_star_pot;
+    thrust::device_vector<double> v_star = v_star_pot;
+    thrust::device_vector<double> h_interface_x = h_interface_x_pot;
+    thrust::device_vector<double> h_interface_y = h_interface_y_pot;
+    thrust::device_vector<double> slope_x = slope_x_pot;
+    thrust::device_vector<double> slope_y = slope_y_pot;
+    thrust::device_vector<double> soilMoistureRetention = soilMoistureRetention_pot;
+    thrust::device_vector<double> eta = eta_pot;
+
     thrust::device_vector<unsigned int> idStaggeredInternalVectHorizontal_excluded = idStaggeredInternalVectHorizontal_excluded_pot;
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectWest_excluded = idStaggeredBoundaryVectWest_excluded_pot;
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectEast_excluded = idStaggeredBoundaryVectEast_excluded_pot;
     thrust::device_vector<unsigned int> idStaggeredInternalVectVertical_excluded = idStaggeredInternalVectVertical_excluded_pot;
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectNorth_excluded = idStaggeredBoundaryVectNorth_excluded_pot;
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectSouth_excluded = idStaggeredBoundaryVectSouth_excluded_pot;
+    thrust::device_vector<unsigned int> idBasinVect_excluded = idBasinVect_excluded_pot;
+    thrust::device_vector<unsigned int> idBasinVectReIndex_excluded = idBasinVectReIndex_excluded_pot;
+
+    thrust::device_vector<unsigned int> idStaggeredInternalVectHorizontal = idStaggeredInternalVectHorizontal_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectWest = idStaggeredBoundaryVectWest_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectEast = idStaggeredBoundaryVectEast_pot;
+    thrust::device_vector<unsigned int> idStaggeredInternalVectVertical = idStaggeredInternalVectVertical_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectNorth = idStaggeredBoundaryVectNorth_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectSouth = idStaggeredBoundaryVectSouth_pot;
+    thrust::device_vector<unsigned int> idBasinVect = idBasinVect_pot;
 
 #else
 
     auto H = std::move(H_pot);
     auto u = std::move(u_pot);
     auto v = std::move(v_pot);
+    auto additional_source_term = std::move(additional_source_term_pot);
+    auto orography = std::move(orography_pot); 
+    auto h_G = std::move(h_G_pot); 
+    auto h_sd = std::move(h_sd_pot); 
+    auto h_sn = std::move(h_sn_pot); 
+    auto S_coeff = std::move(S_coeff_pot);
+    auto W_Gav = std::move(W_Gav_pot); 
+    auto W_Gav_cum = std::move(W_Gav_cum_pot);
+    auto hydraulic_conductivity = std::move(hydraulic_conductivity_pot);
+    auto Z_Gav = std::move(Z_Gav_pot); 
+    auto Res_x = std::move(Res_x_pot); 
+    auto Res_y = std::move(Res_y_pot); 
+    auto n_x = std::move(n_x_pot); 
+    auto n_y = std::move(n_y_pot);
+    auto u_star = std::move(u_star_pot); 
+    auto v_star = std::move(v_star_pot); 
+    auto h_interface_x = std::move(h_interface_x_pot);
+    auto h_interface_y = std::move(h_interface_y_pot); 
+    auto slope_x = std::move(slope_x_pot); 
+    auto slope_y = std::move(slope_y_pot);
+    auto soilMoistureRetention = std::move(soilMoistureRetention_pot); 
+    auto eta = std::move(eta_pot); 
+    
     auto idStaggeredInternalVectHorizontal_excluded = std::move(idStaggeredInternalVectHorizontal_excluded_pot);
     auto idStaggeredBoundaryVectWest_excluded = std::move(idStaggeredBoundaryVectWest_excluded_pot);
     auto idStaggeredBoundaryVectEast_excluded = std::move(idStaggeredBoundaryVectEast_excluded_pot);
     auto idStaggeredInternalVectVertical_excluded = std::move(idStaggeredInternalVectVertical_excluded_pot);
     auto idStaggeredBoundaryVectNorth_excluded = std::move(idStaggeredBoundaryVectNorth_excluded_pot);
     auto idStaggeredBoundaryVectSouth_excluded = std::move(idStaggeredBoundaryVectSouth_excluded_pot);
+    auto idBasinVect_excluded = std::move(idBasinVect_excluded_pot);
+    auto idBasinVectReIndex_excluded = std::move(idBasinVectReIndex_excluded_pot);
 
+    auto idStaggeredInternalVectHorizontal = std::move(idStaggeredInternalVectHorizontal_pot);
+    auto idStaggeredBoundaryVectWest = std::move(idStaggeredBoundaryVectWest_pot);
+    auto idStaggeredBoundaryVectEast = std::move(idStaggeredBoundaryVectEast_pot);
+    auto idStaggeredInternalVectVertical = std::move(idStaggeredInternalVectVertical_pot);
+    auto idStaggeredBoundaryVectNorth = std::move(idStaggeredBoundaryVectNorth_pot);
+    auto idStaggeredBoundaryVectSouth = std::move(idStaggeredBoundaryVectSouth_pot);
+    auto idBasinVect = std::move(idBasinVect_pot);
 #endif
 
     // set initial quantities for the time step adaptation
@@ -326,7 +369,13 @@ int main(int argc, char **argv) {
                        is_precipitation, constant_precipitation,
                        precipitation_file, file_dir, time_spacing_rain,
                        number_stations, max_Days, dataFile, xllcorner,
-                       yllcorner, pixel_size, N_rows, N_cols, idBasinVect);
+                       yllcorner, pixel_size, N_rows, N_cols, 
+#ifdef ENABLE_CUDA
+		       idBasinVect_pot
+#else		       
+		       idBasinVect
+#endif
+		       );
 
     dt_min = std::min(precipitation.dt_rain, dt_temp);
     for (const auto &kk : hydraulic_conductivity) {
@@ -343,17 +392,17 @@ int main(int argc, char **argv) {
     // |                 Temperature                   |
     // +-----------------------------------------------+
 
-    Temperature temp(file_dir + temperature_file, N, max_Days, T_thr, orography,
+    Temperature temp(file_dir + temperature_file, N, max_Days, T_thr, 
                      std::round(max_Days * 24 / time_spacing_temp),
                      steps_per_hour, time_spacing_temp, height_thermometer,
-                     format_temp);
+                     format_temp, orography, idBasinVect);
 
     // +-----------------------------------------------+
     // |              Evapotranspiration               |
     // +-----------------------------------------------+
 
-    evapoTranspiration ET(ET_model, N, orography, temp.J, max_Days, phi_rad,
-                          height_thermometer);
+    evapoTranspiration ET(ET_model, N, temp.J, max_Days, phi_rad,
+                          height_thermometer, idBasinVect, orography);
 
     // +-----------------------------------------------+
     // |                   Runoff                      |
@@ -374,7 +423,13 @@ int main(int argc, char **argv) {
                        idStaggeredBoundaryVectNorth_excluded,
                        idStaggeredBoundaryVectSouth_excluded, friction_model,
                        n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows,
-                       N_cols, slope_x, slope_y);
+                       N_cols, 
+#ifdef ENABLE_CUDA		       
+		       slope_x_pot, slope_y_pot
+#else
+		       slope_x, slope_y
+#endif
+		       );
  
     // +-----------------------------------------------+
     // |             Start the time loop               |
@@ -430,18 +485,14 @@ int main(int argc, char **argv) {
       alfa.f_x();
       alfa.f_y();
 
-      // update only if necessary  --> governed by temperature dynamics, i.e.
-      // time_spacing_temp
-      if (std::floor(time / dt_temp) > std::floor((time - dt_DSV) / dt_temp)) {
-        temp.computeTemperature(std::floor(time / dt_temp), orography,
-                                idBasinVect);
-      }
+      // Update the temperature 
+      temp.computeTemperature(time, dt_temp, dt_DSV);
 
       // ET varies daily
       if (std::floor(time / (24. * 3600)) >
           std::floor((time - dt_DSV) / (24. * 3600))) {
         ET.ET(temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax,
-              std::floor(time / (24 * 3600)), idBasinVect, orography);
+              std::floor(time / (24 * 3600)));
       }
 
       // update only if necessary
@@ -669,7 +720,7 @@ int main(int argc, char **argv) {
           additional_source_term.assign(N, 0.);
 
           // assemble horizontal fluxes
-          for (const unsigned int &Id :
+          for (const auto &Id :
                idStaggeredInternalVectHorizontal_excluded) {
             const unsigned int i = Id / (N_cols + 1), IDeast = Id - i,
                                IDwest = Id - i - 1;
@@ -680,7 +731,7 @@ int main(int argc, char **argv) {
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idStaggeredBoundaryVectWest_excluded) {
+          for (const auto &Id : idStaggeredBoundaryVectWest_excluded) {
             const unsigned int i = Id / (N_cols + 1);
 
             const double h_left = 0, // 0,
@@ -690,7 +741,7 @@ int main(int argc, char **argv) {
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idStaggeredBoundaryVectEast_excluded) {
+          for (const auto &Id : idStaggeredBoundaryVectEast_excluded) {
 
             const unsigned int i = Id / (N_cols + 1);
 

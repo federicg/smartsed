@@ -35,13 +35,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(MPI REQUIRED)
 
 # ------------------------------------------------------------------------------
-# Eigen in case no CUDA
+# Eigen 
 # ------------------------------------------------------------------------------
 
-if(NOT ENABLE_CUDA)
-    find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-    message(STATUS "Eigen found: ${Eigen3_VERSION}")
-endif()
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+message(STATUS "Eigen found: ${Eigen3_VERSION}")
 
 # ------------------------------------------------------------------------------
 # CUDA (optional)
@@ -62,6 +60,7 @@ endif()
 add_executable(main.exe
     main_final_H.cpp
     utils_H.cpp
+    code_init.cpp
     cuda_utils_loop_H.cu
 )
 
@@ -95,10 +94,17 @@ endif()
 # Compile options
 # ------------------------------------------------------------------------------
 
+if(ENABLE_CUDA)
+target_compile_options(main.exe PRIVATE
+    $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G -g -O0>
+    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math -arch=sm_90>
+)
+else()
 target_compile_options(main.exe PRIVATE
     $<$<CONFIG:Debug>:-g -O0>
     $<$<CONFIG:Release>:-O3>
 )
+endif()
 
 # ------------------------------------------------------------------------------
 # Link libraries
@@ -108,12 +114,9 @@ target_link_libraries(main.exe PRIVATE
     MPI::MPI_CXX
 )
 
-if(NOT ENABLE_CUDA)
-    target_link_libraries(main.exe PRIVATE Eigen3::Eigen)
-endif()
-
+target_link_libraries(main.exe PRIVATE Eigen3::Eigen)
 
 if(ENABLE_CUDA)
-    target_link_libraries(main.exe PRIVATE CUDA::cudart)
+    target_link_libraries(main.exe PRIVATE CUDA::cudart CUDA::cublas CUDA::cusparse)
 endif()
 
