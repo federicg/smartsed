@@ -13,9 +13,8 @@
 
 #include <mpi.h>
 
-
 //! set CUDA headers
-#ifndef NO_GPU
+#ifdef ENABLE_CUDA
 
 //! CUDA utils kernels
 #include "cuda_utils_loop_H.cuh"
@@ -167,47 +166,85 @@ int main(int argc, char **argv) {
 
     std::string output_dir, infiltrationModel;
 
-    unsigned int N_rows, N_cols, N, numberOfSteps = 1;
+    unsigned int N_rows, N_cols, N, numberOfSteps = 1, iter = 0;
+
+    std::vector<std::array<double, 2>> Gamma_vect_x, Gamma_vect_y;
+
+    std::vector<std::tuple<bool, int>> excluded_ids;
+    std::vector<std::vector<unsigned int>> kk_gauges;
+
+#ifdef ENABLE_CUDA
+/* define here the linear system stuffs
+ * use the cuSPARSE lib
+ */
+
+    thrust::host_vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
+        W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot,
+        v_pot, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
+        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, 
+	H_pot, additional_source_term;
+
+    thrust::host_vector<unsigned int> idStaggeredBoundaryVectSouth,
+        idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectWest,
+        idStaggeredBoundaryVectEast, idStaggeredInternalVectHorizontal,
+        idStaggeredInternalVectVertical, idBasinVect, idBasinVectReIndex,
+
+        idStaggeredBoundaryVectSouth_excluded_pot,
+        idStaggeredBoundaryVectNorth_excluded_pot,
+        idStaggeredBoundaryVectWest_excluded_pot,
+        idStaggeredBoundaryVectEast_excluded_pot,
+        idStaggeredInternalVectHorizontal_excluded_pot,
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
+        idBasinVectReIndex_excluded;
+
+
+#else
+
+    Eigen::SparseMatrix<double> A;
+    Eigen::VectorXd H_basin, rhs;
+    std::vector<Eigen::Triplet<double>> coefficients;
+
+    std::vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
+        W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot,
+        v_pot, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
+        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, 
+	H_pot, additional_source_term;
 
     std::vector<unsigned int> idStaggeredBoundaryVectSouth,
         idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectWest,
         idStaggeredBoundaryVectEast, idStaggeredInternalVectHorizontal,
         idStaggeredInternalVectVertical, idBasinVect, idBasinVectReIndex,
 
-        idStaggeredBoundaryVectSouth_excluded,
-        idStaggeredBoundaryVectNorth_excluded,
-        idStaggeredBoundaryVectWest_excluded,
-        idStaggeredBoundaryVectEast_excluded,
-        idStaggeredInternalVectHorizontal_excluded,
-        idStaggeredInternalVectVertical_excluded, idBasinVect_excluded,
+        idStaggeredBoundaryVectSouth_excluded_pot,
+        idStaggeredBoundaryVectNorth_excluded_pot,
+        idStaggeredBoundaryVectWest_excluded_pot,
+        idStaggeredBoundaryVectEast_excluded_pot,
+        idStaggeredInternalVectHorizontal_excluded_pot,
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
         idBasinVectReIndex_excluded;
 
-    std::vector<std::array<double, 2>> Gamma_vect_x, Gamma_vect_y;
 
-    std::vector<std::tuple<bool, int>> excluded_ids;
-    std::vector<double> additional_source_term;
-    std::vector<std::vector<unsigned int>> kk_gauges;
-
-    std::vector<double> basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff,
-        W_Gav, W_Gav_cum, hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u,
-        v, n_x, n_y, u_star, v_star, h_interface_x, h_interface_y, slope_x,
-        slope_y, slope_cell, soilMoistureRetention, roughness_vect, eta, H, H_old, H_oldold;
-
-    Eigen::SparseMatrix<double> A;
-    Eigen::VectorXd H_basin, rhs;
-    std::vector<Eigen::Triplet<double>> coefficients;
+#endif
 
     double pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
         xllcorner_staggered_v, yllcorner_staggered_v, NODATA_value, phi_rad,
-        dt_min, c1_sed, dt_sed, slope_x_max, slope_y_max;
+        dt_min, c1_sed, dt_sed, slope_x_max, slope_y_max,
+        c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, time, timed, timedd, area, c1_min;
 
-    int iter = 0;
-    double c1_DSV_, c2_DSV_, c3_DSV_, minH, maxH, time, timed, timedd, area, c1_min;
     bool is_last_step = false, check_last = false;
     static constexpr double gravity = 9.81;
 
-    /*                   */
+    auto c1_DSV = [](double dt_DSV, double pixel_size) {
+      return dt_DSV / pixel_size;
+    };
+
+    auto c2_DSV = [](double c1) { return gravity * c1; };
+
+    auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
+
+
+    /* End of (Variables living all over the code) */
 
     resize_rasters(
         dataFile, N_rows, N_cols, N,
@@ -217,12 +254,12 @@ int main(int argc, char **argv) {
         idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
         idBasinVect, idBasinVectReIndex,
 
-        idStaggeredBoundaryVectSouth_excluded,
-        idStaggeredBoundaryVectNorth_excluded,
-        idStaggeredBoundaryVectWest_excluded,
-        idStaggeredBoundaryVectEast_excluded,
-        idStaggeredInternalVectHorizontal_excluded,
-        idStaggeredInternalVectVertical_excluded, idBasinVect_excluded,
+        idStaggeredBoundaryVectSouth_excluded_pot,
+        idStaggeredBoundaryVectNorth_excluded_pot,
+        idStaggeredBoundaryVectWest_excluded_pot,
+        idStaggeredBoundaryVectEast_excluded_pot,
+        idStaggeredInternalVectHorizontal_excluded_pot,
+        idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded,
         idBasinVectReIndex_excluded,
 
         Gamma_vect_x, Gamma_vect_y,
@@ -230,11 +267,9 @@ int main(int argc, char **argv) {
         excluded_ids, additional_source_term,
 
         basin_mask_Vec, orography, h_G, h_sd, h_sn, S_coeff, W_Gav, W_Gav_cum,
-        hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u, v, n_x, n_y,
+        hydraulic_conductivity, Z_Gav, d_90, Res_x, Res_y, u_pot, v_pot, n_x, n_y,
         u_star, v_star, h_interface_x, h_interface_y, slope_x, slope_y,
-        slope_cell, soilMoistureRetention, roughness_vect, eta, H,
-
-        H_basin, rhs,
+        slope_cell, soilMoistureRetention, roughness_vect, eta, H_pot,
 
         pixel_size, // meter/pixel
         xllcorner, yllcorner, xllcorner_staggered_u, yllcorner_staggered_u,
@@ -244,6 +279,42 @@ int main(int argc, char **argv) {
         file_dir, save_temporal_sequence, max_Days, temperature_file, ET_model,
         infiltrationModel, phi_rad, dt_min, dt_temp, slope_x_max, slope_y_max,
         number_gauges, kk_gauges);
+
+    // +-----------------------------------------------+
+    // |   Copy to Device all the needed objects       |
+    // +-----------------------------------------------+
+
+    // From this part on we just perform all the computations on the device,
+    // the CPU is used only to save the current solution on the disk
+#ifdef ENABLE_CUDA
+
+    thrust::device_vector<double> H = H_pot;
+    thrust::device_vector<double> u = u_pot;
+    thrust::device_vector<double> v = v_pot;
+    thrust::device_vector<unsigned int> idStaggeredInternalVectHorizontal_excluded = idStaggeredInternalVectHorizontal_excluded_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectWest_excluded = idStaggeredBoundaryVectWest_excluded_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectEast_excluded = idStaggeredBoundaryVectEast_excluded_pot;
+    thrust::device_vector<unsigned int> idStaggeredInternalVectVertical_excluded = idStaggeredInternalVectVertical_excluded_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectNorth_excluded = idStaggeredBoundaryVectNorth_excluded_pot;
+    thrust::device_vector<unsigned int> idStaggeredBoundaryVectSouth_excluded = idStaggeredBoundaryVectSouth_excluded_pot;
+
+#else
+
+    auto H = std::move(H_pot);
+    auto u = std::move(u_pot);
+    auto v = std::move(v_pot);
+    auto idStaggeredInternalVectHorizontal_excluded = std::move(idStaggeredInternalVectHorizontal_excluded_pot);
+    auto idStaggeredBoundaryVectWest_excluded = std::move(idStaggeredBoundaryVectWest_excluded_pot);
+    auto idStaggeredBoundaryVectEast_excluded = std::move(idStaggeredBoundaryVectEast_excluded_pot);
+    auto idStaggeredInternalVectVertical_excluded = std::move(idStaggeredInternalVectVertical_excluded_pot);
+    auto idStaggeredBoundaryVectNorth_excluded = std::move(idStaggeredBoundaryVectNorth_excluded_pot);
+    auto idStaggeredBoundaryVectSouth_excluded = std::move(idStaggeredBoundaryVectSouth_excluded_pot);
+
+#endif
+
+    // set initial quantities for the time step adaptation
+    auto H_old = H;
+    auto H_oldold = H;
 
     // +-----------------------------------------------+
     // |                    Rain                       |
@@ -309,25 +380,23 @@ int main(int argc, char **argv) {
     // |             Start the time loop               |
     // +-----------------------------------------------+
     
+#ifdef ENABLE_CUDA
+    // probably add here some resize for the cuSPARSE objects
+#else
     A.resize(idBasinVect_excluded.size(), idBasinVect_excluded.size());
     A.setZero();
-    H_basin.setZero(idBasinVect_excluded.size());
+    H_basin.setZero(idBasinVect_excluded.size()); 
     rhs.setZero(idBasinVect_excluded.size());
+#endif
 
     c1_min = dt_min / pixel_size;
-
-    auto c1_DSV = [](double dt_DSV, double pixel_size) {
-      return dt_DSV / pixel_size;
-    };
-
-    auto c2_DSV = [](double c1) { return gravity * c1; };
-
-    auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
-
     area = pixel_size*pixel_size * 1.e-6; // km^2
 
-    // row, column and value in the Triplet
+#ifndef ENABLE_CUDA
     maxH = *std::max_element(H.begin(), H.end());
+#else
+    maxH = *thrust::max_element(thrust::device, H.begin(), H.end());
+#endif
 
     dt_DSV = maxdt(u, v, maxH, pixel_size);
     dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
@@ -337,43 +406,11 @@ int main(int argc, char **argv) {
     c2_DSV_ = c2_DSV(c1_DSV_);
     c3_DSV_ = c3_DSV(c1_DSV_);
 
-    // set initial quantities for the time step adaptation
-    H_old = H;
-    H_oldold = H;
-
     time = 0.; 
     timed = -dt_DSV;
     timedd = -2. * dt_DSV;
 
-    // +-----------------------------------------------+
-    // |   Copy to Device all the needed objects       |
-    // +-----------------------------------------------+
-
-    // From this part on we just perform all the computations on the device,
-    // the CPU is used only to save the current solution on the disk
-#ifndef NO_GPU
-    /*
-    auto size = 100*sizeof(double); // size in bytes of 100 doubles
-    double *v_d;
-    cudaMalloc(&v_d, size); // allocate on the device
-    double* v_h = (double*)malloc(size);
-    cudaMemcpy(v_d, v_h, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(v_h, v_d, size, cudaMemcpyDeviceToHost);
-
-    // Host -> Device, if h_std is a std::vector<float>
-    thrust::device_vector<float> d_vec(h_std.begin(), h_std.end());
-    */
-
-    // Host -> Device, if h_std is a std::vector<float>
-    // thrust::device_vector<double> H_device(H.begin(), H.end());
-#endif
-
     while (!is_last_step) {
-
-#ifndef NO_GPU
-
-
-#else
 
       if (rank == 0) {
         std::cout << "Simulation progress: " << time / t_final * 100 << " %"
@@ -430,7 +467,7 @@ int main(int argc, char **argv) {
 
       // update only if necessary
       if (std::floor(time / dt_min) > std::floor((time - dt_DSV) / dt_min)) {
-        for (const unsigned int &k : idBasinVect) {
+        for (const auto &k : idBasinVect) {
           S_coeff[k] = 4.62e-10 * h_sn[k] * (temp.T_raster[k] - T_thr) *
                        temp.melt_mask[k];
         }
@@ -489,10 +526,11 @@ int main(int argc, char **argv) {
                   isNonReflectingBC, true, excluded_ids, additional_source_term,
                   coefficients, rhs);
 
+#ifndef ENABLE_CUDA
       A.setFromTriplets(coefficients.begin(), coefficients.end());
       A.makeCompressed();
       coefficients.clear();
-
+#endif
 
       if (spit_out_matrix) {
         tmpname = matrix_name + std::to_string(iter);
@@ -549,10 +587,11 @@ int main(int argc, char **argv) {
         continue;
       }
 
-      for (const unsigned int &Id : idBasinVect_excluded) {
-        const unsigned int IDreIndex = idBasinVectReIndex_excluded[Id];
-        H_oldold[Id] = H_old[Id];
-        H_old[Id] = H[Id];
+      // use swap here!
+      H_oldold.swap(H_old);
+      H_old.swap(H);
+      for (const auto &Id : idBasinVect_excluded) {
+        const auto IDreIndex = idBasinVectReIndex_excluded[Id];
         H[Id] = std::abs(H_basin(IDreIndex));
         eta[Id] = H[Id] + orography[Id];
       }
@@ -612,7 +651,7 @@ int main(int argc, char **argv) {
           }
         }
 
-        for (const unsigned int &k : idBasinVect_excluded) {
+        for (const auto &k : idBasinVect_excluded) {
           // 1.e-3 is the conversion factor, look at EPM theory
           W_Gav[k] = 1.e-3 * M_PI * Z_Gav[k] *
                          std::sqrt(std::abs((.1 + .1 * temp.T_raster[k]) *
@@ -668,7 +707,7 @@ int main(int argc, char **argv) {
           }
 
           // assemble vertical fluxes
-          for (const unsigned int &Id :
+          for (const auto &Id :
                idStaggeredInternalVectVertical_excluded) {
             const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
 
@@ -678,16 +717,16 @@ int main(int argc, char **argv) {
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idStaggeredBoundaryVectNorth_excluded) {
+          for (const auto &Id : idStaggeredBoundaryVectNorth_excluded) {
 
-            const double h_left = 0, // 0
+            const double h_left = 0, 
                 h_right = h_sd[Id];
 
             h_interface_y[Id] =
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idStaggeredBoundaryVectSouth_excluded) {
+          for (const auto &Id : idStaggeredBoundaryVectSouth_excluded) {
 
             const double h_left = h_sd[Id - N_cols], h_right = 0;
 
@@ -695,7 +734,7 @@ int main(int argc, char **argv) {
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idBasinVect_excluded) {
+          for (const auto &Id : idBasinVect_excluded) {
             Res_y[Id] = h_interface_y[Id + N_cols] - h_interface_y[Id];
           }
 
@@ -744,7 +783,7 @@ int main(int argc, char **argv) {
           }
 
           // Update the solution
-          for (const unsigned int &Id : idBasinVect_excluded) {
+          for (const auto &Id : idBasinVect_excluded) {
             h_sd[Id] += -(Res_x[Id] + Res_y[Id]) + W_Gav[Id] +
                         additional_source_term[Id];
           }
@@ -860,7 +899,7 @@ int main(int argc, char **argv) {
       }
 
       // sediment production zones,
-      for (const unsigned int &k : idBasinVect) {
+      for (const auto &k : idBasinVect) {
         W_Gav_cum[k] += W_Gav[k] * (dt_DSV / dt_sed);
       }
 
@@ -892,7 +931,7 @@ int main(int argc, char **argv) {
           iter++;
 
           const auto &currentDay =
-              iter; // std::floor ( time / (frequency_save * 3600) )
+              iter; 
 
           if (rank == 0)
             std::cout << "Saving solution ..., current saving " << iter
@@ -942,8 +981,6 @@ int main(int argc, char **argv) {
         dt_DSV = t_final - time;
         check_last = true;
       }
-
-#endif
 
     } // End Time Loop
 

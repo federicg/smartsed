@@ -9,20 +9,23 @@
 #include <set>
 #include <vector>
 
+#ifndef ENABLE_CUDA
+
 //! Eigen library
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra>
+
+#else
+
+#include "cuda_utils_loop_H.cuh"
+
+#endif
 
 //! Parse library
 #include "GetPot.hpp"
 
 //! IML++ CG template
 #include "cg.hpp"
-
-//! to parallelize with openmp
-#if defined(_OPENMP)
-#include <omp.h>
-#endif
 
 namespace Eigen {
 
@@ -165,6 +168,8 @@ std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file);
 
 std::map<std::array<int, 2>, int> createCN_map();
 
+//==============================================================================
+
 class Raster {
 
 public:
@@ -179,7 +184,11 @@ public:
   Eigen::SparseMatrix<double> Coords; // forse mettere una matrice densa
 };
 
+//==============================================================================
+
 double signum(const double &x);
+
+//==============================================================================
 
 class Rain // Previous interpolation not Linear
 {
@@ -234,6 +243,8 @@ private:
   double c;
 };
 
+//==============================================================================
+
 class Temperature {
 
 public:
@@ -257,9 +268,11 @@ public:
 
 private:
   std::vector<double> Temperature_Graph; // length: ndata
-  const double Temp_diff = -6.5e-3;
+  static constexpr double Temp_diff = -6.5e-3;
   const double height_th;
 };
+
+//==============================================================================
 
 class evapoTranspiration {
 
@@ -284,38 +297,297 @@ public:
 private:
   std::vector<double> Ra;
   unsigned int M_evapoTranspiration_model;
-  static constexpr double M_Gsc = .082; // Solar constant
+  static constexpr double M_Gsc = 0.082; // Solar constant
   const double height_th;
   static constexpr double Temp_diff = -6.5e-3;
 };
 
+//==============================================================================
+
+template<class T_type, class U_type>
 class frictionClass {
 
 public:
   frictionClass(
-      const std::vector<double> &H_interface_horizontal,
-      const std::vector<double> &H_interface_vertical,
-      const std::vector<double> &u, const std::vector<double> &v,
-      const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-      const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-      const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-      const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-      const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-      const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+      const T_type&H_interface_horizontal,
+      const T_type&H_interface_vertical,
+      const T_type&u, const T_type&v,
+      const U_type&idStaggeredInternalVectHorizontal,
+      const U_type&idStaggeredBoundaryVectWest,
+      const U_type&idStaggeredBoundaryVectEast,
+      const U_type&idStaggeredInternalVectVertical,
+      const U_type&idStaggeredBoundaryVectNorth,
+      const U_type&idStaggeredBoundaryVectSouth,
       const std::string &friction_model, const double &n_manning,
       const double &dt_DSV, const std::vector<double> &d_90,
       const std::vector<double> &rough, const double &H_min,
-      const unsigned int &N_rows, const unsigned int &N_cols,
-      const std::vector<double> &S_x, const std::vector<double> &S_y);
+      const unsigned int &N_rows, const unsigned int &N_cols, 
+#ifdef ENABLE_CUDA
+      const thrust::host_vector<double> & S_x, const thrust::host_vector<double> &S_y
+#else
+      const std::vector<double> &S_x, const std::vector<double> &S_y
+#endif      
+     )  
+     : H_interface_horizontal(H_interface_horizontal),
+      H_interface_vertical(H_interface_vertical), u(u), v(v),
+      idStaggeredInternalVectHorizontal(idStaggeredInternalVectHorizontal),
+      idStaggeredBoundaryVectWest(idStaggeredBoundaryVectWest),
+      idStaggeredBoundaryVectEast(idStaggeredBoundaryVectEast),
+      idStaggeredInternalVectVertical(idStaggeredInternalVectVertical),
+      idStaggeredBoundaryVectNorth(idStaggeredBoundaryVectNorth),
+      idStaggeredBoundaryVectSouth(idStaggeredBoundaryVectSouth),
+      M_n_manning(n_manning), M_dt_DSV(dt_DSV), N_rows(N_rows), N_cols(N_cols) {
+
+    M_H_min = std::pow(H_min, M_expo);
+
+    std::vector<double> M_fc0_lower_x(S_x.size()), M_fc0_greater_x(S_x.size()),
+        M_fc0_lower_y(S_y.size()), M_fc0_greater_y(S_y.size());
+
+    for (unsigned int i = 0; i < N_rows; i++) {
+      for (unsigned int j = 0; j < N_cols; j++) {
+        const unsigned int IDcell = j + i * N_cols, IDleft = IDcell + i,
+                           IDright = IDleft + 1, IDup = IDcell,
+                           IDdown = IDcell + N_cols;
+
+        const auto d_90_cell = rough[IDcell] * d_90[IDcell];
+
+        M_fc0_greater_x[IDleft] =
+            std::pow(d_90_cell, .45) / (.56 * std::pow(M_g, .44));
+        M_fc0_lower_x[IDleft] =
+            std::pow(d_90_cell, .24) / (2.73 * std::pow(M_g, .49));
+        M_fc0_greater_y[IDup] =
+            std::pow(d_90_cell, .45) / (.56 * std::pow(M_g, .44));
+        M_fc0_lower_y[IDup] =
+            std::pow(d_90_cell, .24) / (2.73 * std::pow(M_g, .49));
+
+        M_fc0_greater_x[IDright] =
+            std::pow(d_90_cell, .45) / (.56 * std::pow(M_g, .44));
+        M_fc0_lower_x[IDright] =
+            std::pow(d_90_cell, .24) / (2.73 * std::pow(M_g, .49));
+        M_fc0_greater_y[IDdown] =
+            std::pow(d_90_cell, .45) / (.56 * std::pow(M_g, .44));
+        M_fc0_lower_y[IDdown] =
+            std::pow(d_90_cell, .24) / (2.73 * std::pow(M_g, .49));
+      }
+    }
+
+    alfa_x.resize(S_x.size());
+    alfa_y.resize(S_y.size());
+
+    M_coeff = M_g * std::pow(M_n_manning, 2.);
+
+    M_expo_r_x_vect.resize(S_x.size());
+    M_gamma_dt_DSV_x_.resize(S_x.size());
+    for (unsigned int k = 0; k < S_x.size(); k++) {
+      M_expo_r_x_vect[k] = M_expo_r1 * (std::abs(S_x[k]) > .006) +
+                           M_expo_r2 * (std::abs(S_x[k]) <= .006);
+      const auto M_Rick_x =
+          (M_fc0_greater_x[k] * std::pow(std::abs(S_x[k]), .33)) *
+                (std::abs(S_x[k]) > .006) +
+            (M_fc0_lower_x[k] * std::pow(std::abs(S_x[k]), .08)) *
+                (std::abs(S_x[k]) <= .006);
+      M_gamma_dt_DSV_x_[k] = M_g * std::pow(M_Rick_x, 2);
+    }
+
+    M_expo_r_y_vect.resize(S_y.size());
+    M_gamma_dt_DSV_y_.resize(S_y.size());
+    for (unsigned int k = 0; k < S_y.size(); k++) {
+      M_expo_r_y_vect[k] = M_expo_r1 * (std::abs(S_y[k]) > .006) +
+                           M_expo_r2 * (std::abs(S_y[k]) <= .006);
+      const auto M_Rick_y =
+          (M_fc0_greater_y[k] * std::pow(std::abs(S_y[k]), .33)) *
+              (std::abs(S_y[k]) > .006) +
+          (M_fc0_lower_y[k] * std::pow(std::abs(S_y[k]), .08)) *
+              (std::abs(S_y[k]) <= .006);
+      M_gamma_dt_DSV_y_[k] = M_g * std::pow(M_Rick_y, 2);
+    }
+
+    if (friction_model == "None") {
+      M_frictionModel = 0;
+    } else if (friction_model == "Manning") {
+      M_frictionModel = 1;
+    } else if (friction_model == "Rickenmann") {
+      M_frictionModel = 2;
+    } else {
+      std::cout << "No friction model inserted!!" << std::endl;
+      exit(-1.);
+    }
+  }
 
   frictionClass() = delete;
   ~frictionClass() = default;
 
-  void f_x();
+  void f_x() {
+#ifdef ENABLE_CUDA
+    
+    LAUNCH_KERNEL(
+      computeHorizontalInternalKernel_friction,
+      idStaggeredInternalVectHorizontal.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(H_interface_horizontal.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
+      N_cols
+    );
 
-  void f_y();
+    LAUNCH_KERNEL(
+      computeHorizontalWestKernel_interface_friction,
+      idStaggeredBoundaryVectWest.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
 
-  std::vector<double> alfa_x, alfa_y;
+    LAUNCH_KERNEL(
+      computeHorizontalEastKernel_friction,
+      idStaggeredBoundaryVectEast.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+#else
+    for (const auto &Id : idStaggeredInternalVectHorizontal) {
+      double alfa = 1.;
+
+      const auto &H_int = H_interface_horizontal[Id];
+      const auto &exponent = M_expo_r_x_vect[Id];
+      const auto den =
+          std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+      if (den > M_H_min) {
+        const auto u_abs = std::abs(u[Id]);
+        double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+                       (M_frictionModel > 0);
+        coeff = std::max(
+            coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+                       std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
+                       den);
+        alfa = 1. / (1. + coeff);
+      }
+      alfa_x[Id] = alfa;
+    }
+
+    for (const auto &Id : idStaggeredBoundaryVectWest) {
+      double alfa = 1.;
+
+      const auto &H_int = H_interface_horizontal[Id];
+      const auto &exponent = M_expo_r_x_vect[Id];
+      const auto den =
+          std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+      if (den > M_H_min) {
+        const auto u_abs = std::abs(u[Id]);
+        double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+                       (M_frictionModel > 0);
+        coeff = std::max(
+            coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+                       std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
+                       den);
+        alfa = 1. / (1. + coeff);
+      }
+      alfa_x[Id] = alfa;
+    }
+
+    for (const auto &Id : idStaggeredBoundaryVectEast) {
+      double alfa = 1.;
+
+      const auto &H_int = H_interface_horizontal[Id];
+      const auto &exponent = M_expo_r_x_vect[Id];
+      const auto den =
+          std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+      if (den > M_H_min) {
+        const auto u_abs = std::abs(u[Id]);
+        double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
+                       (M_frictionModel > 0);
+        coeff = std::max(
+            coeff, M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
+                       std::pow(u_abs, 1. - exponent * (M_frictionModel == 2)) /
+                       den);
+        alfa = 1. / (1. + coeff);
+      }
+      alfa_x[Id] = alfa;
+    }
+#endif
+  }
+
+
+  void f_y() {
+#ifdef ENABLE_CUDA
+#error "Not yet implemented"
+#else
+    for (const auto &Id : idStaggeredInternalVectVertical) {
+      double alfa = 1.;
+
+      const auto &H_int = H_interface_vertical[Id];
+      const auto &exponent = M_expo_r_y_vect[Id];
+      const auto den =
+        std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+    if (den > M_H_min) {
+      const auto v_abs = std::abs(v[Id]);
+
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+                     (M_frictionModel > 0);
+      coeff = std::max(
+          coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+                     std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
+                     den);
+      alfa = 1. / (1. + coeff);
+    }
+    alfa_y[Id] = alfa;
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectNorth) {
+    double alfa = 1.;
+
+    const auto &H_int = H_interface_vertical[Id];
+    const auto &exponent = M_expo_r_y_vect[Id];
+    const auto den =
+        std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+    if (den > M_H_min) {
+      const auto v_abs = std::abs(v[Id]);
+      double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+                     (M_frictionModel > 0);
+        coeff = std::max(
+            coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+                       std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
+                       den);
+        alfa = 1. / (1. + coeff);
+      }
+      alfa_y[Id] = alfa;
+    }  
+
+    for (const auto &Id : idStaggeredBoundaryVectSouth) {
+      double alfa = 1.;
+
+      const auto &H_int = H_interface_vertical[Id];
+      const auto &exponent = M_expo_r_y_vect[Id];
+      const auto den =
+          std::pow(H_int, M_expo + exponent * (M_frictionModel == 2));
+
+      if (den > M_H_min) {
+        const auto v_abs = std::abs(v[Id]);
+        double coeff = M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
+                       (M_frictionModel > 0);
+        coeff = std::max(
+            coeff, M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
+                       std::pow(v_abs, 1. - exponent * (M_frictionModel == 2)) /
+                       den);
+        alfa = 1. / (1. + coeff);
+      }
+      alfa_y[Id] = alfa;
+    }
+#endif
+  }
+
+  T_type alfa_x, alfa_y;
 
 private:
   unsigned int M_frictionModel;
@@ -329,17 +601,17 @@ private:
 
   double M_H_min;
 
-  const std::vector<double> &u;
-  const std::vector<double> &v;
-  const std::vector<double> &H_interface_horizontal;
-  const std::vector<double> &H_interface_vertical;
+  const T_type&u;
+  const T_type&v;
+  const T_type&H_interface_horizontal;
+  const T_type&H_interface_vertical;
 
-  const std::vector<unsigned int> &idStaggeredInternalVectHorizontal;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectWest;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectEast;
-  const std::vector<unsigned int> &idStaggeredInternalVectVertical;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectNorth;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectSouth;
+  const U_type&idStaggeredInternalVectHorizontal;
+  const U_type&idStaggeredBoundaryVectWest;
+  const U_type&idStaggeredBoundaryVectEast;
+  const U_type&idStaggeredInternalVectVertical;
+  const U_type&idStaggeredBoundaryVectNorth;
+  const U_type&idStaggeredBoundaryVectSouth;
 
   const unsigned int &N_rows;
   const unsigned int &N_cols;
@@ -350,22 +622,25 @@ private:
   static constexpr double M_g = 9.81;
   static constexpr double M_toll = 1.e-4;
 
-  std::vector<double> M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
+  T_type M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
       M_gamma_dt_DSV_y_;
 };
 
+//==============================================================================
+
+template<class T_type, class U_type>
 class upwind {
 
 public:
-  upwind(const std::vector<double> &H, const std::vector<double> &u,
-         const std::vector<double> &v,
+  upwind(const T_type&H, const T_type&u,
+         const T_type&v,
 
-         const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-         const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-         const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-         const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-         const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-         const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+         const U_type&idStaggeredInternalVectHorizontal,
+         const U_type&idStaggeredBoundaryVectWest,
+         const U_type&idStaggeredBoundaryVectEast,
+         const U_type&idStaggeredInternalVectVertical,
+         const U_type&idStaggeredBoundaryVectNorth,
+         const U_type&idStaggeredBoundaryVectSouth,
 
          const unsigned int &N_rows, const unsigned int &N_cols)
       : H(H), u(u), v(v),
@@ -383,27 +658,143 @@ public:
   upwind() = delete;
   ~upwind() = default;
 
-  void computeHorizontal();
+  void computeHorizontal() {
+#ifdef ENABLE_CUDA
 
-  void computeVertical();
+    LAUNCH_KERNEL(
+      computeHorizontalInternalKernel_interface,
+      idStaggeredInternalVectHorizontal.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
 
-  std::vector<double> horizontal, vertical;
+    LAUNCH_KERNEL(
+      computeHorizontalWestKernel_interface,
+      idStaggeredBoundaryVectWest.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+    LAUNCH_KERNEL(
+      computeHorizontalEastKernel_interface,
+      idStaggeredBoundaryVectEast.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(horizontal.data()),
+      N_cols
+    );
+
+#else
+
+    for (const auto &Id : idStaggeredInternalVectHorizontal) {
+      const unsigned int i = Id / (N_cols + 1), 
+          IDeast = Id - i,    
+          IDwest = Id - i - 1; 
+      const double &H_left = H[IDwest], &H_right = H[IDeast];
+      horizontal[Id] =
+          (H_left + H_right) * .5 + signum(u[Id]) * (H_left - H_right) * .5;
+    }
+    for (const auto &Id : idStaggeredBoundaryVectWest) {
+      const unsigned int i = Id / (N_cols + 1);
+      const double H_left = 0, &H_right = H[Id - i];
+      horizontal[Id] = (H_left + H_right) * .5 +
+                        signum(u[Id + 1]) * (H_left - H_right) *
+                           .5; 
+    }
+    for (const auto &Id : idStaggeredBoundaryVectEast) {
+      const unsigned int i = Id / (N_cols + 1);
+      const double &H_left = H[Id - i - 1], H_right = 0;
+      horizontal[Id] = (H_left + H_right) * .5 +
+                       signum(u[Id - 1]) * (H_left - H_right) *
+                           .5; 
+    }
+
+#endif
+  }
+
+  void computeVertical() {
+#ifdef ENABLE_CUDA
+
+    LAUNCH_KERNEL(
+      computeVerticalInternalKernel_interface,
+      idStaggeredInternalVectVertical.size(),
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+
+    LAUNCH_KERNEL(
+      computeVerticalNorthKernel_interface,
+      idStaggeredBoundaryVectNorth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+
+    LAUNCH_KERNEL(
+      computeVerticalSouthKernel_interface,
+      idStaggeredBoundaryVectSouth.size(),
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(H.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(vertical.data()),
+      N_cols
+    );
+
+
+#else
+
+  for (const auto &Id : idStaggeredInternalVectVertical) {
+      const auto IDsouth = Id,   
+          IDnorth = Id - N_cols;
+      const double &H_left = H[IDnorth], &H_right = H[IDsouth];
+      vertical[Id] =
+          (H_left + H_right) * .5 + signum(v[Id]) * (H_left - H_right) * .5;
+    }
+    for (const auto &Id : idStaggeredBoundaryVectNorth) {
+      const double H_left = 0, &H_right = H[Id];
+      vertical[Id] = (H_left + H_right) * .5 +
+                     signum(v[Id + N_cols]) * (H_left - H_right) * .5;
+    }
+    for (const auto &Id : idStaggeredBoundaryVectSouth) {
+      const double &H_left = H[Id - N_cols], H_right = 0;
+      vertical[Id] = (H_left + H_right) * .5 +
+                     signum(v[Id - N_cols]) * (H_left - H_right) * .5;
+    }
+
+#endif    
+  }
+
+  T_type horizontal, vertical;
 
 private:
-  const std::vector<double> &H;
-  const std::vector<double> &u;
-  const std::vector<double> &v;
+  const T_type&H;
+  const T_type&u;
+  const T_type&v;
 
-  const std::vector<unsigned int> &idStaggeredInternalVectHorizontal;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectWest;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectEast;
-  const std::vector<unsigned int> &idStaggeredInternalVectVertical;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectNorth;
-  const std::vector<unsigned int> &idStaggeredBoundaryVectSouth;
+  const U_type&idStaggeredInternalVectHorizontal;
+  const U_type&idStaggeredBoundaryVectWest;
+  const U_type&idStaggeredBoundaryVectEast;
+  const U_type&idStaggeredInternalVectVertical;
+  const U_type&idStaggeredBoundaryVectNorth;
+  const U_type&idStaggeredBoundaryVectSouth;
 
   const unsigned int &N_cols;
   const unsigned int &N_rows;
 };
+
+//==============================================================================
 
 bool is_file_exist(const char *fileName);
 

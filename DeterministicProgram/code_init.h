@@ -9,60 +9,55 @@
 #include <map>
 #include <set>
 #include <vector>
-
-//! Eigen library
-#include <Eigen/Sparse>
-#include <unsupported/Eigen/SparseExtra>
+#include <type_traits>
 
 //!
 #include "utils_H.h"
 
-template <class T>
+template <class T_type, class U_type, class V_type>
 void resize_rasters(
-    const T &dataFile,
+    const T_type &dataFile,
 
     unsigned int &N_rows, unsigned int &N_cols, unsigned int &N,
 
-    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    std::vector<unsigned int> &idBasinVect,
-    std::vector<unsigned int> &idBasinVectReIndex,
+    U_type&idStaggeredBoundaryVectSouth,
+    U_type&idStaggeredBoundaryVectNorth,
+    U_type&idStaggeredBoundaryVectWest,
+    U_type&idStaggeredBoundaryVectEast,
+    U_type&idStaggeredInternalVectHorizontal,
+    U_type&idStaggeredInternalVectVertical,
+    U_type&idBasinVect,
+    U_type&idBasinVectReIndex,
 
-    std::vector<unsigned int> &idStaggeredBoundaryVectSouth_excluded,
-    std::vector<unsigned int> &idStaggeredBoundaryVectNorth_excluded,
-    std::vector<unsigned int> &idStaggeredBoundaryVectWest_excluded,
-    std::vector<unsigned int> &idStaggeredBoundaryVectEast_excluded,
-    std::vector<unsigned int> &idStaggeredInternalVectHorizontal_excluded,
-    std::vector<unsigned int> &idStaggeredInternalVectVertical_excluded,
-    std::vector<unsigned int> &idBasinVect_excluded,
-    std::vector<unsigned int> &idBasinVectReIndex_excluded,
+    U_type&idStaggeredBoundaryVectSouth_excluded,
+    U_type&idStaggeredBoundaryVectNorth_excluded,
+    U_type&idStaggeredBoundaryVectWest_excluded,
+    U_type&idStaggeredBoundaryVectEast_excluded,
+    U_type&idStaggeredInternalVectHorizontal_excluded,
+    U_type&idStaggeredInternalVectVertical_excluded,
+    U_type&idBasinVect_excluded,
+    U_type&idBasinVectReIndex_excluded,
 
     std::vector<std::array<double, 2>> &Gamma_vect_x,
     std::vector<std::array<double, 2>> &Gamma_vect_y,
 
     std::vector<std::tuple<bool, int>> &excluded_ids,
-    std::vector<double> &additional_source_term,
+    V_type&additional_source_term,
 
-    std::vector<double> &basin_mask_Vec, std::vector<double> &orography,
-    std::vector<double> &h_G, std::vector<double> &h_sd,
-    std::vector<double> &h_sn, std::vector<double> &S_coeff,
-    std::vector<double> &W_Gav, std::vector<double> &W_Gav_cum,
-    std::vector<double> &hydraulic_conductivity, std::vector<double> &Z_Gav,
-    std::vector<double> &d_90, std::vector<double> &Res_x,
-    std::vector<double> &Res_y, std::vector<double> &u, std::vector<double> &v,
-    std::vector<double> &n_x, std::vector<double> &n_y,
-    std::vector<double> &u_star, std::vector<double> &v_star,
-    std::vector<double> &h_interface_x, std::vector<double> &h_interface_y,
-    std::vector<double> &slope_x, std::vector<double> &slope_y,
-    std::vector<double> &slope_cell, std::vector<double> &soilMoistureRetention,
-    std::vector<double> &roughness_vect, std::vector<double> &eta,
-    std::vector<double> &H,
-
-    Eigen::VectorXd &H_basin, Eigen::VectorXd &rhs,
+    V_type&basin_mask_Vec, V_type&orography,
+    V_type&h_G, V_type&h_sd,
+    V_type&h_sn, V_type&S_coeff,
+    V_type&W_Gav, V_type&W_Gav_cum,
+    V_type&hydraulic_conductivity, V_type&Z_Gav,
+    V_type&d_90, V_type&Res_x,
+    V_type&Res_y, V_type&u, V_type&v,
+    V_type&n_x, V_type&n_y,
+    V_type&u_star, V_type&v_star,
+    V_type&h_interface_x, V_type&h_interface_y,
+    V_type&slope_x, V_type&slope_y,
+    V_type&slope_cell, V_type&soilMoistureRetention,
+    V_type&roughness_vect, V_type&eta,
+    V_type&H,
 
     double &pixel_size, // meter/pixel
     double &xllcorner, double &yllcorner, double &xllcorner_staggered_u,
@@ -78,6 +73,16 @@ void resize_rasters(
     const int number_gauges, std::vector<std::vector<unsigned int>> &kk_gauges)
 
 {
+
+  static_assert(
+    std::is_same<typename U_type::value_type, unsigned int>::value,
+    "U_type must contain unsigned int"
+  );
+
+  static_assert(
+    std::is_same<typename V_type::value_type, double>::value,
+    "V_type must contain double"
+  );
 
   output_dir = "../Outputs/" + std::to_string(currentSimNumber) + "/";
 
@@ -1135,6 +1140,10 @@ void resize_rasters(
       }
     }
   }
+
+  // +-----------------------------------------------+
+  // |     Compute boundaries of basin domain        |
+  // +-----------------------------------------------+
 
   computeAdjacencies(
       basin_mask_Vec, excluded_ids, idStaggeredBoundaryVectSouth_excluded,

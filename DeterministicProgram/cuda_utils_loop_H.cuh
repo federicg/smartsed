@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cuda_runtime.h>
+#include <cusparse_v2.h>
+#include <cublas_v2.h>
 
 #include "utils_H.h"
 
@@ -40,19 +42,125 @@
 #   define PRINT_INFO(var) printf("  " #var ": %f\n", var);
 #endif
 
+//==============================================================================
+
+static constexpr int blockSize = 256;
+
+#define LAUNCH_KERNEL(kernel, n, ...)                    \
+  do {                                                   \
+    int numBlocks = ((n) + blockSize - 1) / blockSize;  \
+    kernel<<<numBlocks, blockSize>>>(__VA_ARGS__, n);   \
+  } while (0)
+
+//==============================================================================
+// Horizontal upwind
+__global__ void computeHorizontalInternalKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeHorizontalWestKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeHorizontalEastKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+// Vertical upwind
+__global__ void computeVerticalInternalKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeVerticalNorthKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeVerticalSouthKernel_interface(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+//==============================================================================
+// Horizontal friction
+__global__ void computeHorizontalInternalKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeHorizontalWestKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeHorizontalEastKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* u,
+    double* horizontal,
+    unsigned int N_cols,
+    unsigned int n);
+
+// Vertical friciton
+__global__ void computeVerticalInternalKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeVerticalNorthKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void computeVerticalSouthKernel_friction(
+    const unsigned int* ids,
+    const double* H,
+    const double* v,
+    double* vertical,
+    unsigned int N_cols,
+    unsigned int n);
+
+//==============================================================================
+
+
 typedef struct VecStruct {
     cusparseDnVecDescr_t vec;
     double*              ptr;
 } Vec;
-
-
-/*
-__global__ void addKernel(double* a, const double* b, int n) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) a[i] += b[i];
-}
-*/
-
 
 
 //==============================================================================
@@ -62,61 +170,7 @@ __global__ void addKernel(double* a, const double* b, int n) {
 void make_laplace_matrix(int * n_out,
                          int **row_offsets_out, 
                          int **columns_out, 
-                         double **values_out) {
-    int grid = 700; // grid resolution
-
-    int n = grid * grid;
-    *n_out = n;
-    // vertices have 5 neighbors, 
-    // but each vertex on the boundary loses 1. corners lose 2.
-    int nnz = 5 * n - 4 * grid;
-
-    printf("Creating 5-point time-dependent diffusion matrix.\n"
-           " grid size: %d x %d\n"
-           " matrix rows:   %d\n"
-           " matrix cols:   %d\n"
-           " nnz:         %d\n",
-           grid, grid, n, n, nnz);
-
-    int* row_offsets = *row_offsets_out = (int*)malloc((n + 1) * sizeof(int));
-    int* columns     = *columns_out     = (int*)malloc(nnz * sizeof(int));
-    double* values   = *values_out      = (double*)malloc(nnz * sizeof(double));
-    assert(row_offsets);
-    assert(columns);
-    assert(values);
-
-    // The Laplacian stencil looks like [-1;-1,4,-1;-1].
-    // ICHOL doesn't work great with that stencil.
-    // ICHOL is better suited when there's some more mass on the diagonal.
-    double mass = 0.04;
-
-    int it = 0; // next unused index into `columns`/`values`
-
-#define INSERT(u,v, x)                    \
-    if(0<=(u) && (u)<grid &&              \
-       0<=(v) && (v)<grid)                \
-    {                                     \
-        columns[it] = ((u) * grid + (v)); \
-        values[it] = x;                   \
-        ++it;                             \
-    }
-
-    int row = 0;
-    row_offsets[row] = 0;
-    for (int i = 0; i < grid; ++i) {
-        for (int j = 0; j < grid; ++j)
-        {
-            INSERT(i - 1, j    , -1.0);
-            INSERT(i    , j - 1, -1.0);
-            INSERT(i    , j    ,  4.0 + mass);
-            INSERT(i    , j + 1, -1.0);
-            INSERT(i + 1, j    , -1.0);
-            row_offsets[++row] = it;
-        }
-    }
-    assert(it == nnz);
-#undef INSERT
-}
+                         double **values_out);
 
 //==============================================================================
 
@@ -134,174 +188,10 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            Vec                  d_tmp,
            void*                d_bufferMV,
            int                  maxIterations,
-           double               tolerance) {
-    const double zero      = 0.0;
-    const double one       = 1.0;
-    const double minus_one = -1.0;
-    //--------------------------------------------------------------------------
-    // ### 1 ### R0 = b - A * X0 (using initial guess in X)
-    //    (a) copy b in R0
-    CHECK_CUDA( cudaMemcpy(d_R.ptr, d_B.ptr, m * sizeof(double),
-                           cudaMemcpyDeviceToDevice) )
-    //    (b) compute R = -A * X0 + R
-    CHECK_CUSPARSE( cusparseSpMV(cusparseHandle,
-                                 CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                 &minus_one, matA, d_X.vec, &one, d_R.vec,
-                                 CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT,
-                                 d_bufferMV) )
-    //--------------------------------------------------------------------------
-    // ### 2 ### R_i_aux = L^-1 L^-T R_i
-    size_t              bufferSizeL, bufferSizeLT;
-    void*               d_bufferL, *d_bufferLT;
-    cusparseSpSVDescr_t spsvDescrL, spsvDescrLT;
-    //    (a) L^-1 tmp => R_i_aux    (triangular solver)
-    CHECK_CUSPARSE( cusparseSpSV_createDescr(&spsvDescrL) )
-    CHECK_CUSPARSE( cusparseSpSV_bufferSize(
-                        cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                        &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, &bufferSizeL) )
-    CHECK_CUDA( cudaMalloc(&d_bufferL, bufferSizeL) )
-    CHECK_CUSPARSE( cusparseSpSV_analysis(
-                        cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                        &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, d_bufferL) )
-    CHECK_CUDA( cudaMemset(d_tmp.ptr, 0x0, m * sizeof(double)) )
-    CHECK_CUSPARSE( cusparseSpSV_solve(
-                        cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                        &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL) )
-
-    //    (b) L^-T R_i => tmp    (triangular solver)
-    CHECK_CUSPARSE( cusparseSpSV_createDescr(&spsvDescrLT) )
-    CHECK_CUSPARSE( cusparseSpSV_bufferSize(
-                        cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
-                        &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, &bufferSizeLT) )
-    CHECK_CUDA( cudaMalloc(&d_bufferLT, bufferSizeLT) )
-    CHECK_CUSPARSE( cusparseSpSV_analysis(
-                        cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
-                        &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, d_bufferLT) )
-    CHECK_CUDA( cudaMemset(d_R_aux.ptr, 0x0, m * sizeof(double)) )
-    CHECK_CUSPARSE( cusparseSpSV_solve(
-                        cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
-                        &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
-                        CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT) )
-    //--------------------------------------------------------------------------
-    // ### 3 ### P0 = R0_aux
-    CHECK_CUDA( cudaMemcpy(d_P.ptr, d_R_aux.ptr, m * sizeof(double),
-                           cudaMemcpyDeviceToDevice) )
-    //--------------------------------------------------------------------------
-    // nrm_R0 = ||R||
-    double nrm_R;
-    CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
-    double threshold = tolerance * nrm_R;
-    printf("  Initial Residual: Norm %e' threshold %e\n", nrm_R, threshold);
-    //--------------------------------------------------------------------------
-    double delta;
-    CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_R.ptr, 1, d_R_aux.ptr, 1, &delta) )
-    //--------------------------------------------------------------------------
-    // ### 4 ### repeat until convergence based on max iterations and
-    //           and relative residual
-    for (int i = 0; i < maxIterations; i++) {
-        printf("  Iteration = %d; Error Norm = %e\n", i, nrm_R);
-        //----------------------------------------------------------------------
-        // ### 5 ### alpha = (R_i, R_aux_i) / (A * P_i, P_i)
-        //     (a) T  = A * P_i
-        CHECK_CUSPARSE( cusparseSpMV(cusparseHandle,
-                                     CUSPARSE_OPERATION_NON_TRANSPOSE, &one,
-                                     matA, d_P.vec, &zero, d_T.vec,
-                                     CUDA_R_64F, CUSPARSE_SPMV_ALG_DEFAULT,
-                                     d_bufferMV) )
-        //     (b) denominator = (T, P_i)
-        double denominator;
-        CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_T.ptr, 1, d_P.ptr, 1,
-                                 &denominator) )
-        //     (c) alpha = delta / denominator
-        double alpha = delta / denominator;
-        PRINT_INFO(delta)
-        PRINT_INFO(denominator)
-        PRINT_INFO(alpha)
-        //----------------------------------------------------------------------
-        // ### 6 ###  X_i+1 = X_i + alpha * P
-        //    (a) X_i+1 = -alpha * T + X_i
-        CHECK_CUBLAS( cublasDaxpy(cublasHandle, m, &alpha, d_P.ptr, 1,
-                                  d_X.ptr, 1) )
-        //----------------------------------------------------------------------
-        // ### 7 ###  R_i+1 = R_i - alpha * (A * P)
-        //    (a) R_i+1 = -alpha * T + R_i
-        double minus_alpha = -alpha;
-        CHECK_CUBLAS( cublasDaxpy(cublasHandle, m, &minus_alpha, d_T.ptr, 1,
-                                  d_R.ptr, 1) )
-        //----------------------------------------------------------------------
-        // ### 8 ###  check ||R_i+1|| < threshold
-        CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
-        PRINT_INFO(nrm_R)
-        if (nrm_R < threshold)
-            break;
-        //----------------------------------------------------------------------
-        // ### 9 ### R_aux_i+1 = L^-1 L^-T R_i+1
-        //    (a) L^-1 R_i+1 => tmp    (triangular solver)
-        CHECK_CUDA( cudaMemset(d_tmp.ptr,   0x0, m * sizeof(double)) )
-        CHECK_CUDA( cudaMemset(d_R_aux.ptr, 0x0, m * sizeof(double)) )
-        CHECK_CUSPARSE( cusparseSpSV_solve(cusparseHandle,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           &one, matL, d_R.vec, d_tmp.vec,
-                                           CUDA_R_64F,
-                                           CUSPARSE_SPSV_ALG_DEFAULT,
-                                           spsvDescrL) )
-        //    (b) L^-T tmp => R_aux_i+1    (triangular solver)
-        CHECK_CUSPARSE( cusparseSpSV_solve(cusparseHandle,
-                                           CUSPARSE_OPERATION_TRANSPOSE,
-                                           &one, matL, d_tmp.vec,
-                                           d_R_aux.vec, CUDA_R_64F,
-                                           CUSPARSE_SPSV_ALG_DEFAULT,
-                                           spsvDescrLT) )
-        //----------------------------------------------------------------------
-        // ### 10 ### beta = (R_i+1, R_aux_i+1) / (R_i, R_aux_i)
-        //    (a) delta_new => (R_i+1, R_aux_i+1)
-        double delta_new;
-        CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_R.ptr, 1, d_R_aux.ptr, 1,
-                                 &delta_new) )
-        //    (b) beta => delta_new / delta
-        double beta = delta_new / delta;
-        PRINT_INFO(delta_new)
-        PRINT_INFO(beta)
-        delta       = delta_new;
-        //----------------------------------------------------------------------
-        // ### 11 ###  P_i+1 = R_aux_i+1 + beta * P_i
-        //    (a) P = beta * P
-        CHECK_CUBLAS(cublasDscal(cublasHandle, m, &beta, d_P.ptr, 1))
-        //    (b) P = R_aux + P
-        CHECK_CUBLAS(
-            cublasDaxpy(cublasHandle, m, &one, d_R_aux.ptr, 1, d_P.ptr, 1))
-    }
-    //--------------------------------------------------------------------------
-    printf("Check Solution\n"); // ||R = b - A * X||
-    //    (a) copy b in R
-    CHECK_CUDA( cudaMemcpy(d_R.ptr, d_B.ptr, m * sizeof(double),
-                           cudaMemcpyDeviceToDevice) )
-    // R = -A * X + R
-    CHECK_CUSPARSE( cusparseSpMV(cusparseHandle,
-                                 CUSPARSE_OPERATION_NON_TRANSPOSE, &minus_one,
-                                 matA, d_X.vec, &one, d_R.vec, CUDA_R_64F,
-                                 CUSPARSE_SPMV_ALG_DEFAULT, d_bufferMV) )
-    // check ||R||
-    CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
-    printf("Final error norm = %e\n", nrm_R);
-    //--------------------------------------------------------------------------
-    CHECK_CUSPARSE( cusparseSpSV_destroyDescr(spsvDescrL) )
-    CHECK_CUSPARSE( cusparseSpSV_destroyDescr(spsvDescrLT) )
-    CHECK_CUDA( cudaFree(d_bufferL) )
-    CHECK_CUDA( cudaFree(d_bufferLT) )
-    return EXIT_SUCCESS;
-}
+           double               tolerance);
 
 //==============================================================================
 //==============================================================================
-
-
-
 
 
 
