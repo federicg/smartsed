@@ -29,6 +29,8 @@
 //! IML++ CG template
 #include "cg.hpp"
 
+//==============================================================================
+
 namespace Eigen {
 
 namespace internal {
