@@ -1,5 +1,7 @@
 #include "cuda_utils_loop_H.cuh"
 
+//==============================================================================
+
 __device__ __forceinline__
 double M_gamma_dt_DSV(double dt, double coeff)
 {
@@ -116,6 +118,7 @@ void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned i
 
 }
 
+//==============================================================================
 // Vertical upwind
 __global__ void computeVerticalInternalKernel_interface(
     const unsigned int* ids,
@@ -222,7 +225,6 @@ void compute_vertical_interface_wrapper(const thrust::device_vector<unsigned int
       N_cols
     );
 }
-
 
 //==============================================================================
 // Horizontal friction
@@ -402,6 +404,7 @@ void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned in
 
 }
 
+//==============================================================================
 // Vertical friction
 __global__ void computeVerticalInternalKernel_friction(
     const unsigned int* ids,
@@ -1013,3 +1016,4 @@ int main(int argc, char** argv) {
 }
 #endif
 
+//==============================================================================
