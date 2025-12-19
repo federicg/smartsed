@@ -182,13 +182,17 @@ void computeAdjacencies(
 
     const unsigned int &N_rows, const unsigned int &N_cols);
 
-
+//==============================================================================
 
 bool is_file_exist(const char *fileName);
+
+//==============================================================================
 
 std::vector<double> compute_d_perc(const std::vector<double> &clay,
                                    const std::vector<double> &sand,
                                    const double &perc);
+
+//==============================================================================
 
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
@@ -196,17 +200,23 @@ void saveSolution(const std::string &preName, const std::string &flag,
                   const double &cellsize, const double &NODATA_value,
                   const Eigen::VectorXd &H); // it is H or orography
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
                   const double &cellsize, const double &NODATA_value,
                   const std::vector<double> &H); // it is H or orography
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
                   const double &cellsize, const double &NODATA_value,
                   const std::vector<int> &H); // it is H or orography
+
+//==============================================================================
 
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
@@ -215,6 +225,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &n, const std::vector<double> &u,
                   const std::vector<double> &v,
                   const Eigen::VectorXd &H); // it is H or orography
+
+//==============================================================================
 
 void saveSolution(const std::string &preName, const unsigned int &N_rows,
                   const unsigned int &N_cols, const double &xllcorner,
@@ -223,6 +235,8 @@ void saveSolution(const std::string &preName, const unsigned int &N_rows,
                   const std::vector<std::tuple<bool, int>>
                       excluded_ids); // excluded regions, high slopes I hope
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
@@ -230,6 +244,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &n, const std::vector<double> &u,
                   const std::vector<double> &v,
                   const std::vector<double> &H); // it is H or orography
+
+//==============================================================================
 
 void putDry_excludedNodes(
     const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
@@ -245,15 +261,25 @@ void putDry_excludedNodes(
     const std::vector<double> &orography, std::vector<double> &u,
     std::vector<double> &v);
 
+//==============================================================================
+
 void saveVector(const Eigen::VectorXd &b, const std::string &Name);
 
+//==============================================================================
+
 void saveMatrix(const Eigen::SparseMatrix<double> &A, const std::string &Name);
+
+//==============================================================================
 
 void saveTemporalSequence(const Vector2D &X_gauges, const double &time,
                           const std::string &preName, const double &H);
 
+//==============================================================================
+
 void saveTemporalSequence(const double &time, const std::string &preName,
                           const double &H);
+
+//==============================================================================
 
 class Raster {
 
@@ -269,7 +295,11 @@ public:
   Eigen::SparseMatrix<double> Coords; // forse mettere una matrice densa
 };
 
+//==============================================================================
+
 std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file);
+
+//==============================================================================
 
 std::map<std::array<int, 2>, int> createCN_map();
 
@@ -1422,4 +1452,3 @@ void resize_rasters(
 }
 
 //==============================================================================
-
