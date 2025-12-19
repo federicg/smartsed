@@ -1,5 +1,6 @@
 #include "code_init.h"
 
+//==============================================================================
 
 int computePourCell(const int &IDcell, const unsigned int &N_cols,
                     const std::vector<double> &oro,
@@ -113,6 +114,8 @@ int computePourCell(const int &IDcell, const unsigned int &N_cols,
 
   return candidate_id;
 }
+
+//==============================================================================
 
 void computeAdjacencies(
     const std::vector<double> &basin_mask_Vec,
@@ -229,6 +232,8 @@ void computeAdjacencies(
     }
   }
 }
+
+//==============================================================================
 
 void computeAdjacencies(
     const std::vector<double> &basin_mask_Vec_input,
@@ -357,6 +362,8 @@ void computeAdjacencies(
     }
   }
 }
+
+//==============================================================================
 
 void saveVector(const Eigen::VectorXd &b, const std::string &Name) {
   std::ofstream ff(Name);
@@ -489,6 +496,7 @@ void putDry_excludedNodes(
   }
 }
 
+//==============================================================================
 
 Raster::Raster(const std::string &file) {
   std::cout << "Reading file, " << file << std::endl;
@@ -562,16 +570,21 @@ Raster::Raster(const std::string &file) {
   Coords.setFromTriplets(cc.begin(), cc.end());
 };
 
+//==============================================================================
+
 Vector2D operator*(Vector2D const &vector, double const &factor) {
   Vector2D tmp(vector);
   return tmp *= factor;
 }
+
+//==============================================================================
 
 Vector2D operator*(double const &factor, Vector2D const &vector) {
   Vector2D tmp(vector);
   return tmp *= factor;
 }
 
+//==============================================================================
 
 std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file) {
   std::cout << "Reading Gavrilovic coefficients, ... " << std::endl;
@@ -642,6 +655,8 @@ std::map<int, std::array<double, 2>> createCN_map_Gav(const std::string &file) {
 
   return CN;
 }
+
+//==============================================================================
 
 std::map<std::array<int, 2>, int> createCN_map() {
   std::cout << "Reading CN coefficients, ... " << std::endl;
@@ -871,10 +886,14 @@ std::map<std::array<int, 2>, int> createCN_map() {
   return CN;
 }
 
+//==============================================================================
+
 bool is_file_exist(const char *fileName) {
   std::ifstream infile(fileName);
   return infile.good();
 }
+
+//==============================================================================
 
 std::vector<double> compute_d_perc(const std::vector<double> &clay,
                                    const std::vector<double> &sand,
@@ -1007,6 +1026,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const unsigned int &N_rows,
                   const unsigned int &N_cols, const double &xllcorner,
                   const double &yllcorner, const double &cellsize,
@@ -1097,6 +1118,8 @@ void saveSolution(const std::string &preName, const unsigned int &N_rows,
 
   ff.close();
 }
+
+//==============================================================================
 
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
@@ -1196,6 +1219,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
@@ -1293,6 +1318,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
 
   ff.close();
 }
+
+//==============================================================================
 
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
@@ -1394,6 +1421,8 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
+//==============================================================================
+
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
@@ -1494,3 +1523,4 @@ void saveSolution(const std::string &preName, const std::string &flag,
   ff.close();
 }
 
+//==============================================================================
