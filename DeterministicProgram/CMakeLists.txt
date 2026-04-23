@@ -51,6 +51,14 @@ if(ENABLE_CUDA)
 
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+    # Tell CMake to compile these .cpp files with nvcc instead of g++
+    set_source_files_properties(
+        main_final_H.cpp
+        utils_H.cpp
+        code_init.cpp
+        PROPERTIES LANGUAGE CUDA
+    )
 endif()
 
 # ------------------------------------------------------------------------------
