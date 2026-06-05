@@ -13,8 +13,6 @@
 #include <ctime>
 #include <functional>
 
-
-
 //==============================================================================
 
 void compute_dt_adaptive(const std::vector<double> &H,

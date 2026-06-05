@@ -948,6 +948,299 @@ void computePrecipitation_wrapper(
 
 }
 
+
+//==============================================================================
+
+
+__global__ void bilinearInterpolationHorizontal(
+    const unsigned int* __restrict__ ids,
+    const double* __restrict__ u,
+    const double* __restrict__ v,
+    double* __restrict__ u_star,
+    const double scale,
+    const unsigned int nrows,
+    const unsigned int ncols,
+    unsigned int n) {
+
+  const unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) return;
+
+  const unsigned int Id  = __ldg(&ids[tid]);
+  const unsigned int row = Id / (ncols + 1);
+  const unsigned int col = Id - row * (ncols + 1);  // cheaper than Id % (ncols+1)
+
+  // Neighbour indices into v-grid (nrows+1) x (ncols)
+  const unsigned int ID_NE = Id - row;
+  const unsigned int ID_NW = ID_NE - 1;
+  const unsigned int ID_SE = ID_NE + ncols;
+  const unsigned int ID_SW = ID_NW + ncols;
+
+  // Velocity at this staggered node (u-grid)
+  const double vel_x = __ldg(&u[Id]);
+  const double vel_y = (__ldg(&v[ID_NE]) + __ldg(&v[ID_NW]) +
+                        __ldg(&v[ID_SE]) + __ldg(&v[ID_SW])) * 0.25;
+
+  // Back-trace position
+  double x = (double)col - vel_x * scale;
+  double y = (double)row - vel_y * scale;
+
+
+  // Branchless clamp — u-grid is nrows x (ncols+1)
+  x = fmax(0.0, fmin(x, (double)ncols));
+  y = fmax(0.0, fmin(y, (double)(nrows - 1)));
+
+  const int x_1 = (int)floor(x);
+  const int y_1 = (int)floor(y);
+  const int x_2 = min(x_1 + 1, (int)ncols);
+  const int y_2 = min(y_1 + 1, (int)(nrows - 1));
+
+  // Flat indices into u-grid, stride is (ncols+1)
+  const int stride = (int)(ncols + 1);
+  const int Id_11  = x_1 + y_1 * stride;
+  const int Id_12  = x_1 + y_2 * stride;
+  const int Id_21  = x_2 + y_1 * stride;
+  const int Id_22  = x_2 + y_2 * stride;
+
+  // Bilinear weights
+  const double w_x2 = (double)x_2 - x;
+  const double w_x1 = x - (double)x_1;
+  const double w_y2 = (double)y_2 - y;
+  const double w_y1 = y - (double)y_1;
+
+  // Interpolate with FMA
+  const double a = fma(__ldg(&u[Id_11]), w_x2, __ldg(&u[Id_21]) * w_x1);
+  const double b = fma(__ldg(&u[Id_12]), w_x2, __ldg(&u[Id_22]) * w_x1);
+
+  u_star[Id] = fma(a, w_y2, b * w_y1);
+}
+
+
+__global__ void bilinearInterpolationHorizontalWest(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* u_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  
+  const auto Idd = Id + 1;
+  u_star[Id] = u_star[Idd] * (u[Idd] < 0.);
+}
+
+__global__ void bilinearInterpolationHorizontalEast(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* u_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const auto Idd = Id - 1;
+  u_star[Id] = u_star[Idd] * (u[Idd] > 0.);
+}
+
+
+void bilinearInterpolationHorizontal_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
+                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+                const thrust::device_vector<double>& u, 
+		const thrust::device_vector<double>& v, 
+		thrust::device_vector<double>& u_star, 
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols, cudaStream_t stream) {
+
+    launch_kernel(
+      bilinearInterpolationHorizontal,
+      idStaggeredInternalVectHorizontal.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(u_star.data()),
+      scale, N_rows, N_cols
+    );
+ 
+    launch_kernel(
+      bilinearInterpolationHorizontalWest,
+      idStaggeredBoundaryVectWest.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(u_star.data()),
+      scale, N_rows, N_cols
+    );
+
+    launch_kernel(
+      bilinearInterpolationHorizontalEast,
+      idStaggeredBoundaryVectEast.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(u_star.data()),
+      scale, N_rows, N_cols
+    );
+
+}
+
+
+__global__ void bilinearInterpolationVertical(
+    const unsigned int* __restrict__ ids,
+    const double* __restrict__ u,
+    const double* __restrict__ v,
+    double* __restrict__ v_star,
+    const double scale,
+    const unsigned int nrows,
+    const unsigned int ncols,
+    unsigned int n) {
+
+  const unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n) return;
+
+  const unsigned int Id   = __ldg(&ids[tid]);
+
+  const unsigned int row = Id / ncols;
+  const unsigned int col = Id - row * ncols; //Id % ncols;
+
+  const unsigned int ID_SW = Id + row;
+  const unsigned int ID_SE = ID_SW + 1;
+  const unsigned int ID_NW = ID_SW - (ncols + 1);
+  const unsigned int ID_NE = ID_NW + 1;
+
+  // Back-trace position
+  const double vel_x = (__ldg(&u[ID_SW]) + __ldg(&u[ID_SE]) +
+                        __ldg(&u[ID_NW]) + __ldg(&u[ID_NE])) * 0.25;
+  const double vel_y = __ldg(&v[Id]);
+
+  double x = (double)col - vel_x * scale;
+  double y = (double)row - vel_y * scale;
+
+  // Branchless clamp
+  x = fmax(0.0, fmin(x, (double)(ncols - 1)));
+  y = fmax(0.0, fmin(y, (double)(nrows)));
+
+  const int x_1 = (int)floor(x);
+  const int y_1 = (int)floor(y);
+  const int x_2 = min(x_1 + 1, (int)(ncols - 1));
+  const int y_2 = min(y_1 + 1, (int)(nrows));
+
+  // Flat indices into v-grid
+  const int Id_11 = x_1 + y_1 * (int)ncols;
+  const int Id_12 = x_1 + y_2 * (int)ncols;
+  const int Id_21 = x_2 + y_1 * (int)ncols;
+  const int Id_22 = x_2 + y_2 * (int)ncols;
+
+  // Bilinear weights
+  const double w_x2 = (double)x_2 - x;
+  const double w_x1 = x - (double)x_1;
+  const double w_y2 = (double)y_2 - y;
+  const double w_y1 = y - (double)y_1;
+
+  // Interpolate with FMA
+  const double a = fma(__ldg(&v[Id_11]), w_x2, __ldg(&v[Id_21]) * w_x1);
+  const double b = fma(__ldg(&v[Id_12]), w_x2, __ldg(&v[Id_22]) * w_x1);
+
+  v_star[Id] = fma(a, w_y2, b * w_y1);
+}
+
+
+__global__ void bilinearInterpolationVerticalNorth(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* v_star,
+		const double scale,
+		const unsigned int nrows, const unsigned int ncols,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const auto Idd = Id + ncols;
+  v_star[Id] = v_star[Idd] * (v[Idd] < 0.);
+}
+
+__global__ void bilinearInterpolationVerticalSouth(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* v_star,
+		const double scale, 
+		const unsigned int nrows, const unsigned int ncols,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+
+  const auto Idd = Id - ncols;
+  v_star[Id] = v_star[Idd] * (v[Idd] > 0.);
+}
+
+
+
+void bilinearInterpolationVertical_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
+                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+                const thrust::device_vector<double>& u, 
+		const thrust::device_vector<double>& v, 
+		thrust::device_vector<double>& v_star, 
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols, cudaStream_t stream) {
+ 
+    launch_kernel(
+      bilinearInterpolationVertical,
+      idStaggeredInternalVectVertical.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(v_star.data()),
+      scale, N_rows, N_cols
+    );
+ 
+    launch_kernel(
+      bilinearInterpolationVerticalNorth,
+      idStaggeredBoundaryVectNorth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(v_star.data()),
+      scale, N_rows, N_cols
+    );
+
+    launch_kernel(
+      bilinearInterpolationVerticalSouth,
+      idStaggeredBoundaryVectSouth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(v.data()),
+      thrust::raw_pointer_cast(v_star.data()),
+      scale, N_rows, N_cols
+    );
+
+}
+
 //==============================================================================
 
 __global__ void computeKernel_sediment(

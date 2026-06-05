@@ -418,6 +418,87 @@ void computePrecipitation_wrapper(
 
 //==============================================================================
 
+__global__ void bilinearInterpolationHorizontal(
+		const unsigned int* __restrict__ ids,
+		const double* __restrict__ u,
+		const double* __restrict__ v,
+		double* __restrict__ u_star,
+		const double scale,
+		const unsigned int nrows,
+		const unsigned int ncols,
+		unsigned int n);
+
+__global__ void bilinearInterpolationHorizontalWest(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* u_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n);
+
+__global__ void bilinearInterpolationHorizontalEast(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* u_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n);
+
+
+void bilinearInterpolationHorizontal_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
+                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+                const thrust::device_vector<double>& u, 
+		const thrust::device_vector<double>& v, 
+		thrust::device_vector<double>& u_star, 
+		const double scale, 
+		const unsigned int nrows, const unsigned int ncols, cudaStream_t stream);
+
+
+__global__ void bilinearInterpolationVertical(
+		const unsigned int* __restrict__ ids,
+		const double* __restrict__ u,
+		const double* __restrict__ v,
+		double* __restrict__ v_star,
+		const double scale,
+		const unsigned int nrows,
+		const unsigned int ncols,
+		unsigned int n);
+
+__global__ void bilinearInterpolationVerticalNorth(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* v_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n);
+
+__global__ void bilinearInterpolationVerticalSouth(
+		const unsigned int* ids,
+                const double* u,
+		const double* v,
+                double* v_star,
+		const double scale,
+		const unsigned int N_rows, const unsigned int N_cols,
+		unsigned int n);
+
+
+void bilinearInterpolationVertical_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
+                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+                const thrust::device_vector<double>& u, 
+		const thrust::device_vector<double>& v, 
+		thrust::device_vector<double>& v_star, 
+		const double scale,
+		const unsigned int nrows, const unsigned int ncols, cudaStream_t stream);
+
+//==============================================================================
+
 typedef struct VecStruct {
     cusparseDnVecDescr_t vec;
     double*              ptr;

@@ -1453,7 +1453,13 @@ void bilinearInterpolation(
 
 #ifdef ENABLE_CUDA
 
+  bilinearInterpolationHorizontal_wrapper(idStaggeredInternalVectHorizontal,
+                idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+                u, v, u_star, dt_DSV/pixel_size, nrows, ncols, stream);
 
+  bilinearInterpolationVertical_wrapper(idStaggeredInternalVectVertical,
+                idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+                u, v, v_star, dt_DSV/pixel_size, nrows, ncols, stream);
 
 #else
 
@@ -1592,7 +1598,7 @@ void bilinearInterpolation(
     }
     if (y_2 == 0) {
       y_2 += 1;
-      x_2 += 1;
+      y_1 += 1;
       y += 1;
     }
 
@@ -1899,7 +1905,7 @@ void updateVel(
 
 #else
   // +-----------------------------------------------+
-  // |              Update Vertical Velocity         |
+  // |           Update Vertical Velocity            |
   // +-----------------------------------------------+
 
   for (const auto &Id : idStaggeredInternalVectVertical) {
@@ -1945,7 +1951,7 @@ void updateVel(
   }
 
   // +-----------------------------------------------+
-  // |              Update Horizontal Velocity       |
+  // |           Update Horizontal Velocity          |
   // +-----------------------------------------------+
 
   for (const auto &Id : idStaggeredInternalVectHorizontal) {

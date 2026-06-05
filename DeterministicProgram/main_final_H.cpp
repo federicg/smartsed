@@ -679,6 +679,19 @@ int main(int argc, char **argv) {
         H[Id] = std::abs(H_basin(IDreIndex));
         eta[Id] = H[Id] + orography[Id];
       }
+
+#else
+/*
+    //--------------------------------------------------------------------------
+    // ### Run CG computation ###
+    printf("CG loop:\n");
+    gpu_CG(cublasHandle, cusparseHandle, m,
+           matA, matL, d_B, d_X, d_R, d_R_aux, d_P, d_T,
+           d_tmp, d_bufferMV, 
+	   1000,  // max iterations 
+	   1e-6); // tolerance
+    //--------------------------------------------------------------------------
+*/
 #endif
 
       // +-----------------------------------------------+
