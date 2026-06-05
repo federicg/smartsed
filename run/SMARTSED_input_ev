@@ -78,7 +78,7 @@
     [./initial_conditions]
     
     restart_H                   = true
-    H_file                      = ../Outputs/initial_cond/H_ev_5.asc   #realOrography/H.asc
+    H_file                      = ../Outputs/initial_cond/h_ev_5.asc   #realOrography/H.asc
     
     restart_vel                 = true
     vel_file_u                  = ../Outputs/initial_cond/u_ev_5.asc
@@ -137,7 +137,7 @@
 
    # 
    steps_per_hour    = 50    # number of time steps per hour
-   max_Days          = 35   # maximum number of simulated days
+   max_Days          = 1   # maximum number of simulated days
    H_min             = 1.e-3 # threshold for max mass loss
    T_thr             = 2.   # threshold between snow and rain [ °C ]  -->  must be positive 
    

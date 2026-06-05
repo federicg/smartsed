@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 #include <complex>
+#include <numeric>
 
 //! pure CPU header
 #include "code_init.h"
@@ -21,6 +22,7 @@
 //! Include GPU impl.
 #ifdef ENABLE_CUDA
 #include "cuda_utils_loop_H.cuh"
+#include <thrust/extrema.h>
 #endif
 
 //! Parse library
@@ -86,7 +88,7 @@ class Rain // Previous interpolation not Linear
 {
 public:
 #ifdef ENABLE_CUDA
-  using T_type = thrust::device_vector<double>;
+  using T_type = thrust::host_vector<double>;
 #else
   using T_type = std::vector<double>;
 #endif
@@ -109,10 +111,20 @@ public:
       exit(1.);
     }
 
-    DP_total.resize(N);
-    DP_cumulative.resize(N);
-    DP_infiltrated.resize(N);
+    DP_total_pot.resize(N);
+    DP_cumulative_pot.resize(N);
+    DP_infiltrated_pot.resize(N);
     IDW_weights.resize(N);
+   
+#ifdef ENABLE_CUDA
+    DP_total = DP_total_pot;
+    DP_cumulative = DP_cumulative_pot;
+    DP_infiltrated = DP_infiltrated_pot;
+#else
+    DP_total = std::move(DP_total_pot);
+    DP_cumulative = std::move(DP_cumulative_pot);
+    DP_infiltrated = std::move(DP_infiltrated_pot);
+#endif
 
     dt_rain = 0;
 
@@ -165,7 +177,6 @@ public:
                               X, Y, xllcorner, yllcorner, pixel_size, N_rows,
                               N_cols, idBasinVect);
     }
-
   }
 
   Rain() = delete;
@@ -232,6 +243,49 @@ public:
     for (unsigned int i = 0; i < IDW_weights.size(); i++) {
       IDW_weights[i].push_back(1.);
     }
+
+#ifdef ENABLE_CUDA
+
+    thrust::host_vector<unsigned int> size_hy(Hyetograph.size()), 
+	    size_IDW(IDW_weights.size());
+    unsigned int size_hy_s = 0, size_IDW_s = 0;
+    for (int i = 0; i < Hyetograph.size(); i++) {
+	    size_hy[i] = Hyetograph[i].size();
+	    size_hy_s += Hyetograph[i].size();
+    }
+
+    for (int i = 0; i < IDW_weights.size(); i++) {
+	    size_IDW[i] = IDW_weights[i].size();
+	    size_IDW_s += IDW_weights[i].size();
+    }
+
+    thrust::host_vector<double> flat_hy, flat_IDW;
+
+    flat_hy.resize(size_hy_s);
+    flat_IDW.resize(size_IDW_s);
+
+    for (int i = 0; i < Hyetograph.size(); i++)
+	    for (int j = 0; j < Hyetograph[i].size(); j++)
+		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j] 
+			    = Hyetograph[i][j];
+
+     for (int i = 0; i < IDW_weights.size(); i++)
+	    for (int j = 0; j < IDW_weights[i].size(); j++)
+		    flat_IDW[std::accumulate(size_IDW.begin(), size_IDW.begin()+i, 0) + j] 
+			    = IDW_weights[i][j];
+
+     Hyetograph_gpu = flat_hy;
+     IDW_weights_gpu = flat_IDW;
+
+     M_time_spacing_vect_gpu = M_time_spacing_vect;
+
+     thrust::host_vector<unsigned int> offset_hy(Hyetograph.size() + 1, 0);
+     thrust::inclusive_scan(size_hy.begin(), size_hy.end(), offset_hy.begin() + 1);
+
+     d_offset_hy = offset_hy;
+
+#endif
+
   }
 
   void IDW_precipitation(const std::vector<std::string> &file_vect,
@@ -371,6 +425,49 @@ public:
         IDW_weights[IDcenter][ii] /= sum;
       }
     }
+
+#ifdef ENABLE_CUDA
+
+    thrust::host_vector<unsigned int> size_hy(Hyetograph.size()), 
+	    size_IDW(IDW_weights.size());
+    unsigned int size_hy_s = 0, size_IDW_s = 0;
+    for (int i = 0; i < Hyetograph.size(); i++) {
+	    size_hy[i] = Hyetograph[i].size();
+	    size_hy_s += Hyetograph[i].size();
+    }
+
+    for (int i = 0; i < IDW_weights.size(); i++) {
+	    size_IDW[i] = IDW_weights[i].size();
+	    size_IDW_s += IDW_weights[i].size();
+    }
+
+    thrust::host_vector<double> flat_hy, flat_IDW;
+
+    flat_hy.resize(size_hy_s);
+    flat_IDW.resize(size_IDW_s);
+
+    for (int i = 0; i < Hyetograph.size(); i++)
+	    for (int j = 0; j < Hyetograph[i].size(); j++)
+		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j] 
+			    = Hyetograph[i][j];
+
+     for (int i = 0; i < IDW_weights.size(); i++)
+	    for (int j = 0; j < IDW_weights[i].size(); j++)
+		    flat_IDW[std::accumulate(size_IDW.begin(), size_IDW.begin()+i, 0) + j] 
+			    = IDW_weights[i][j];
+
+     Hyetograph_gpu = flat_hy;
+     IDW_weights_gpu = flat_IDW;
+
+     M_time_spacing_vect_gpu = M_time_spacing_vect;
+
+     thrust::host_vector<unsigned int> offset_hy(Hyetograph.size() + 1, 0);
+     thrust::inclusive_scan(size_hy.begin(), size_hy.end(), offset_hy.begin() + 1);
+
+     d_offset_hy = offset_hy;
+
+#endif
+
   }
 
   template <class T_type, class Ud_type>
@@ -378,11 +475,26 @@ public:
                             const T_type &melt_mask,
                             const T_type &h_G,
                             const T_type &H,
-                            const unsigned int N_rows,
                             const unsigned int N_cols,
-                            const Ud_type &idBasinVect) {
+                            const Ud_type &idBasinVect
 #ifdef ENABLE_CUDA
-    computePrecipitationKernel(time, );
+			    , cudaStream_t stream = 0
+#endif
+
+		  ) {
+#ifdef ENABLE_CUDA
+
+      computePrecipitation_wrapper(
+        idBasinVect,
+        time, c, M_isInitialLoss,
+	M_time_spacing_vect_gpu,
+	S,
+        melt_mask,
+	Hyetograph_gpu,
+	IDW_weights_gpu,
+	DP_total, DP_cumulative, DP_infiltrated,
+	h_G, H, N_cols, d_offset_hy, Hyetograph.size(), stream);
+
 #else
     // SCS-CN method and Initial and Constant Loss Model
     for (unsigned int Id = 0; Id < Hyetograph.size(); Id++) {
@@ -398,13 +510,13 @@ public:
           DP_infiltrated[IDcenter] = 0.;
         }
 
-        rainfall_intensity = Hyetograph[Id][i_index] * IDW_weights[IDcenter][Id];
+        const double rainfall_intensity = Hyetograph[Id][i_index] * IDW_weights[IDcenter][Id];
 
         const double deltaSoilMoisture = h_G[IDcenter] - S[IDcenter];
 
         double weight = 0.;
         if (S[IDcenter] > 0 && deltaSoilMoisture < 0.) {
-          weight = std::pow(deltaSoilMoisture / S[IDcenter], 2.);
+          weight = (deltaSoilMoisture / S[IDcenter])*(deltaSoilMoisture / S[IDcenter]);
         }
 
         if (weight > 1. || h_G[IDcenter] < 0) {
@@ -435,17 +547,30 @@ public:
 #endif
   }
 
+  T_type DP_total_pot, DP_cumulative_pot, DP_infiltrated_pot;
+
+#ifdef ENABLE_CUDA
+  thrust::device_vector<unsigned int> d_offset_hy;
+  thrust::device_vector<double> DP_total, DP_cumulative, DP_infiltrated,
+	  M_time_spacing_vect_gpu;
+#else
   T_type DP_total, DP_cumulative, DP_infiltrated;
+#endif
 
   double dt_rain;
 
 private:
+#ifdef ENABLE_CUDA
+  thrust::device_vector<double> Hyetograph_gpu, IDW_weights_gpu;
+  thrust::host_vector<thrust::host_vector<double>> Hyetograph, // # station times ndata
+	  IDW_weights;
+#else
   std::vector<std::vector<double>> Hyetograph, // # station times ndata
-      IDW_weights;
+	  IDW_weights;
+#endif
 
   T_type M_time_spacing_vect;
   bool M_isInitialLoss;
-  double rainfall_intensity = 0;
   double c;
 };
 
@@ -465,16 +590,10 @@ public:
 
     T_raster.resize(N);
     melt_mask.resize(N);
-
-#ifdef ENABLE_CUDA
-    thrust::host_vector<double> T_dailyMean_pot, T_dailyMin_pot, T_dailyMax_pot;
-#else
-    std::vector<double> T_dailyMean_pot, T_dailyMin_pot, T_dailyMax_pot;
-#endif
     
-    T_dailyMean_pot.resize(max_Days);
-    T_dailyMin_pot.resize(max_Days);
-    T_dailyMax_pot.resize(max_Days);
+    T_dailyMean.resize(max_Days);
+    T_dailyMin.resize(max_Days);
+    T_dailyMax.resize(max_Days);
     J.resize(max_Days);
 
     Temperature_Graph.reserve(ndata);
@@ -516,10 +635,10 @@ public:
             } else if (uu != 2) {
               nn.push_back(31);
             } else if ((year % 4 == 0 && year % 100 != 0) ||
-                       year % 400 == 0) // febbraio bisestile
+                       year % 400 == 0) // leap year February
             {
               nn.push_back(29);
-            } else // febbraio non bisestile
+            } else // non-leap year February
             {
               nn.push_back(28);
             }
@@ -612,10 +731,10 @@ public:
             } else if (uu != 2) {
               nn.push_back(31);
             } else if ((year % 4 == 0 && year % 100 != 0) ||
-                       year % 400 == 0) // febbraio bisestile
+                       year % 400 == 0) // leap year February
             {
               nn.push_back(29);
-            } else // febbraio non bisestile
+            } else // non-leap year February
             {
               nn.push_back(28);
             }
@@ -688,20 +807,20 @@ public:
 
       while (k != static_cast<unsigned int>(std::round((24. / time_spacing)))) {
 
-        T_dailyMean_pot[n - 1] += Temperature_Graph[h];
+        T_dailyMean[n - 1] += Temperature_Graph[h];
 
         if (k != 0) {
 
           if (Temperature_Graph[h] < T_dailyMin[n - 1]) {
-            T_dailyMin_pot[n - 1] = Temperature_Graph[h];
+            T_dailyMin[n - 1] = Temperature_Graph[h];
           }
 
           if (Temperature_Graph[h] > T_dailyMax[n - 1]) {
-            T_dailyMax_pot[n - 1] = Temperature_Graph[h];
+            T_dailyMax[n - 1] = Temperature_Graph[h];
           }
         } else {
-          T_dailyMin_pot[n - 1] = Temperature_Graph[h];
-          T_dailyMax_pot[n - 1] = Temperature_Graph[h];
+          T_dailyMin[n - 1] = Temperature_Graph[h];
+          T_dailyMax[n - 1] = Temperature_Graph[h];
         }
 
         h++;
@@ -714,7 +833,7 @@ public:
         exit(-1.);
       }
 
-      T_dailyMean_pot[n - 1] /= k;
+      T_dailyMean[n - 1] /= k;
     }
     // --------------------------------------------- //
 
@@ -723,24 +842,32 @@ public:
       const unsigned int i = std::floor((n - 1) * (24. / time_spacing));
       J[n - 1] = J_ndata[i];
     }
-
-#ifdef ENABLE_CUDA
-    T_dailyMean = T_dailyMean_pot;
-    T_dailyMin = T_dailyMin_pot;
-    T_dailyMax = T_dailyMax_pot;
-#else
-    T_dailyMean = std::move(T_dailyMean_pot);
-    T_dailyMin = std::move(T_dailyMin_pot);
-    T_dailyMax = std::move(T_dailyMax_pot);
-#endif
   }
 
   Temperature() = delete;
   ~Temperature() = default;
 
-  void computeTemperature(const double time, const double dt_temp, const double dt_DSV) {
+  void computeTemperature(const double time, const double dt_temp, const double dt_DSV
 #ifdef ENABLE_CUDA
-    computeTemperatureKernel();
+         , cudaStream_t stream = 0
+#endif
+
+		  ) {
+#ifdef ENABLE_CUDA
+    if (std::floor(time / dt_temp) > std::floor((time - dt_DSV) / dt_temp)) {
+      const unsigned int i_t = std::floor(time / dt_temp);
+      const double T = Temperature_Graph[i_t];
+      if (std::isnan(T)) {
+        std::cout << "NAN in computeTemperature" << std::endl;
+        exit(-1);
+      }
+      computeTemperature_wrapper(
+        idBasinVect,
+        T_raster,
+        melt_mask,
+        orography,
+        T, Temp_diff, height_th, T_crit, stream);
+    }
 #else
     // update only if necessary  --> governed by temperature dynamics, i.e.
     // time_spacing_temp
@@ -759,13 +886,13 @@ public:
 #endif
   }
 
-  T_type T_raster, melt_mask, T_dailyMean, T_dailyMin, T_dailyMax;
-  std::vector<double> J;
+  T_type T_raster, melt_mask; 
+  std::vector<double> J, T_dailyMean, T_dailyMin, T_dailyMax;
 
 private:
   const T_type&orography;
   const U_type&idBasinVect;
-  T_type Temperature_Graph; // length: ndata
+  std::vector<double> Temperature_Graph; // length: ndata
   static constexpr double Temp_diff = -6.5e-3;
   const double height_th;
   const double T_crit;
@@ -784,12 +911,6 @@ public:
       : height_th(height_thermometer), idBasinVect(idBasinVect),
         orography(orography) {
 
-#ifdef ENABLE_CUDA
-    thrust::host_vector<double> Ra_pot;
-#else
-    std::vector<double> Ra_pot;
-#endif
-
     ET_vec.resize(N);
 
     if (ET_model == "None") {
@@ -801,22 +922,15 @@ public:
       exit(-1.);
     }
 
-    Ra_pot.resize(max_Days);
+    Ra.resize(max_Days);
     for (unsigned int n = 1; n <= max_Days; n++) {
       const auto dr = 1 + .033 * std::cos(2 * M_PI * J[n - 1] / 365),
                  delta = .409 * std::sin(2 * M_PI * J[n - 1] / 365 - 1.39),
                  ws = std::acos(-std::tan(phi_rad) * std::tan(delta));
-      Ra_pot[n - 1] = (24 * 60 / M_PI) * M_Gsc * dr *
+      Ra[n - 1] = (24 * 60 / M_PI) * M_Gsc * dr *
                   (ws * std::sin(phi_rad) * std::sin(delta) +
                    std::cos(phi_rad) * std::cos(delta) * std::sin(ws));
     }
-
-#ifdef ENABLE_CUDA
-    Ra = Ra_pot;
-#else
-    Ra = std::move(Ra_pot);
-#endif
-
   }
 
   evapoTranspiration() = delete;
@@ -825,9 +939,24 @@ public:
   void ET(const T_type &T_mean, // length nstep: vector of temperature in deg Celsius
           const T_type &T_min, // length nstep
           const T_type &T_max, // length nstep
-          const unsigned int i) {
+          const unsigned int i
 #ifdef ENABLE_CUDA
-    ETKernel();
+	  , cudaStream_t stream = 0
+#endif
+
+	  ) {
+#ifdef ENABLE_CUDA
+    if (M_evapoTranspiration_model == 0) return;  // early exit for case 0
+
+    computeET_wrapper(
+      idBasinVect, ET_vec, orography, 
+      Ra[i],
+      T_mean[i],   // scalar base temps — host access
+      T_max[i],
+      T_min[i],
+      Temp_diff, height_th,
+      M_evapoTranspiration_model,
+      stream);
 #else
     switch (M_evapoTranspiration_model) {
     case 0:
@@ -851,7 +980,7 @@ public:
 private:
   const T_type&orography;
   const U_type&idBasinVect;
-  T_type Ra;
+  std::vector<double> Ra;
   unsigned int M_evapoTranspiration_model;
   static constexpr double M_Gsc = 0.082; // Solar constant
   const double height_th;
@@ -860,7 +989,7 @@ private:
 
 //==============================================================================
 
-template<class T_type, class U_type, class V_type>
+template<class T_type, class U_type>
 class frictionClass {
 public:
   frictionClass(
@@ -874,10 +1003,17 @@ public:
       const U_type&idStaggeredBoundaryVectNorth,
       const U_type&idStaggeredBoundaryVectSouth,
       const std::string &friction_model, const double &n_manning,
-      const double &dt_DSV, const std::vector<double> &d_90,
-      const std::vector<double> &rough, const double &H_min,
+      const double &dt_DSV, 
+#ifndef ENABLE_CUDA
+      const std::vector<double> &d_90,
+      const std::vector<double> &rough, 
+#else
+      const thrust::host_vector<double> &d_90,
+      const thrust::host_vector<double> &rough,
+#endif
+      const double &H_min,
       const unsigned int &N_rows, const unsigned int &N_cols, 
-      const V_type& S_x, const V_type& S_y
+      const T_type& S_x, const T_type& S_y
      )  
      : H_interface_horizontal(H_interface_horizontal),
       H_interface_vertical(H_interface_vertical), u(u), v(v),
@@ -963,18 +1099,29 @@ public:
       std::cout << "No friction model inserted!!" << std::endl;
       exit(-1.);
     }
+
+#ifdef ENABLE_CUDA // copy to GPU the vectors
+    M_expo_r_x_vect_gpu = M_expo_r_x_vect;
+    M_expo_r_y_vect_gpu = M_expo_r_y_vect; 
+    M_gamma_dt_DSV_x_gpu_ = M_gamma_dt_DSV_x_;
+    M_gamma_dt_DSV_y_gpu_ = M_gamma_dt_DSV_y_;
+#endif
   }
 
   frictionClass() = delete;
   ~frictionClass() = default;
 
-  void f_x() {
+  void f_x(
+#ifdef ENABLE_CUDA
+    cudaStream_t stream = 0
+#endif
+		  ) {
 #ifdef ENABLE_CUDA
     compute_horizontal_friction_wrapper(idStaggeredInternalVectHorizontal,
                 idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
-                H_interface_horizontal, u, M_expo_r_x_vect,
-                alfa_x, M_gamma_dt_DSV_x_, M_dt_DSV, M_coeff, M_H_min,
-                M_expo, M_frictionModel);
+                H_interface_horizontal, u, M_expo_r_x_vect_gpu,
+                alfa_x, M_gamma_dt_DSV_x_gpu_, M_dt_DSV, M_coeff, M_H_min,
+                M_expo, M_frictionModel, stream);
 #else
     for (const auto &Id : idStaggeredInternalVectHorizontal) {
       double alfa = 1.;
@@ -1042,13 +1189,17 @@ public:
   }
 
 
-  void f_y() {
+  void f_y(
+#ifdef ENABLE_CUDA
+    cudaStream_t stream = 0
+#endif
+		  ) {
 #ifdef ENABLE_CUDA
     compute_vertical_friction_wrapper(idStaggeredInternalVectVertical,
                 idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
-                H_interface_vertical, v, M_expo_r_y_vect,
-                alfa_y, M_gamma_dt_DSV_y_, M_dt_DSV, M_coeff, M_H_min,
-                M_expo, M_frictionModel);
+                H_interface_vertical, v, M_expo_r_y_vect_gpu,
+                alfa_y, M_gamma_dt_DSV_y_gpu_, M_dt_DSV, M_coeff, M_H_min,
+                M_expo, M_frictionModel, stream);
 #else
     for (const auto &Id : idStaggeredInternalVectVertical) {
       double alfa = 1.;
@@ -1154,8 +1305,15 @@ private:
   static constexpr double M_g = 9.81;
   static constexpr double M_toll = 1.e-4;
 
-  T_type M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
+#ifndef ENABLE_CUDA
+  std::vector<double> M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
       M_gamma_dt_DSV_y_;
+#else
+  thrust::host_vector<double> M_expo_r_x_vect, M_expo_r_y_vect, M_gamma_dt_DSV_x_,
+      M_gamma_dt_DSV_y_;
+  thrust::device_vector<double> M_expo_r_x_vect_gpu, M_expo_r_y_vect_gpu, M_gamma_dt_DSV_x_gpu_,
+      M_gamma_dt_DSV_y_gpu_;
+#endif
 };
 
 //==============================================================================
@@ -1183,6 +1341,7 @@ public:
         idStaggeredBoundaryVectNorth(idStaggeredBoundaryVectNorth),
         idStaggeredBoundaryVectSouth(idStaggeredBoundaryVectSouth),
         N_cols(N_cols), N_rows(N_rows) {
+
     horizontal.resize(u.size());
     vertical.resize(v.size());
   }
@@ -1190,11 +1349,15 @@ public:
   upwind() = delete;
   ~upwind() = default;
 
-  void computeHorizontal() {
+  void computeHorizontal(
+#ifdef ENABLE_CUDA
+    cudaStream_t stream = 0  // default stream if not specified
+#endif
+		  ) {
 #ifdef ENABLE_CUDA
     compute_horizontal_interface_wrapper(idStaggeredInternalVectHorizontal,
                 idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
-                H, u, horizontal, N_cols);
+                H, u, horizontal, N_cols, stream);
 #else
     for (const auto &Id : idStaggeredInternalVectHorizontal) {
       const unsigned int i = Id / (N_cols + 1), 
@@ -1221,11 +1384,15 @@ public:
 #endif
   }
 
-  void computeVertical() {
+  void computeVertical(
+#ifdef ENABLE_CUDA
+    cudaStream_t stream = 0  // default stream if not specified
+#endif
+		  ) {
 #ifdef ENABLE_CUDA
     compute_vertical_interface_wrapper(idStaggeredInternalVectVertical,
                 idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
-                H, v, vertical, N_cols);
+                H, v, vertical, N_cols, stream);
 #else
   for (const auto &Id : idStaggeredInternalVectVertical) {
       const auto IDsouth = Id,   
@@ -1267,66 +1434,566 @@ private:
 
 //==============================================================================
 
+template<class T_type, class U_type>
 void bilinearInterpolation(
-    const std::vector<double> &u, const std::vector<double> &v,
-    std::vector<double> &u_star, std::vector<double> &v_star,
-    const unsigned int &nrows, const unsigned int &ncols, const double &dt_DSV,
-    const double &pixel_size,
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth);
+    const T_type &u, const T_type &v,
+    T_type &u_star, T_type &v_star,
+    const unsigned int nrows, const unsigned int ncols, const double dt_DSV,
+    const double pixel_size,
+    const U_type &idStaggeredInternalVectHorizontal,
+    const U_type &idStaggeredInternalVectVertical,
+    const U_type &idStaggeredBoundaryVectWest,
+    const U_type &idStaggeredBoundaryVectEast,
+    const U_type &idStaggeredBoundaryVectNorth,
+    const U_type &idStaggeredBoundaryVectSouth
+#ifdef ENABLE_CUDA
+    , cudaStream_t stream = 0  // default stream if not specified
+#endif
+    ) {
+
+#ifdef ENABLE_CUDA
+
+
+
+#else
+
+  // +-----------------------------------------------+
+  // |              Horizontal Velocity              |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectHorizontal) {
+
+    const unsigned int i = Id / (ncols + 1), j = Id % (ncols + 1),
+                       ID_NE = Id - i, // v
+        ID_NW = ID_NE - 1,             // v
+        ID_SE = ID_NE + ncols,         // v
+        ID_SW = ID_NW + ncols;         // v
+
+    Vector2D vel(std::array<double, 2>{
+        {u[Id], (v[ID_NE] + v[ID_NW] + v[ID_SE] + v[ID_SW]) / 4.}});
+
+    const auto Dx = vel / pixel_size * dt_DSV;
+
+    Vector2D xx(std::array<double, 2>{
+        {double(j), double(i)}}); // Top-Left reference frame
+
+    xx = xx - Dx;
+
+    auto x = xx(0), y = xx(1);
+
+    auto x_1 = std::floor(x), //  11    21     ----> x
+        y_1 = std::floor(y),  //
+        x_2 = x_1 + 1,        //
+        y_2 = y_1 + 1;        //  12    22
+                              //
+                              // |
+                              // | y
+
+    if (x_1 == ncols) {
+      x_2 -= 1;
+      x_1 -= 1;
+      x -= 1;
+    }
+    if (x_2 == 0) {
+      x_2 += 1;
+      x_1 += 1;
+      x += 1;
+    }
+
+    if (y_1 == (nrows - 1)) {
+      y_2 -= 1;
+      y_1 -= 1;
+      y -= 1;
+    }
+    if (y_2 == 0) {
+      y_2 += 1;
+      y_1 += 1;
+      y += 1;
+    }
+
+    // return 0 for target values that are out of bounds
+    if (x_2 < 0 || x_1 > ncols || y_2 < 0 || y_1 > (nrows - 1)) {
+      u_star[Id] = 0.;
+    } else {
+      const auto Id_11 = x_1 + y_1 * (ncols + 1), // u
+          Id_12 = x_1 + y_2 * (ncols + 1),        // u
+          Id_21 = x_2 + y_1 * (ncols + 1),        // u
+          Id_22 = x_2 + y_2 * (ncols + 1);        // u
+
+      // compute weights
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+                   w_y1 = y - y_1;
+
+      const auto a = u[Id_11] * w_x2 + u[Id_21] * w_x1,
+                 b = u[Id_12] * w_x2 + u[Id_22] * w_x1;
+
+      u_star[Id] = a * w_y2 + b * w_y1;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectWest) {
+    const auto Idd = Id + 1;
+    u_star[Id] = u_star[Idd] * (u[Idd] < 0.);
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectEast) {
+    const auto Idd = Id - 1;
+    u_star[Id] = u_star[Idd] * (u[Idd] > 0.);
+  }
+
+  // +-----------------------------------------------+
+  // |              Vertical Velocity                |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectVertical) {
+
+    const auto i = Id / ncols, j = Id % ncols,
+
+               ID_SW = Id + i,       // u
+        ID_SE = ID_SW + 1,           // u
+        ID_NW = ID_SW - (ncols + 1), // u
+        ID_NE = ID_NW + 1;           // u
+
+    Vector2D vel(std::array<double, 2>{
+        {(u[ID_SW] + u[ID_SE] + u[ID_NW] + u[ID_NE]) / 4., v[Id]}});
+
+    const auto Dx = vel / pixel_size * dt_DSV;
+
+    Vector2D xx(std::array<double, 2>{
+        {double(j), double(i)}}); // Top-Left reference frame
+
+    xx = xx - Dx;
+
+    auto x = xx(0), y = xx(1);
+
+    auto x_1 = std::floor(x), //  11    21     ----> x
+        y_1 = std::floor(y),  //
+        x_2 = x_1 + 1,        //
+        y_2 = y_1 + 1;        //  12    22
+                              //
+                              // |
+                              // | y
+
+    if (x_1 == (ncols - 1)) {
+      x_2 -= 1;
+      x_1 -= 1;
+      x -= 1;
+    }
+    if (x_2 == 0) {
+      x_2 += 1;
+      x_1 += 1;
+      x += 1;
+    }
+
+    if (y_1 == nrows) {
+      y_2 -= 1;
+      y_1 -= 1;
+      y -= 1;
+    }
+    if (y_2 == 0) {
+      y_2 += 1;
+      x_2 += 1;
+      y += 1;
+    }
+
+    // return 0 for target values that are out of bounds
+    if (x_2 < 0 || x_1 > (ncols - 1) || y_2 < 0 || y_1 > nrows) {
+      v_star[Id] = 0.;
+    } else {
+      const auto Id_11 = x_1 + y_1 * ncols, Id_12 = x_1 + y_2 * ncols,
+                 Id_21 = x_2 + y_1 * ncols, Id_22 = x_2 + y_2 * ncols;
+
+      // compute weights
+      const double w_x2 = x_2 - x, w_x1 = x - x_1, w_y2 = y_2 - y,
+                   w_y1 = y - y_1;
+
+      const auto a = v[Id_11] * w_x2 + v[Id_21] * w_x1,
+                 b = v[Id_12] * w_x2 + v[Id_22] * w_x1;
+
+      v_star[Id] = a * w_y2 + b * w_y1;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectNorth) {
+    const auto Idd = Id + ncols;
+    v_star[Id] = v_star[Idd] * (v[Idd] < 0.);
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectSouth) {
+    const auto Idd = Id - ncols;
+    v_star[Id] = v_star[Idd] * (v[Idd] > 0.);
+  }
+#endif
+}
 
 //==============================================================================
 
+template <class T_type, class U_type>
 void buildMatrix(
-    const std::vector<double> &H_int_x, const std::vector<double> &H_int_y,
-    const std::vector<double> &orography, const std::vector<double> &u_star,
-    const std::vector<double> &v_star, const std::vector<double> &u,
-    const std::vector<double> &v, const std::vector<double> &H,
-    const unsigned int &N_cols, const unsigned int &N_rows,
-    const unsigned int &N, const double &c1, const double &c3,
-    const double &H_min, const std::vector<double> &precipitation,
-    const double &dt_DSV, const std::vector<double> &alfa_x,
-    const std::vector<double> &alfa_y,
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    const std::vector<unsigned int> &idBasinVect,
-    const std::vector<unsigned int> &idBasinVect_not_excluded,
-    const std::vector<unsigned int>
+    const T_type &H_int_x, const T_type &H_int_y,
+    const T_type &orography, const T_type &u_star,
+    const T_type &v_star, const T_type &u,
+    const T_type &v, const T_type &H,
+    const unsigned int N_cols, const unsigned int N_rows,
+    const unsigned int N, const double c1, const double c3,
+    const double H_min, const T_type &precipitation,
+    const double dt_DSV, const T_type &alfa_x,
+    const T_type &alfa_y,
+    const U_type &idStaggeredInternalVectHorizontal,
+    const U_type &idStaggeredInternalVectVertical,
+    const U_type &idStaggeredBoundaryVectWest,
+    const U_type &idStaggeredBoundaryVectEast,
+    const U_type &idStaggeredBoundaryVectNorth,
+    const U_type &idStaggeredBoundaryVectSouth,
+    const U_type &idBasinVect,
+    const U_type &idBasinVect_not_excluded,
+    const U_type
         &idStaggeredInternalVectHorizontal_not_excluded,
-    const std::vector<unsigned int>
+    const U_type
         &idStaggeredInternalVectVertical_not_excluded,
-    const std::vector<unsigned int> &idBasinVectReIndex,
-    const bool &isNonReflectingBC, const bool &isH,
+    const U_type &idBasinVectReIndex,
+    const bool isNonReflectingBC, const bool isH,
+    T_type &additional_source_term
 
-    const std::vector<std::tuple<bool, int>> &excluded_ids,
-    std::vector<double> &additional_source_term,
+#ifdef ENABLE_CUDA
+    , cudaStream_t stream = 0  // default stream if not specified
+#else    
+    , const std::vector<std::tuple<bool, int>> &excluded_ids,
+    std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs
+#endif
+    ) {
 
-    std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs);
+#ifdef ENABLE_CUDA
+
+#else
+	    
+  // Be careful to the mass conservation
+  // cycle over boundary interfaces and check if one of the left, right cells
+  // are excluded ones
+
+  for (const auto &k_ex : idBasinVect_not_excluded) {
+    const auto &current_tuple = excluded_ids[k_ex];
+    if (std::get<0>(current_tuple)) {
+      const auto &k_pour = std::get<1>(current_tuple);
+      if (k_pour >= 0) {
+        additional_source_term[k_pour] += precipitation[k_ex] * dt_DSV;
+      }
+    }
+  }
+
+  for (const auto &Id : idBasinVect) {
+    const auto IDreIndex = idBasinVectReIndex[Id];
+
+    coefficients.push_back(Eigen::Triplet<double>(IDreIndex, IDreIndex, 1.));
+    rhs(IDreIndex) = H[Id] + precipitation[Id] * dt_DSV;
+  }
+
+  for (const auto &Id : idStaggeredInternalVectHorizontal) {
+    const unsigned int i = Id / (N_cols + 1),
+                       IDleft = Id - i - 1,           // H
+        IDright = Id - i,                             // H
+        IDleftReIndex = idBasinVectReIndex[IDleft],   // H
+        IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_x[Id];
+    const double coeff_m = H_interface * alfa_x[Id];
+
+    if (H_interface > H_min) {
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
+
+      rhs(IDleftReIndex) +=
+          -c1 * (+coeff_m * u_star[Id]) -
+          (orography[IDleft] - orography[IDright]) * c3 * coeff_m * isH;
+
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
+
+      rhs(IDrightReIndex) +=
+          -c1 * (-coeff_m * u_star[Id]) -
+          (orography[IDright] - orography[IDleft]) * c3 * coeff_m * isH;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectWest) {
+    const unsigned int i = Id / (N_cols + 1), IDright = Id - i,
+                       IDrightright = IDright + 1,    // H
+        IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_x[Id];
+
+    const double coeff_m = H_interface * alfa_x[Id];
+
+    if (H_interface > H_min) {
+      rhs(IDrightReIndex) +=
+          isNonReflectingBC * (-c1 * (-coeff_m * u_star[Id]));
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectEast) {
+    const unsigned int i = Id / (N_cols + 1), IDleft = Id - i - 1,
+                       IDleftleft = IDleft - 1,     // H
+        IDleftReIndex = idBasinVectReIndex[IDleft]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_x[Id];
+
+    const double coeff_m = H_interface * alfa_x[Id];
+
+    if (H_interface > H_min) {
+      rhs(IDleftReIndex) += isNonReflectingBC * (-c1 * (+coeff_m * u_star[Id]));
+    }
+  }
+
+  for (const auto &Id : idStaggeredInternalVectVertical) {
+    const unsigned int IDleft = Id - N_cols,          // H
+        IDright = Id,                                 // H
+        IDleftReIndex = idBasinVectReIndex[IDleft],   // H
+        IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_y[Id];
+
+    const double coeff_m = H_interface * alfa_y[Id];
+
+    if (H_interface > H_min) {
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDleftReIndex, IDrightReIndex, -c3 * coeff_m));
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDleftReIndex, IDleftReIndex, c3 * coeff_m));
+
+      rhs(IDleftReIndex) +=
+          -c1 * (+coeff_m * v_star[Id]) -
+          (orography[IDleft] - orography[IDright]) * c3 * coeff_m * isH;
+
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDrightReIndex, IDleftReIndex, -c3 * coeff_m));
+      coefficients.push_back(
+          Eigen::Triplet<double>(IDrightReIndex, IDrightReIndex, c3 * coeff_m));
+
+      rhs(IDrightReIndex) +=
+          -c1 * (-coeff_m * v_star[Id]) -
+          (orography[IDright] - orography[IDleft]) * c3 * coeff_m * isH;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectNorth) {
+    const unsigned int IDright = Id,
+                       IDrightright = Id + N_cols,    //
+        IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_y[Id];
+
+    const double coeff_m = H_interface * alfa_y[Id];
+
+    if (H_interface > H_min) {
+      rhs(IDrightReIndex) +=
+          isNonReflectingBC * (-c1 * (-coeff_m * v_star[Id]));
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectSouth) {
+    const unsigned int IDleft = Id - N_cols,        // H
+        IDleftleft = IDleft - N_cols,               // H
+        IDleftReIndex = idBasinVectReIndex[IDleft]; // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_y[Id];
+
+    const double coeff_m = H_interface * alfa_y[Id];
+
+    if (H_interface > H_min) {
+      rhs(IDleftReIndex) += isNonReflectingBC * (-c1 * (+coeff_m * v_star[Id]));
+    }
+  }
+
+  for (const auto &Id : idStaggeredInternalVectHorizontal_not_excluded) {
+
+    const unsigned int i = Id / (N_cols + 1),
+                       IDleft = Id - i - 1, // H
+        IDright = Id - i;                   // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_x[Id];
+
+    if (H_interface > H_min) {
+      if (std::get<0>(excluded_ids[IDleft])) {
+        const auto &k_pour = std::get<1>(excluded_ids[IDleft]);
+        if (k_pour >= 0) {
+          additional_source_term[k_pour] += H_interface * std::abs(u[Id]) * c1;
+        }
+      }
+
+      if (std::get<0>(excluded_ids[IDright])) {
+        const auto &k_pour = std::get<1>(excluded_ids[IDright]);
+        if (k_pour >= 0) {
+          additional_source_term[k_pour] += H_interface * std::abs(u[Id]) * c1;
+        }
+      }
+    }
+  }
+
+  for (const auto &Id : idStaggeredInternalVectVertical_not_excluded) {
+    const unsigned int IDleft = Id - N_cols, // H
+        IDright = Id;                        // H
+
+    // define H at interfaces
+    const auto H_interface = H_int_y[Id];
+
+    if (H_interface > H_min) {
+      if (std::get<0>(excluded_ids[IDleft])) {
+        const auto &k_pour = std::get<1>(excluded_ids[IDleft]);
+        if (k_pour >= 0) {
+          additional_source_term[k_pour] += H_interface * std::abs(v[Id]) * c1;
+        }
+      }
+
+      if (std::get<0>(excluded_ids[IDright])) {
+        const auto &k_pour = std::get<1>(excluded_ids[IDright]);
+        if (k_pour >= 0) {
+          additional_source_term[k_pour] += H_interface * std::abs(v[Id]) * c1;
+        }
+      }
+    }
+  }
+
+  for (const auto &Id : idBasinVect) {
+    const auto IDreIndex = idBasinVectReIndex[Id];
+    if (!std::get<0>(excluded_ids[Id])) {
+      rhs(IDreIndex) += additional_source_term[Id];
+    }
+  }
+#endif
+}
 
 //==============================================================================
 
+template <class T_type, class U_type>
 void updateVel(
-    std::vector<double> &u, std::vector<double> &v,
-    const std::vector<double> &u_star, const std::vector<double> &v_star,
-    const std::vector<double> &alfa_x, const std::vector<double> &alfa_y,
-    const double &N_rows, const double &N_cols, const double &c2,
-    const double &H_min, const std::vector<double> &eta,
-    const std::vector<double> &H, const std::vector<double> &orography,
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    const bool &isNonReflectingBC);
+    T_type &u, T_type &v,
+    const T_type &u_star, const T_type &v_star,
+    const T_type &alfa_x, const T_type &alfa_y,
+    const double N_rows, const double N_cols, const double c2,
+    const double H_min, const T_type &eta,
+    const T_type &H, const T_type &orography,
+    const U_type &idStaggeredInternalVectHorizontal,
+    const U_type &idStaggeredInternalVectVertical,
+    const U_type &idStaggeredBoundaryVectWest,
+    const U_type &idStaggeredBoundaryVectEast,
+    const U_type &idStaggeredBoundaryVectNorth,
+    const U_type &idStaggeredBoundaryVectSouth,
+    const bool isNonReflectingBC
+#ifdef ENABLE_CUDA
+    , cudaStream_t stream = 0  // default stream if not specified
+#endif
+    ) {
+
+#ifdef ENABLE_CUDA
+
+#else
+  // +-----------------------------------------------+
+  // |              Update Vertical Velocity         |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectVertical) {
+    const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
+
+    const auto &H_interface =
+        (H[IDsouth] + H[IDnorth]) * .5 +
+        signum(-eta[IDsouth] + eta[IDnorth]) * (-H[IDsouth] + H[IDnorth]) * .5;
+    if (H_interface > H_min) {
+      v[Id] = alfa_y[Id] * (v_star[Id] - c2 * (eta[IDsouth] - eta[IDnorth]));
+    } else {
+      v[Id] = 0.;
+    }
+  }
+
+  // first row
+  for (const auto &Id : idStaggeredBoundaryVectNorth) {
+    const unsigned int IDsouth = Id + N_cols, IDnorth = Id;
+
+    const auto &H_interface =
+        (H[IDnorth]) * .5 +
+        signum(-eta[IDsouth] + eta[IDnorth]) * (-H[IDnorth]) * .5;
+    if (H_interface > H_min) {
+      v[Id] = isNonReflectingBC * alfa_y[Id] * (v_star[Id]);
+    } else {
+      v[Id] = 0.;
+    }
+  }
+
+  // last row
+  for (const auto &Id : idStaggeredBoundaryVectSouth) {
+
+    const unsigned int IDsouth = Id - N_cols, IDnorth = Id - 2 * N_cols;
+
+    const auto &H_interface =
+        (H[IDsouth]) * .5 +
+        signum(-eta[IDsouth] + eta[IDnorth]) * (H[IDsouth]) * .5;
+    if (H_interface > H_min) {
+      v[Id] = isNonReflectingBC * alfa_y[Id] * (v_star[Id]);
+    } else {
+      v[Id] = 0.;
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |              Update Horizontal Velocity       |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectHorizontal) {
+
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i,
+                       IDwest = Id - i - 1;
+
+    const auto &H_interface =
+        (H[IDeast] + H[IDwest]) * .5 +
+        signum(-eta[IDeast] + eta[IDwest]) * (-H[IDeast] + H[IDwest]) * .5;
+    if (H_interface > H_min) {
+      u[Id] = alfa_x[Id] * (u_star[Id] - c2 * (eta[IDeast] - eta[IDwest]));
+    } else {
+      u[Id] = 0.;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectWest) {
+
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i + 1,
+                       IDwest = Id - i;
+
+    const auto &H_interface =
+        (H[IDwest]) * .5 +
+        signum(-eta[IDeast] + eta[IDwest]) * (-H[IDwest]) * .5;
+    if (H_interface > H_min) {
+      u[Id] = isNonReflectingBC * alfa_x[Id] * (u_star[Id]);
+    } else {
+      u[Id] = 0.;
+    }
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectEast) {
+
+    const unsigned int i = Id / (N_cols + 1), IDeast = Id - i - 1,
+                       IDwest = Id - i - 2;
+
+    const auto &H_interface =
+        (H[IDeast]) * .5 +
+        signum(-eta[IDeast] + eta[IDwest]) * (H[IDeast]) * .5;
+    if (H_interface > H_min) {
+      u[Id] = isNonReflectingBC * alfa_x[Id] * (u_star[Id]);
+    } else {
+      u[Id] = 0.;
+    }
+  }
+#endif
+}
 
 //==============================================================================
 
@@ -1341,17 +2008,95 @@ void compute_dt_adaptive(const std::vector<double> &H,
 
 //==============================================================================
 
-double maxdt(const std::vector<double> &u, const std::vector<double> &v,
-             const double &Hmax, const double &pixel_size);
+template <class T>
+static inline T maxdt_compute(const T vel_max_x, const T vel_max_y,
+                              const T Hmax,      const T pixel_size,
+			      const T gravity,
+			      const T dt_DSV_given, const T t_final) {
+  static_assert(std::is_same<T, double>::value, 
+		  "maxdt_compute only supports double");
+
+  const T Co     = 2.;
+  const T Co_cel = 1e4;
+  const T cel    = std::sqrt(Hmax * gravity);
+
+  T dt = Co * pixel_size /
+              (std::max(vel_max_x, vel_max_y) + std::numeric_limits<T>::epsilon());
+  dt = std::min(dt, Co_cel * pixel_size /
+                    (cel + std::numeric_limits<T>::epsilon()));
+
+  dt = (dt_DSV_given > 0.0) ? std::min(dt, dt_DSV_given) : dt;
+  dt = (t_final      > 0.0) ? std::min(dt, t_final) : dt;
+
+  return dt;
+}
 
 //==============================================================================
 
-double maxCourant(const std::vector<double> &u, const std::vector<double> &v,
-                  const double &c1);
+template <class T_type>
+double maxdt(const T_type &u, const T_type &v,
+             const double Hmax, const double pixel_size,
+             const double gravity,
+             const double dt_DSV_given, const double t_final) {
+
+#ifdef ENABLE_CUDA
+
+  const auto v_mm = deviceMinMax(v);
+  const auto u_mm = deviceMinMax(u);
+
+  const double vel_max_y = std::max(v_mm.max_val, std::abs(v_mm.min_val));
+  const double vel_max_x = std::max(u_mm.max_val, std::abs(u_mm.min_val));
+
+  return maxdt_compute(vel_max_x, vel_max_y, Hmax, pixel_size,
+                       gravity, dt_DSV_given, t_final);
+
+#else
+ 
+  const double vel_max_y = std::max(*std::max_element(v.begin(), v.end()),
+                                    std::abs(*std::min_element(v.begin(), v.end())));
+  const double vel_max_x = std::max(*std::max_element(u.begin(), u.end()),
+                                    std::abs(*std::min_element(u.begin(), u.end())));
+
+  return maxdt_compute(vel_max_x, vel_max_y, Hmax, pixel_size,
+                       gravity, dt_DSV_given, t_final);
+
+#endif
+}
 
 //==============================================================================
 
-double maxCourant(const std::vector<double> &H, const double &c1);
+template <class T_type>
+double maxCourant(const T_type &u,
+                  const T_type &v, const double c1) {
+#ifdef ENABLE_CUDA
+  const auto v_mm = deviceMinMax(v);
+  const auto u_mm = deviceMinMax(u);
+
+  const double Courant_y = std::max(v_mm.max_val, std::abs(v_mm.min_val));
+  const double Courant_x = std::max(u_mm.max_val, std::abs(u_mm.min_val));
+
+  return std::max(Courant_y, Courant_x) * c1;
+#else
+  const double Courant_y = std::max(*std::max_element(v.begin(), v.end()),
+                                    std::abs(*std::min_element(v.begin(), v.end())));
+  const double Courant_x = std::max(*std::max_element(u.begin(), u.end()),
+                                    std::abs(*std::min_element(u.begin(), u.end())));
+
+  return std::max(Courant_y, Courant_x) * c1;
+#endif
+}
+
+template <class T_type>
+double maxCourant(const T_type &H, const double c1, 
+		const double gravity) {
+#ifdef ENABLE_CUDA
+  return std::sqrt(deviceMax(H) * gravity) * c1;  // deviceMax from before 
+#else
+  const double Courant_cel =
+      std::sqrt(*std::max_element(H.begin(), H.end()) * gravity);
+  return (Courant_cel * c1);
+#endif
+}
 
 //==============================================================================
 
@@ -1369,36 +2114,264 @@ int current_start_chunk(const int &rank,
 
 //==============================================================================
 // For gravitational layer
+template <class T_type, class U_type>
 void computeResiduals(
-    const std::vector<double> &n_x, const std::vector<double> &n_y,
-    const unsigned int &N_cols, const unsigned int &N_rows,
-    const std::vector<double> &h,
-    const std::vector<double> &coeff, // hydraulic conductivity
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    const std::vector<unsigned int> &idBasinVect,
-    std::vector<double> &h_interface_x, std::vector<double> &h_interface_y,
-    std::vector<double> &Res_x, std::vector<double> &Res_y);
+    const T_type &n_x, const T_type &n_y,
+    const unsigned int N_cols,
+    const T_type &coeff, // hydraulic conductivity
+    const U_type &idStaggeredInternalVectHorizontal,
+    const U_type &idStaggeredInternalVectVertical,
+    const U_type &idStaggeredBoundaryVectWest,
+    const U_type &idStaggeredBoundaryVectEast,
+    const U_type &idStaggeredBoundaryVectNorth,
+    const U_type &idStaggeredBoundaryVectSouth,
+    const U_type &idBasinVect,
+    const T_type &T_raster, const T_type &melt_mask,
+    T_type &h_sn,
+    T_type &h, 
+    const T_type &ET_vec, 
+    const T_type &DP_infiltrated,
+    const T_type &DP_total,
+    const double c1_min,
+    const double dt_min, 
+    const double T_thr, 
+    T_type &h_interface_x, T_type &h_interface_y
+#ifdef ENABLE_CUDA
+    , cudaStream_t stream = 0  // default stream if not specified
+#endif    
+    ) {
+
+#ifdef ENABLE_CUDA
+
+      computeResidualsHorizontal_wrapper(
+        idStaggeredInternalVectHorizontal,
+	idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+	coeff, n_x, h,
+        h_interface_x, N_cols, stream);
+ 
+      computeResidualsVertical_wrapper(
+        idStaggeredInternalVectVertical,
+	idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+	coeff, n_y, h,
+        h_interface_y, N_cols, stream);
+
+      updateSnowGravLayers_wrapper(
+        idBasinVect, T_raster, melt_mask, h_sn, 
+	h, ET_vec, DP_infiltrated, DP_total, c1_min, dt_min, T_thr,
+	N_cols, h_interface_x, h_interface_y, stream);
+
+#else
+
+  // +-----------------------------------------------+
+  // |                  Horizontal                   |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectHorizontal) {
+    const unsigned int i = Id / (N_cols + 1), // u
+        IDeast = Id - i,                      // H
+        IDwest = Id - i - 1;                  // H
+
+    const double &h_left = h[IDwest], &h_right = h[IDeast];
+
+    const double k_c_left = coeff[IDwest], k_c_right = coeff[IDeast];
+
+    h_interface_x[Id] = n_x[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectWest) {
+    const unsigned int i = Id / (N_cols + 1);
+    const double h_left = 0, h_right = h[Id - i];
+    const double k_c_left = 0., k_c_right = coeff[Id - i];
+    h_interface_x[Id] = n_x[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectEast) {
+    const unsigned int i = Id / (N_cols + 1);
+    const double h_left = h[Id - i - 1], h_right = 0;
+    const double k_c_left = coeff[Id - i - 1], k_c_right = 0.;
+    h_interface_x[Id] = n_x[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  // +-----------------------------------------------+
+  // |                   Vertical                    |
+  // +-----------------------------------------------+
+
+  for (const auto &Id : idStaggeredInternalVectVertical) {
+    const unsigned int IDsouth = Id, // H
+        IDnorth = Id - N_cols;       // H
+
+    const double h_left = h[IDnorth], h_right = h[IDsouth];
+
+    const double k_c_left = coeff[IDnorth], k_c_right = coeff[IDsouth];
+
+    h_interface_y[Id] = n_y[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectNorth) {
+    const double h_left = 0, h_right = h[Id];
+
+    const double k_c_left = 0., k_c_right = coeff[Id];
+
+    h_interface_y[Id] = n_y[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  for (const auto &Id : idStaggeredBoundaryVectSouth) {
+    const double h_left = h[Id - N_cols], h_right = 0;
+
+    const double k_c_left = coeff[Id - N_cols], k_c_right = 0.;
+
+    h_interface_y[Id] = n_y[Id] *
+                        ((k_c_left * h_left + k_c_right * h_right) +
+                         n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+                        .5;
+  }
+
+  // +-----------------------------------------------+
+  // |                   Internal                    |
+  // +-----------------------------------------------+
+
+  for (const auto &k : idBasinVect) {
+    const unsigned int i = k / N_cols;	
+    const double S_coeff = 4.62e-10 * h_sn[k] * (T_raster[k] - T_thr) * melt_mask[k];
+    const double Res_x_cell = h_interface_x[k + 1 + i] - h_interface_x[k + i];
+    const double Res_y_cell = h_interface_y[k + N_cols] - h_interface_y[k];	  
+    h[k] = std::max(h[k] + (S_coeff - ET_vec[k]) * dt_min + DP_infiltrated[k] * dt_min - c1_min * (Res_x_cell + Res_y_cell), 0.);
+    h_sn[k] += DP_total[k] * (1. - melt_mask[k]) * dt_min - S_coeff * dt_min;
+  }
+
+#endif
+}
 
 //==============================================================================
 // For sediment transport
+template <class T_type, class U_type>
 void computeResidualsTruncated(
-    const std::vector<double> &u, const std::vector<double> &v,
-    const unsigned int &N_cols, const unsigned int &N_rows,
-    const unsigned int &N, const double &c1, const std::vector<double> &S_x,
-    const std::vector<double> &S_y, const double &alpha, const double &beta,
-    const double &gamma,
-    const std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    const std::vector<unsigned int> &idStaggeredInternalVectVertical,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    const std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
+    const T_type &u, const T_type &v,
+    const unsigned int N_cols, const unsigned int N_rows,
+    const unsigned int N, const double c1, const T_type &S_x,
+    const T_type &S_y, const double alpha, const double beta,
+    const double gamma,
+    const U_type &idStaggeredInternalVectHorizontal,
+    const U_type &idStaggeredInternalVectVertical,
+    const U_type &idStaggeredBoundaryVectWest,
+    const U_type &idStaggeredBoundaryVectEast,
+    const U_type &idStaggeredBoundaryVectNorth,
+    const U_type &idStaggeredBoundaryVectSouth,
+#ifdef ENABLE_CUDA
+    T_type &Gamma_x_1, T_type &Gamma_x_2,
+    T_type &Gamma_y_1, T_type &Gamma_y_2, 
+    const T_type& S_x_mod, const double& S_y_mod, cudaStream_t stream = 0
+#else
     std::vector<std::array<double, 2>> &Gamma_x,
-    std::vector<std::array<double, 2>> &Gamma_y);
+    std::vector<std::array<double, 2>> &Gamma_y
+#endif
+ 
+    ) {
+
+#ifdef ENABLE_CUDA
+
+      computeResidualsTruncatedHorizontal_wrapper(
+        idStaggeredInternalVectHorizontal,
+	idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+        Gamma_x_1, Gamma_x_2,
+	S_x_mod,
+        u, c1, stream);
+ 
+      computeResidualsTruncatedVertical_wrapper(
+        idStaggeredInternalVectVertical,
+	idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+        Gamma_y_1, Gamma_y_2,
+	S_y_mod,
+        v, c1, stream);
+
+#else
+  for (unsigned int ii = 0; ii < idStaggeredInternalVectHorizontal.size(); ii++) {
+    const auto &Id = idStaggeredInternalVectHorizontal[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) * // here it is better to compute this vector outside the main loop!
+                               u[Id] * (.5 - .5 * signum(u[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                              u[Id] * (.5 + .5 * signum(u[Id]));
+
+    Gamma_x[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectWest.size(); ii++) {
+    const auto &Id = idStaggeredBoundaryVectWest[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                               u[Id] * (.5 - .5 * signum(u[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                              u[Id] * (.5 + .5 * signum(u[Id]));
+
+    Gamma_x[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+ 
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectEast.size(); ii++) {
+    const auto &Id = idStaggeredBoundaryVectEast[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                               u[Id] * (.5 - .5 * signum(u[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_x[Id]), beta) *
+                              u[Id] * (.5 + .5 * signum(u[Id]));
+
+    Gamma_x[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredInternalVectVertical.size(); ii++) {
+    const auto &Id = idStaggeredInternalVectVertical[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                               v[Id] * (.5 - .5 * signum(v[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
+
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectNorth.size(); ii++) {
+    const auto &Id = idStaggeredBoundaryVectNorth[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                               v[Id] * (.5 - .5 * signum(v[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
+
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectSouth.size(); ii++) {
+    const auto &Id = idStaggeredBoundaryVectSouth[ii];
+
+    const double coeff_right = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                               v[Id] * (.5 - .5 * signum(v[Id])),
+
+                 coeff_left = c1 * alpha * std::pow(std::abs(S_y[Id]), beta) *
+                              v[Id] * (.5 + .5 * signum(v[Id]));
+
+    Gamma_y[Id] = std::array<double, 2>{{coeff_right, coeff_left}};
+  }
+#endif
+}
 
 //==============================================================================

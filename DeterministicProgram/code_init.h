@@ -118,69 +118,370 @@ Vector2D operator*(double const &factor, Vector2D const &vector);
 
 //==============================================================================
 
+template<class T, class U>
 int computePourCell(const int &IDcell, const unsigned int &N_cols,
-                    const std::vector<double> &oro,
-                    const std::set<unsigned int> &idBasinVect,
-                    const std::set<unsigned int> &idStaggeredBoundaryVectSouth,
-                    const std::set<unsigned int> &idStaggeredBoundaryVectNorth,
-                    const std::set<unsigned int> &idStaggeredBoundaryVectWest,
-                    const std::set<unsigned int> &idStaggeredBoundaryVectEast);
+                    const U &oro,
+                    const T &idBasinVect,
+                    const T &idStaggeredBoundaryVectSouth,
+                    const T &idStaggeredBoundaryVectNorth,
+                    const T &idStaggeredBoundaryVectWest,
+                    const T &idStaggeredBoundaryVectEast)
+{
+  int candidate_id = -1;
+
+  // +-----------------------------------------------+
+  // |               "Cartesian" cells               |
+  // +-----------------------------------------------+
+
+  const int i = IDcell / N_cols;
+
+  const int IDsouth = IDcell + N_cols, IDnorth = IDcell, IDwest = IDcell + i,
+            IDeast = IDcell + i + 1;
+
+  const auto iterator_south = idStaggeredBoundaryVectSouth.find(IDsouth),
+             iterator_north = idStaggeredBoundaryVectNorth.find(IDnorth),
+             iterator_west = idStaggeredBoundaryVectWest.find(IDwest),
+             iterator_east = idStaggeredBoundaryVectEast.find(IDeast);
+
+  std::vector<unsigned int> candidates;
+  candidates.reserve(8);
+
+  bool is_north = false, is_south = false, is_west = false, is_east = false;
+
+  if (iterator_south == idStaggeredBoundaryVectSouth.end()) {
+    const int IDcell_south = IDcell + N_cols;
+    candidates.push_back(IDcell_south);
+
+    is_south = true;
+  }
+
+  if (iterator_north == idStaggeredBoundaryVectNorth.end()) {
+    const int IDcell_north = IDcell - N_cols;
+    candidates.push_back(IDcell_north);
+
+    is_north = true;
+  }
+
+  if (iterator_west == idStaggeredBoundaryVectWest.end()) {
+    const int IDcell_west = IDcell - 1;
+    candidates.push_back(IDcell_west);
+
+    is_west = true;
+  }
+
+  if (iterator_east == idStaggeredBoundaryVectEast.end()) {
+    const int IDcell_east = IDcell + 1;
+    candidates.push_back(IDcell_east);
+
+    is_east = true;
+  }
+
+  // +-----------------------------------------------+
+  // |               Diagonal cells                  |
+  // +-----------------------------------------------+
+
+  if (is_north && is_west) {
+    // exist north-west cell for sure
+    const int IDcel_nw = IDcell - 1 - N_cols;
+
+    if (idBasinVect.find(IDcel_nw) != idBasinVect.end()) {
+      candidates.push_back(IDcel_nw);
+    }
+  }
+
+  if (is_north && is_east) {
+    // exist north-east cell for sure
+    const int IDcel_ne = IDcell + 1 - N_cols;
+
+    if (idBasinVect.find(IDcel_ne) != idBasinVect.end()) {
+      candidates.push_back(IDcel_ne);
+    }
+  }
+
+  if (is_south && is_west) {
+    // exist south-west cell for sure
+    const int IDcel_sw = IDcell - 1 + N_cols;
+
+    if (idBasinVect.find(IDcel_sw) != idBasinVect.end()) {
+      candidates.push_back(IDcel_sw);
+    }
+  }
+
+  if (is_south && is_east) {
+    // exist south-east cell for sure
+    const int IDcel_se = IDcell + 1 + N_cols;
+
+    if (idBasinVect.find(IDcel_se) != idBasinVect.end()) {
+      candidates.push_back(IDcel_se);
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |       Compute min oro cell (pour point)       |
+  // +-----------------------------------------------+
+
+  double current_minimum_oro = oro[IDcell];
+  for (const auto &it : candidates) {
+    const auto &candidate_minimum_oro = oro[it];
+    if (candidate_minimum_oro < current_minimum_oro) {
+      current_minimum_oro = candidate_minimum_oro;
+      candidate_id = it;
+    }
+  }
+
+  return candidate_id;
+
+}
 
 //==============================================================================
 
+template<class T, class U>
 void computeAdjacencies(
-    const std::vector<double> &basin_mask_Vec_mpi,
-    const std::vector<double> &basin_mask_Vec,
+    const U &basin_mask_Vec,
 
-    std::vector<unsigned int> &idStaggeredBoundaryVectSouth_mpi,
-    std::vector<unsigned int> &idStaggeredBoundaryVectNorth_mpi,
-    std::vector<unsigned int> &idStaggeredBoundaryVectWest_mpi,
-    std::vector<unsigned int> &idStaggeredBoundaryVectEast_mpi,
+    T &idStaggeredBoundaryVectSouth,
+    T &idStaggeredBoundaryVectNorth,
+    T &idStaggeredBoundaryVectWest,
+    T &idStaggeredBoundaryVectEast,
 
-    std::vector<unsigned int> &idStaggeredInternalVectHorizontal_mpi,
-    std::vector<unsigned int> &idStaggeredInternalVectVertical_mpi,
+    T &idStaggeredInternalVectHorizontal,
+    T &idStaggeredInternalVectVertical,
 
-    std::vector<unsigned int> &idBasinVectReIndex_mpi,
-    std::vector<unsigned int> &idBasinVectReIndex,
+    T &idBasinVect,
+    T &idBasinVectReIndex,
 
-    const unsigned int &N_rows, const unsigned int &N_cols);
+    const unsigned int &N_rows, const unsigned int &N_cols)
+{
+  // +-----------------------------------------------+
+  // |                 Basin H IDs                   |
+  // +-----------------------------------------------+
+
+  unsigned int h = 0;
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int k = j + i * N_cols;
+      idBasinVectReIndex.push_back(h);
+
+      if (basin_mask_Vec[k] == 1) {
+        idBasinVect.push_back(k);
+        h++;
+      }
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |         Vertical Vel. Staggered IDs           |
+  // +-----------------------------------------------+
+
+  // cycle on centered cells
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int
+          IDcell = j + i * N_cols,
+          IDcell_south = IDcell + N_cols,
+          IDvel = IDcell + N_cols; // interface between IDcell and IDcell_south
+
+      if (i != (N_rows - 1)) {
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) ==
+            1) // interface cell
+        {
+          if (basin_mask_Vec[IDcell] == 0) {
+            idStaggeredBoundaryVectNorth.push_back(IDvel);
+          } else {
+            idStaggeredBoundaryVectSouth.push_back(IDvel);
+          }
+        }
+
+        if (i == 0 && basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_north = IDcell;
+
+          idStaggeredBoundaryVectNorth.push_back(IDvel_north); // it is ok
+        }
+
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) == 2) {
+          idStaggeredInternalVectVertical.push_back(
+              IDvel); // it is ok no repetition
+        }
+
+      } else {
+        if (basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_south = IDvel;
+
+          idStaggeredBoundaryVectSouth.push_back(IDvel_south);
+        }
+      }
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |         Horizontal Vel. Staggered IDs         |
+  // +-----------------------------------------------+
+
+  // cycle on centered cells
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
+                         IDvel = IDcell + i +
+                                 1; // interface between IDcell and IDcell_east
+
+      if (j != (N_cols - 1)) {
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 1) {
+          if (basin_mask_Vec[IDcell] == 0) {
+            idStaggeredBoundaryVectWest.push_back(IDvel);
+          } else {
+            idStaggeredBoundaryVectEast.push_back(IDvel);
+          }
+        }
+
+        if (j == 0 && basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_west = IDcell + i;
+
+          idStaggeredBoundaryVectWest.push_back(IDvel_west);
+        }
+
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 2) {
+          idStaggeredInternalVectHorizontal.push_back(IDvel);
+        }
+      } else {
+        if (basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_east = IDvel;
+          idStaggeredBoundaryVectEast.push_back(IDvel_east);
+        }
+      }
+    }
+  }
+}
 
 //==============================================================================
 
+template<class T, class U>
 void computeAdjacencies(
-    const std::vector<double> &basin_mask_Vec,
-
-    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
-
-    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    std::vector<unsigned int> &idStaggeredInternalVectVertical,
-
-    std::vector<unsigned int> &idBasinVect,
-    std::vector<unsigned int> &idBasinVectReIndex,
-
-    const unsigned int &N_rows, const unsigned int &N_cols);
-
-//==============================================================================
-
-void computeAdjacencies(
-    const std::vector<double> &basin_mask_Vec_input,
+    const U &basin_mask_Vec_input,
     const std::vector<std::tuple<bool, int>> &excluded_ids,
 
-    std::vector<unsigned int> &idStaggeredBoundaryVectSouth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectNorth,
-    std::vector<unsigned int> &idStaggeredBoundaryVectWest,
-    std::vector<unsigned int> &idStaggeredBoundaryVectEast,
+    T &idStaggeredBoundaryVectSouth,
+    T &idStaggeredBoundaryVectNorth,
+    T &idStaggeredBoundaryVectWest,
+    T &idStaggeredBoundaryVectEast,
 
-    std::vector<unsigned int> &idStaggeredInternalVectHorizontal,
-    std::vector<unsigned int> &idStaggeredInternalVectVertical,
+    T &idStaggeredInternalVectHorizontal,
+    T &idStaggeredInternalVectVertical,
 
-    std::vector<unsigned int> &idBasinVect,
-    std::vector<unsigned int> &idBasinVectReIndex,
+    T &idBasinVect,
+    T &idBasinVectReIndex,
 
-    const unsigned int &N_rows, const unsigned int &N_cols);
+    const unsigned int &N_rows, const unsigned int &N_cols)
+{
+  auto basin_mask_Vec = basin_mask_Vec_input;
+
+  for (unsigned int i = 0; i < basin_mask_Vec.size(); i++) {
+    if (std::get<0>(excluded_ids[i])) {
+      basin_mask_Vec[i] = 0.;
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |                 Basin H IDs                   |
+  // +-----------------------------------------------+
+
+  unsigned int h = 0;
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int k = j + i * N_cols;
+
+      idBasinVectReIndex.push_back(h);
+
+      if (basin_mask_Vec[k] == 1) {
+        idBasinVect.push_back(k);
+        h++;
+      }
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |         Vertical Vel. Staggered IDs           |
+  // +-----------------------------------------------+
+
+  // cycle on centered cells
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int
+          IDcell = j + i * N_cols,
+          IDcell_south = IDcell + N_cols,
+          IDvel = IDcell + N_cols; // interface between IDcell and IDcell_south
+
+      if (i != (N_rows - 1)) {
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) ==
+            1) // interface cell
+        {
+          if (basin_mask_Vec[IDcell] == 0) {
+            idStaggeredBoundaryVectNorth.push_back(IDvel);
+          } else {
+            idStaggeredBoundaryVectSouth.push_back(IDvel);
+          }
+        }
+
+        if (i == 0 && basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_north = IDcell;
+
+          idStaggeredBoundaryVectNorth.push_back(IDvel_north); // it is ok
+        }
+
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_south]) == 2) {
+          idStaggeredInternalVectVertical.push_back(
+              IDvel); // it is ok no repetition
+        }
+
+      } else {
+
+        if (basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_south = IDvel;
+
+          idStaggeredBoundaryVectSouth.push_back(IDvel_south);
+        }
+      }
+    }
+  }
+
+  // +-----------------------------------------------+
+  // |         Horizontal Vel. Staggered IDs         |
+  // +-----------------------------------------------+
+
+  // cicle on centered cells
+  for (unsigned int i = 0; i < N_rows; i++) {
+    for (unsigned int j = 0; j < N_cols; j++) {
+      const unsigned int IDcell = j + i * N_cols, IDcell_east = IDcell + 1,
+                         IDvel = IDcell + i +
+                                 1; // interface between IDcell and IDcell_east
+
+      if (j != (N_cols - 1)) {
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 1) {
+          if (basin_mask_Vec[IDcell] == 0) {
+            idStaggeredBoundaryVectWest.push_back(IDvel);
+          } else {
+            idStaggeredBoundaryVectEast.push_back(IDvel);
+          }
+        }
+
+        if (j == 0 && basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_west = IDcell + i;
+
+          idStaggeredBoundaryVectWest.push_back(IDvel_west);
+        }
+
+        if ((basin_mask_Vec[IDcell] + basin_mask_Vec[IDcell_east]) == 2) {
+          idStaggeredInternalVectHorizontal.push_back(IDvel);
+        }
+      } else {
+        if (basin_mask_Vec[IDcell] == 1) {
+          const auto IDvel_east = IDvel;
+
+          idStaggeredBoundaryVectEast.push_back(IDvel_east);
+        }
+      }
+    }
+  }
+}
 
 //==============================================================================
 
@@ -194,37 +495,104 @@ std::vector<double> compute_d_perc(const std::vector<double> &clay,
 
 //==============================================================================
 
+template <class T>
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
                   const double &cellsize, const double &NODATA_value,
-                  const Eigen::VectorXd &H); // it is H or orography
+                  const T&H) // it is H or orography
+{
+  std::ofstream ff(preName + ".asc");
 
-//==============================================================================
+  if (flag == "u") {
+    ff << "ncols ";
+    ff << N_cols + 1;
+    ff << std::endl;
 
-void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols,
-                  const double &xllcorner, const double &yllcorner,
-                  const double &cellsize, const double &NODATA_value,
-                  const std::vector<double> &H); // it is H or orography
+    ff << "nrows ";
+    ff << N_rows;
+    ff << std::endl;
+  } else if (flag == "v") {
+    ff << "ncols ";
+    ff << N_cols;
+    ff << std::endl;
 
-//==============================================================================
+    ff << "nrows ";
+    ff << N_rows + 1;
+    ff << std::endl;
+  } else {
+    ff << "ncols ";
+    ff << N_cols;
+    ff << std::endl;
 
-void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols,
-                  const double &xllcorner, const double &yllcorner,
-                  const double &cellsize, const double &NODATA_value,
-                  const std::vector<int> &H); // it is H or orography
+    ff << "nrows ";
+    ff << N_rows;
+    ff << std::endl;
+  }
 
-//==============================================================================
+  ff << "xllcorner ";
+  ff << xllcorner;
+  ff << std::endl;
 
-void saveSolution(const std::string &preName, const std::string &flag,
-                  const unsigned int &N_rows, const unsigned int &N_cols,
-                  const double &xllcorner, const double &yllcorner,
-                  const double &cellsize, const double &NODATA_value,
-                  const unsigned int &n, const std::vector<double> &u,
-                  const std::vector<double> &v,
-                  const Eigen::VectorXd &H); // it is H or orography
+  ff << "yllcorner ";
+  ff << yllcorner;
+  ff << std::endl;
+
+  ff << "cellsize ";
+  ff << cellsize;
+  ff << std::endl;
+
+  ff << "NODATA_value ";
+  ff << NODATA_value;
+  ff << std::endl;
+
+  if (flag == "u") {
+
+    for (unsigned int i = 0; i < N_rows; i++) {
+
+      for (unsigned int j = 0; j <= N_cols; j++) {
+
+        const auto Id = j + i * (N_cols + 1);
+
+        ff << H[Id] << " ";
+      }
+
+      ff << std::endl;
+    }
+
+  } else if (flag == "v") {
+
+    for (unsigned int i = 0; i <= N_rows; i++) {
+
+      for (unsigned int j = 0; j < N_cols; j++) {
+
+        const auto Id = j + i * N_cols;
+
+        ff << H[Id] << " ";
+      }
+
+      ff << std::endl;
+    }
+
+  } else // H or orography
+  {
+
+    for (unsigned int i = 0; i < N_rows; i++) {
+
+      for (unsigned int j = 0; j < N_cols; j++) {
+
+        const auto k = j + i * N_cols; // H
+
+        ff << H[k] << " ";
+      }
+
+      ff << std::endl;
+    }
+  }
+
+  ff.close();
+}
+
 
 //==============================================================================
 
@@ -237,13 +605,105 @@ void saveSolution(const std::string &preName, const unsigned int &N_rows,
 
 //==============================================================================
 
+template<class T>
 void saveSolution(const std::string &preName, const std::string &flag,
                   const unsigned int &N_rows, const unsigned int &N_cols,
                   const double &xllcorner, const double &yllcorner,
                   const double &cellsize, const double &NODATA_value,
                   const unsigned int &n, const std::vector<double> &u,
                   const std::vector<double> &v,
-                  const std::vector<double> &H); // it is H or orography
+                  const T &H) // it is H or orography
+{
+  std::ofstream ff(preName + std::to_string(n) + ".asc");
+
+  if (flag == "u") {
+    ff << "ncols ";
+    ff << N_cols + 1;
+    ff << std::endl;
+
+    ff << "nrows ";
+    ff << N_rows;
+    ff << std::endl;
+  } else if (flag == "v") {
+    ff << "ncols ";
+    ff << N_cols;
+    ff << std::endl;
+
+    ff << "nrows ";
+    ff << N_rows + 1;
+    ff << std::endl;
+  } else {
+    ff << "ncols ";
+    ff << N_cols;
+    ff << std::endl;
+
+    ff << "nrows ";
+    ff << N_rows;
+    ff << std::endl;
+  }
+
+  ff << "xllcorner ";
+  ff << xllcorner;
+  ff << std::endl;
+
+  ff << "yllcorner ";
+  ff << yllcorner;
+  ff << std::endl;
+
+  ff << "cellsize ";
+  ff << cellsize;
+  ff << std::endl;
+
+  ff << "NODATA_value ";
+  ff << NODATA_value;
+  ff << std::endl;
+
+  if (flag == "u") {
+
+    for (unsigned int i = 0; i < N_rows; i++) {
+
+      for (unsigned int j = 0; j <= N_cols; j++) {
+
+        const auto Id = j + i * (N_cols + 1);
+
+        ff << u[Id] << " ";
+      }
+
+      ff << std::endl;
+    }
+
+  } else if (flag == "v") {
+
+    for (unsigned int i = 0; i <= N_rows; i++) {
+
+      for (unsigned int j = 0; j < N_cols; j++) {
+
+        const auto Id = j + i * N_cols;
+
+        ff << v[Id] << " ";
+      }
+
+      ff << std::endl;
+    }
+
+  } else // H or orography
+  {
+
+    for (unsigned int i = 0; i < N_rows; i++) {
+
+      for (unsigned int j = 0; j < N_cols; j++) {
+
+        const auto k = j + i * N_cols; // H
+
+        ff << H[k] << " ";
+      }
+
+      ff << std::endl;
+    }
+  }
+  ff.close();
+}
+
 
 //==============================================================================
 
@@ -328,19 +788,27 @@ void resize_rasters(
     U_type&idBasinVect_excluded,
     U_type&idBasinVectReIndex_excluded,
 
+#ifdef ENABLE_CUDA
+    V_type &Gamma_vect_x_1, V_type &Gamma_vect_x_2,
+    V_type &Gamma_vect_y_1, V_type &Gamma_vect_y_2,
+    V_type &slope_x_mod,
+    V_type &slope_y_mod,
+    const double alpha, const double beta,
+#else    
     std::vector<std::array<double, 2>> &Gamma_vect_x,
     std::vector<std::array<double, 2>> &Gamma_vect_y,
+#endif
 
     std::vector<std::tuple<bool, int>> &excluded_ids,
     V_type&additional_source_term,
 
     V_type&orography,
     V_type&h_G, V_type&h_sd,
-    V_type&h_sn, V_type&S_coeff,
+    V_type&h_sn,
     V_type&W_Gav, V_type&W_Gav_cum,
     V_type&hydraulic_conductivity, V_type&Z_Gav,
-    V_type&d_90, V_type&Res_x,
-    V_type&Res_y, V_type&u, V_type&v,
+    V_type&d_90,
+    V_type&u, V_type&v,
     V_type&n_x, V_type&n_y,
     V_type&u_star, V_type&v_star,
     V_type&h_interface_x, V_type&h_interface_y,
@@ -494,11 +962,8 @@ void resize_rasters(
     h_G.resize(N);
     h_sd.resize(N);
     h_sn.resize(N);
-    S_coeff.resize(N);
     W_Gav.resize(N);
     W_Gav_cum.resize(N);
-    Res_x.resize(N);
-    Res_y.resize(N);
     Z_Gav.resize(N);
     d_90.resize(N);
     soilMoistureRetention.resize(N);
@@ -515,8 +980,17 @@ void resize_rasters(
     u_star.resize(u.size());
     v_star.resize(v.size());
 
+#ifdef ENABLE_CUDA    
+    Gamma_vect_x_1.resize(u.size());
+    Gamma_vect_x_2.resize(u.size());
+    Gamma_vect_y_1.resize(v.size());
+    Gamma_vect_y_2.resize(v.size());
+    slope_x_mod.resize(u.size());
+    slope_y_mod.resize(v.size());
+#else
     Gamma_vect_x.resize(u.size());
     Gamma_vect_y.resize(v.size());
+#endif
 
     h_interface_x.resize(u.size());
     h_interface_y.resize(v.size());
@@ -1449,6 +1923,38 @@ void resize_rasters(
 
   saveSolution(output_dir + "excluded_ids", N_rows, N_cols, xllcorner,
                yllcorner, pixel_size, NODATA_value, excluded_ids);
+
+#ifdef ENABLE_CUDA
+  for (unsigned int ii = 0; ii < idStaggeredInternalVectHorizontal.size(); ii++) {
+	  const auto &Id = idStaggeredInternalVectHorizontal[ii];
+	  slope_x_mod[Id] = alpha * std::pow(std::abs(slope_x[Id]), beta);
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectWest.size(); ii++) {
+	  const auto &Id = idStaggeredBoundaryVectWest[ii];
+	  slope_x_mod[Id] = alpha * std::pow(std::abs(slope_x[Id]), beta);
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectEast.size(); ii++) {
+	  const auto &Id = idStaggeredBoundaryVectEast[ii];
+          slope_x_mod[Id] = alpha * std::pow(std::abs(slope_x[Id]), beta);
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredInternalVectVertical.size(); ii++) {
+	  const auto &Id = idStaggeredInternalVectVertical[ii];
+	  slope_y_mod[Id] = alpha * std::pow(std::abs(slope_y[Id]), beta);
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectNorth.size(); ii++) {
+	  const auto &Id = idStaggeredBoundaryVectNorth[ii];
+	  slope_y_mod[Id] = alpha * std::pow(std::abs(slope_y[Id]), beta);
+  }
+
+  for (unsigned int ii = 0; ii < idStaggeredBoundaryVectSouth.size(); ii++) {
+	  const auto &Id = idStaggeredBoundaryVectSouth[ii];
+	  slope_y_mod[Id] = alpha * std::pow(std::abs(slope_y[Id]), beta);
+  }
+#endif
 }
 
 //==============================================================================

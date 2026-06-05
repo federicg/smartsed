@@ -33,4 +33,3 @@ cmake -S . -B build-cuda-debug \
       -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-cuda-debug -j
 
-

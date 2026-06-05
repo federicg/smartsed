@@ -13,6 +13,15 @@
 //! MPI
 #include <mpi.h>
 
+//
+#ifdef ENABLE_CUDA
+  #define CUDA_STREAM(s)        , s   // for functions that have other args before stream
+  #define CUDA_STREAM_ONLY(s)   s     // for functions where stream is the only arg
+#else
+  #define CUDA_STREAM(s)
+  #define CUDA_STREAM_ONLY(s)
+#endif
+
 
 int main(int argc, char **argv) {
 
@@ -110,8 +119,8 @@ int main(int argc, char **argv) {
   if (totSimNumber >= 0 && rank == 0) {
     const std::string bashCommand =
         std::string("Rscript "
-                    "../Geostatistics/Downscaling_Simulation_SoilGrids/"
-                    "Downscaling/DownscalingAitchisonSmartSed_2020.R ") +
+                    "../Geostatistics/"
+                    "DownscalingAitchisonSmartSed_2020.R ") +
         std::to_string(totSimNumber) + " " + std::to_string(scaling_factor);
     std::system(bashCommand.c_str());
   }
@@ -137,6 +146,21 @@ int main(int argc, char **argv) {
   // |                Start MC sim                   |
   // +-----------------------------------------------+
 
+#ifdef ENABLE_CUDA
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    static constexpr int N_STREAMS = 6;  // one per independent kernel launch
+    const int max_streams = prop.concurrentKernels ? N_STREAMS : 1;  // fallback to 1 if no concurrency
+
+    std::vector<cudaStream_t> streams(max_streams);
+    for (auto &s : streams)
+      cudaStreamCreate(&s);
+
+    // use by index
+    auto S = [&](int i) { return streams[i % max_streams]; };
+#endif
+
+
   // Starts the Monte Carlo simulation
   for (int currentSimNumber =
            std::min(totSimNumber, current_start_chunk(rank, chunk_sim_vec) + 1);
@@ -150,20 +174,19 @@ int main(int argc, char **argv) {
 
     unsigned int N_rows, N_cols, N, numberOfSteps = 1, iter = 0;
 
-    std::vector<std::array<double, 2>> Gamma_vect_x, Gamma_vect_y;
-
     std::vector<std::tuple<bool, int>> excluded_ids;
     std::vector<std::vector<unsigned int>> kk_gauges;
 
 #ifdef ENABLE_CUDA
 /* define here the linear system stuffs
  * use the cuSPARSE lib
- */
+*/
+    thrust::host_vector<double> Gamma_vect_x_1_pot, Gamma_vect_x_2_pot, Gamma_vect_y_1_pot, Gamma_vect_y_2_pot;
 
-    thrust::host_vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot,
-        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot,
+    thrust::host_vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot,
+        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, u_pot,
         v_pot, n_x_pot, n_y_pot, u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot,
-        slope_y_pot, soilMoistureRetention_pot, roughness_vect, eta_pot, 
+        slope_y_pot, slope_x_mod_pot, slope_y_mod_pot, soilMoistureRetention_pot, roughness_vect, eta_pot, 
 	H_pot, additional_source_term_pot;
 
     thrust::host_vector<unsigned int> idStaggeredBoundaryVectSouth_pot,
@@ -179,15 +202,15 @@ int main(int argc, char **argv) {
         idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
         idBasinVectReIndex_excluded_pot;
 
-
 #else
+    std::vector<std::array<double, 2>> Gamma_vect_x, Gamma_vect_y;
 
     Eigen::SparseMatrix<double> A;
     Eigen::VectorXd H_basin, rhs;
     std::vector<Eigen::Triplet<double>> coefficients;
 
-    std::vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot,
-        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot,
+    std::vector<double> orography_pot, h_G_pot, h_sd_pot, h_sn_pot,
+        W_Gav_pot, W_Gav_cum_pot, hydraulic_conductivity_pot, Z_Gav_pot, d_90, u_pot,
         v_pot, n_x_pot, n_y_pot, u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot,
         slope_y_pot, soilMoistureRetention_pot, roughness_vect, eta_pot, 
 	H_pot, additional_source_term_pot;
@@ -205,7 +228,6 @@ int main(int argc, char **argv) {
         idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
         idBasinVectReIndex_excluded_pot;
 
-
 #endif
 
     double pixel_size, // meter/pixel
@@ -216,11 +238,20 @@ int main(int argc, char **argv) {
 
     bool is_last_step = false, check_last = false;
 
+    constexpr double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
     static constexpr double gravity = 9.81;
     auto c1_DSV = [](double dt_DSV, double pixel_size) { return dt_DSV / pixel_size; };
     auto c2_DSV = [](double c1) { return gravity * c1; };
     auto c3_DSV = [](double c1) { return gravity * c1 * c1; };
 
+/*a naive implementation of transposition
+   for (int i=0; i<N_rows; i++) {
+	   for (int j=0; j<N_cols; j++) {
+		   H_transpose[j*N_rows + i] = H[i*N_cols + j]; // H is in row-major
+	   }
+   }
+
+*/
 
     /* End of (Variables living all over the code) */
 
@@ -240,12 +271,17 @@ int main(int argc, char **argv) {
         idStaggeredInternalVectVertical_excluded_pot, idBasinVect_excluded_pot,
         idBasinVectReIndex_excluded_pot,
 
+#ifdef ENABLE_CUDA
+	Gamma_vect_x_1_pot, Gamma_vect_x_2_pot, Gamma_vect_y_1_pot, Gamma_vect_y_2_pot,
+	slope_x_mod_pot, slope_y_mod_pot, alfa_coeff, beta_coeff,
+#else	
         Gamma_vect_x, Gamma_vect_y,
+#endif
 
         excluded_ids, additional_source_term_pot,
 
-        orography_pot, h_G_pot, h_sd_pot, h_sn_pot, S_coeff_pot, W_Gav_pot, W_Gav_cum_pot,
-        hydraulic_conductivity_pot, Z_Gav_pot, d_90, Res_x_pot, Res_y_pot, u_pot, v_pot, n_x_pot, n_y_pot,
+        orography_pot, h_G_pot, h_sd_pot, h_sn_pot, W_Gav_pot, W_Gav_cum_pot,
+        hydraulic_conductivity_pot, Z_Gav_pot, d_90, u_pot, v_pot, n_x_pot, n_y_pot,
         u_star_pot, v_star_pot, h_interface_x_pot, h_interface_y_pot, slope_x_pot, slope_y_pot,
         soilMoistureRetention_pot, roughness_vect, eta_pot, H_pot,
 
@@ -274,13 +310,10 @@ int main(int argc, char **argv) {
     thrust::device_vector<double> h_G = h_G_pot;
     thrust::device_vector<double> h_sd = h_sd_pot;
     thrust::device_vector<double> h_sn = h_sn_pot;
-    thrust::device_vector<double> S_coeff = S_coeff_pot;
     thrust::device_vector<double> W_Gav = W_Gav_pot;
     thrust::device_vector<double> W_Gav_cum = W_Gav_cum_pot;
     thrust::device_vector<double> hydraulic_conductivity = hydraulic_conductivity_pot;
     thrust::device_vector<double> Z_Gav = Z_Gav_pot;
-    thrust::device_vector<double> Res_x = Res_x_pot;
-    thrust::device_vector<double> Res_y = Res_y_pot;
     thrust::device_vector<double> n_x = n_x_pot;
     thrust::device_vector<double> n_y = n_y_pot;
     thrust::device_vector<double> u_star = u_star_pot;
@@ -308,6 +341,19 @@ int main(int argc, char **argv) {
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectNorth = idStaggeredBoundaryVectNorth_pot;
     thrust::device_vector<unsigned int> idStaggeredBoundaryVectSouth = idStaggeredBoundaryVectSouth_pot;
     thrust::device_vector<unsigned int> idBasinVect = idBasinVect_pot;
+ 
+    // set initial quantities for the time step adaptation
+    thrust::device_vector<double> H_old = H_pot;
+    thrust::device_vector<double> H_oldold = H_pot;
+
+    thrust::device_vector<double> Gamma_vect_x_1 = Gamma_vect_x_1_pot;
+    thrust::device_vector<double> Gamma_vect_x_2 = Gamma_vect_x_2_pot;
+    thrust::device_vector<double> Gamma_vect_y_1 = Gamma_vect_y_1_pot;
+    thrust::device_vector<double> Gamma_vect_y_2 = Gamma_vect_y_2_pot;
+
+    // build now the slope_x_mod_pot and slope_y_mod_pot to be used in the computeResidualsTruncated function
+    thrust::device_vector<double> slope_x_mod = slope_x_mod_pot;
+    thrust::device_vector<double> slope_y_mod = slope_y_mod_pot;
 
 #else
 
@@ -319,13 +365,10 @@ int main(int argc, char **argv) {
     auto h_G = std::move(h_G_pot); 
     auto h_sd = std::move(h_sd_pot); 
     auto h_sn = std::move(h_sn_pot); 
-    auto S_coeff = std::move(S_coeff_pot);
     auto W_Gav = std::move(W_Gav_pot); 
     auto W_Gav_cum = std::move(W_Gav_cum_pot);
     auto hydraulic_conductivity = std::move(hydraulic_conductivity_pot);
     auto Z_Gav = std::move(Z_Gav_pot); 
-    auto Res_x = std::move(Res_x_pot); 
-    auto Res_y = std::move(Res_y_pot); 
     auto n_x = std::move(n_x_pot); 
     auto n_y = std::move(n_y_pot);
     auto u_star = std::move(u_star_pot); 
@@ -353,11 +396,13 @@ int main(int argc, char **argv) {
     auto idStaggeredBoundaryVectNorth = std::move(idStaggeredBoundaryVectNorth_pot);
     auto idStaggeredBoundaryVectSouth = std::move(idStaggeredBoundaryVectSouth_pot);
     auto idBasinVect = std::move(idBasinVect_pot);
-#endif
 
     // set initial quantities for the time step adaptation
     auto H_old = H;
     auto H_oldold = H;
+
+#endif
+
 
     // +-----------------------------------------------+
     // |                    Rain                       |
@@ -395,19 +440,22 @@ int main(int argc, char **argv) {
     Temperature temp(file_dir + temperature_file, N, max_Days, T_thr, 
                      std::round(max_Days * 24 / time_spacing_temp),
                      steps_per_hour, time_spacing_temp, height_thermometer,
-                     format_temp, orography, idBasinVect);
+                     format_temp, 
+		     orography, idBasinVect); // here we pass the device vectors, because are not used during initialization 
 
     // +-----------------------------------------------+
     // |              Evapotranspiration               |
     // +-----------------------------------------------+
 
     evapoTranspiration ET(ET_model, N, temp.J, max_Days, phi_rad,
-                          height_thermometer, idBasinVect, orography);
+                          height_thermometer, 
+			  idBasinVect, orography); // here we pass the device vectors, because are not used during initialization
 
     // +-----------------------------------------------+
     // |                   Runoff                      |
     // +-----------------------------------------------+
 
+    // here we pass the device vectors, because are not used during initialization
     upwind H_interface(H, u, v, idStaggeredInternalVectHorizontal_excluded,
                        idStaggeredBoundaryVectWest_excluded,
                        idStaggeredBoundaryVectEast_excluded,
@@ -423,18 +471,12 @@ int main(int argc, char **argv) {
                        idStaggeredBoundaryVectNorth_excluded,
                        idStaggeredBoundaryVectSouth_excluded, friction_model,
                        n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows,
-                       N_cols, 
-#ifdef ENABLE_CUDA		       
-		       slope_x_pot, slope_y_pot
-#else
-		       slope_x, slope_y
-#endif
-		       );
+                       N_cols, slope_x, slope_y);
  
     // +-----------------------------------------------+
     // |             Start the time loop               |
     // +-----------------------------------------------+
-    
+   
 #ifdef ENABLE_CUDA
     // probably add here some resize for the cuSPARSE objects
 #else
@@ -444,18 +486,16 @@ int main(int argc, char **argv) {
     rhs.setZero(idBasinVect_excluded.size());
 #endif
 
+#ifdef ENABLE_CUDA
+    maxH = deviceMax(H);
+#else
+    maxH = *std::max_element(H.begin(), H.end());
+#endif
+
     c1_min = dt_min / pixel_size;
     area = pixel_size*pixel_size * 1.e-6; // km^2
 
-#ifndef ENABLE_CUDA
-    maxH = *std::max_element(H.begin(), H.end());
-#else
-    maxH = *thrust::max_element(thrust::device, H.begin(), H.end());
-#endif
-
-    dt_DSV = maxdt(u, v, maxH, pixel_size);
-    dt_DSV = dt_DSV < dt_DSV_given ? dt_DSV : dt_DSV_given;
-    dt_DSV = dt_DSV < t_final ? dt_DSV : t_final;
+    dt_DSV = maxdt(u, v, maxH, pixel_size, gravity, dt_DSV_given, t_final);
 
     c1_DSV_ = c1_DSV(dt_DSV, pixel_size);
     c2_DSV_ = c2_DSV(c1_DSV_);
@@ -465,6 +505,10 @@ int main(int argc, char **argv) {
     timed = -dt_DSV;
     timedd = -2. * dt_DSV;
 
+    // Up to this point, no computations are carried out on the device.
+    // Just standard copies to Device are done (which are blocking)
+
+
     while (!is_last_step) {
 
       if (rank == 0) {
@@ -472,74 +516,58 @@ int main(int argc, char **argv) {
                   << " max surface run-off vel. based Courant: "
                   << maxCourant(u, v, c1_DSV_)
                   << " max surface run-off cel. based Courant: "
-                  << maxCourant(H, c1_DSV_) << std::endl;
+                  << maxCourant(H, c1_DSV_, gravity) << std::endl;
         std::cout << "Current dt, " << dt_DSV << ", given dt, " << dt_DSV_given
                   << std::endl;
       }
 
+      //TODO: check if the host/device calls below are all independent!
+      //TODO: check how many SM do we need to allocate!
+     
       // Compute interface fluxes via upwind method
-      H_interface.computeHorizontal();
-      H_interface.computeVertical();
+      H_interface.computeHorizontal(CUDA_STREAM_ONLY(S(0)));
+      H_interface.computeVertical(CUDA_STREAM_ONLY(S(1)));
 
       // Compute alfa coefficients
-      alfa.f_x();
-      alfa.f_y();
+      alfa.f_x(CUDA_STREAM_ONLY(S(2)));
+      alfa.f_y(CUDA_STREAM_ONLY(S(3)));
 
       // Update the temperature 
-      temp.computeTemperature(time, dt_temp, dt_DSV);
+      temp.computeTemperature(time, dt_temp, dt_DSV CUDA_STREAM(S(4)));
 
       // ET varies daily
       if (std::floor(time / (24. * 3600)) >
           std::floor((time - dt_DSV) / (24. * 3600))) {
         ET.ET(temp.T_dailyMean, temp.T_dailyMin, temp.T_dailyMax,
-              std::floor(time / (24 * 3600)));
+              std::floor(time / (24 * 3600)) CUDA_STREAM(S(5)));
       }
+ 
+      // +-----------------------------------------------+
+      // |    Gravitational Layer, Snow Accumulation     |
+      // +-----------------------------------------------+
+
+      precipitation.computePrecipitation(time, soilMoistureRetention,
+                                         temp.melt_mask, h_G, H, N_cols,
+                                         idBasinVect CUDA_STREAM(S(6)));
 
       // update only if necessary
       if (std::floor(time / dt_min) > std::floor((time - dt_DSV) / dt_min)) {
 
-        // +-----------------------------------------------+
-        // |            Gravitational Layer                |
-        // +-----------------------------------------------+
-
-        // h_G
         // vertical and horizontal residuals for Gravitational Layer
         computeResiduals(
-            n_x, n_y, N_cols, N_rows, h_G, hydraulic_conductivity,
+            n_x, n_y, N_cols, hydraulic_conductivity,
             idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
             idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
             idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
-            idBasinVect, h_interface_x, h_interface_y, Res_x, Res_y);
-      }
+	    idBasinVect, temp.T_raster, temp.melt_mask,
+	    h_sn, h_G, ET.ET_vec,
+            precipitation.DP_infiltrated,
+	    precipitation.DP_total,
+	    c1_min,
+	    dt_min, 
+	    T_thr, 
+            h_interface_x, h_interface_y CUDA_STREAM(S(7)));
 
-      precipitation.computePrecipitation(time, soilMoistureRetention,
-                                         temp.melt_mask, h_G, H, N_rows, N_cols,
-                                         idBasinVect);
-
-      // update only if necessary
-      if (std::floor(time / dt_min) > std::floor((time - dt_DSV) / dt_min)) {
-        for (const auto &k : idBasinVect) {
-          S_coeff[k] = 4.62e-10 * h_sn[k] * (temp.T_raster[k] - T_thr) *
-                       temp.melt_mask[k];
-        }
-
-        for (const auto &k : idBasinVect) {
-          h_G[k] += (S_coeff[k] - ET.ET_vec[k]) * dt_min +
-                    precipitation.DP_infiltrated[k] * dt_min -
-                    c1_min * (Res_x[k] + Res_y[k]);
-          h_G[k] *= (h_G[k] >= 0); // to account for evapotranspiration
-        }
-
-        // +-----------------------------------------------+
-        // |              Snow Accumulation                |
-        // +-----------------------------------------------+
-
-        for (const auto &k : idBasinVect) {
-          const auto snow_acc =
-              precipitation.DP_total[k] * (1. - temp.melt_mask[k]) * dt_min -
-              S_coeff[k] * dt_min;
-          h_sn[k] += snow_acc;
-        }
       }
 
       // +-----------------------------------------------+
@@ -554,14 +582,16 @@ int main(int argc, char **argv) {
                             idStaggeredBoundaryVectWest_excluded,
                             idStaggeredBoundaryVectEast_excluded,
                             idStaggeredBoundaryVectNorth_excluded,
-                            idStaggeredBoundaryVectSouth_excluded);
+                            idStaggeredBoundaryVectSouth_excluded CUDA_STREAM(S(8)));
 
+#ifndef ENABLE_CUDA
       coefficients.reserve(
           idBasinVect_excluded.size() +
           4 * idStaggeredInternalVectHorizontal_excluded.size() +
           4 * idStaggeredInternalVectVertical_excluded.size());
 
       additional_source_term.assign(N, 0.);
+#endif
 
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, N_rows, N, c1_DSV_, c3_DSV_,
@@ -574,14 +604,17 @@ int main(int argc, char **argv) {
                   idStaggeredBoundaryVectSouth_excluded, idBasinVect_excluded,
                   idBasinVect, idStaggeredInternalVectHorizontal,
                   idStaggeredInternalVectVertical, idBasinVectReIndex_excluded,
-                  isNonReflectingBC, true, excluded_ids, additional_source_term,
-                  coefficients, rhs);
+                  isNonReflectingBC, true,
+		  additional_source_term CUDA_STREAM(S(9))
+#ifndef ENABLE_CUDA
+                  , excluded_ids, coefficients, rhs
+#endif
+		  );
 
 #ifndef ENABLE_CUDA
       A.setFromTriplets(coefficients.begin(), coefficients.end());
       A.makeCompressed();
       coefficients.clear();
-#endif
 
       if (spit_out_matrix) {
         tmpname = matrix_name + std::to_string(iter);
@@ -591,7 +624,7 @@ int main(int argc, char **argv) {
         std::cout << "saving " << tmpname << std::endl;
         Eigen::saveMarketVector_lis(rhs, tmpname);
       }
-
+      
       if (direct_method) // Direct Sparse method: Cholesky being A spd
       {
         Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Upper> solver;
@@ -602,7 +635,6 @@ int main(int argc, char **argv) {
         }
         H_basin = solver.solve(rhs);
       } else {
-
         double tol = 1.e-6;
         int result, maxit = 15000;
 
@@ -622,6 +654,7 @@ int main(int argc, char **argv) {
 
       minH = H_basin.minCoeff();
       maxH = H_basin.maxCoeff();
+
       if (rank == 0)
         std::cout << "min H: " << minH << " max H: " << maxH << std::endl;
 
@@ -646,6 +679,7 @@ int main(int argc, char **argv) {
         H[Id] = std::abs(H_basin(IDreIndex));
         eta[Id] = H[Id] + orography[Id];
       }
+#endif
 
       // +-----------------------------------------------+
       // |                  Update u, v                  |
@@ -658,15 +692,14 @@ int main(int argc, char **argv) {
                 idStaggeredBoundaryVectWest_excluded,
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
-                idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC);
-
+                idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(10)));
+/*
       // +-----------------------------------------------+
       // |             Sediment Transport                |
       // +-----------------------------------------------+
 
       if (is_sediment_transport) {
         // tic();
-        constexpr double alfa_coeff = 2.5, beta_coeff = 1.6, gamma_coeff = 1.;
 
         dt_sed = compute_dt_sediment(alfa_coeff, beta_coeff, slope_x_max,
                                      slope_y_max, u, v, pixel_size, dt_DSV,
@@ -675,7 +708,7 @@ int main(int argc, char **argv) {
 
         // vertical and horizontal residuals truncated for Sediment Transport
         computeResidualsTruncated(
-            u, v, N_cols, N_rows, N, c1_sed, slope_x, slope_y,
+            u, v, N_cols, N_rows, N, (dt_sed / pixel_size), slope_x, slope_y,
             alfa_coeff,  // alfa
             beta_coeff,  // beta
             gamma_coeff, // gamma
@@ -684,7 +717,14 @@ int main(int argc, char **argv) {
             idStaggeredBoundaryVectWest_excluded,
             idStaggeredBoundaryVectEast_excluded,
             idStaggeredBoundaryVectNorth_excluded,
-            idStaggeredBoundaryVectSouth_excluded, Gamma_vect_x, Gamma_vect_y);
+            idStaggeredBoundaryVectSouth_excluded, 
+#ifdef ENABLE_CUDA
+	    Gamma_vect_x_1, Gamma_vect_x_2, Gamma_vect_y_1, Gamma_vect_y_2,
+	    slope_x_mod, slope_y_mod CUDA_STREAM(S(11))
+#else
+	    Gamma_vect_x, Gamma_vect_y
+#endif
+	    );
 
         additional_source_term.assign(N, 0.);
 
@@ -751,11 +791,6 @@ int main(int argc, char **argv) {
                 Gamma_vect_x[Id][0] * h_right + Gamma_vect_x[Id][1] * h_left;
           }
 
-          for (const unsigned int &Id : idBasinVect_excluded) {
-            const unsigned int i = Id / N_cols;
-
-            Res_x[Id] = h_interface_x[Id + 1 + i] - h_interface_x[Id + i];
-          }
 
           // assemble vertical fluxes
           for (const auto &Id :
@@ -785,9 +820,6 @@ int main(int argc, char **argv) {
                 Gamma_vect_y[Id][0] * h_right + Gamma_vect_y[Id][1] * h_left;
           }
 
-          for (const auto &Id : idBasinVect_excluded) {
-            Res_y[Id] = h_interface_y[Id + N_cols] - h_interface_y[Id];
-          }
 
           // assemble the source term
           for (const auto &Id : idStaggeredInternalVectHorizontal) {
@@ -835,7 +867,10 @@ int main(int argc, char **argv) {
 
           // Update the solution
           for (const auto &Id : idBasinVect_excluded) {
-            h_sd[Id] += -(Res_x[Id] + Res_y[Id]) + W_Gav[Id] +
+            const unsigned int i = Id / N_cols;
+	    const auto Res_x_cell = h_interface_x[Id + 1 + i] - h_interface_x[Id + i];
+	    const auto Res_y_cell = h_interface_y[Id + N_cols] - h_interface_y[Id]; 	    
+            h_sd[Id] += -(Res_x_cell + Res_y_cell) + W_Gav[Id] +
                         additional_source_term[Id];
           }
         }
@@ -1016,7 +1051,7 @@ int main(int argc, char **argv) {
       // |               Update time step                |
       // +-----------------------------------------------+
 
-      dt_DSV = maxdt(u, v, maxH, pixel_size);
+      dt_DSV = maxdt(u, v, maxH, pixel_size, gravity);
       double dt_DSV_min = dt_DSV * .5;
 
       compute_dt_adaptive(H, H_old, H_oldold, idBasinVect_excluded, dt_DSV,
@@ -1032,10 +1067,15 @@ int main(int argc, char **argv) {
         dt_DSV = t_final - time;
         check_last = true;
       }
-
+*/
     } // End Time Loop
-
+      
   } // End Monte Carlo loop
+
+#ifdef ENABLE_CUDA
+  for (auto &s : streams)
+    cudaStreamDestroy(s);
+#endif
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (rank == 0) {

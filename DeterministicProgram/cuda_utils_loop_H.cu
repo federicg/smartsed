@@ -1,11 +1,33 @@
+#include <thrust/extrema.h>      // for thrust::max_element, min_element, minmax_element
+#include <thrust/reduce.h>       // for thrust::reduce
+#include <thrust/device_vector.h>
 #include "cuda_utils_loop_H.cuh"
+
+
+double deviceMax(const thrust::device_vector<double> &v) {
+  return *thrust::max_element(v.begin(), v.end());
+}
+
+double deviceMin(const thrust::device_vector<double> &v) {
+  return *thrust::min_element(v.begin(), v.end());
+}
+
+double deviceSum(const thrust::device_vector<double> &v) {
+  return thrust::reduce(v.begin(), v.end(), 0.0, thrust::plus<double>());
+}
+
+MinMaxResult deviceMinMax(const thrust::device_vector<double> &v) {
+  auto mm = thrust::minmax_element(v.begin(), v.end());
+  return { static_cast<double>(*mm.first), static_cast<double>(*mm.second) };
+}
 
 //==============================================================================
 
 __device__ __forceinline__
-double M_gamma_dt_DSV(double dt, double coeff)
-{
-  return dt * coeff;
+double M_gamma_dt_DSV(double dt, double coeff) { return dt * coeff; }
+
+__device__ inline int signum_dev(double val) {
+    return (0.0 < val) - (val < 0.0);
 }
 
 //==============================================================================
@@ -82,13 +104,19 @@ __global__ void computeHorizontalEastKernel_interface(
         0.5 * (H_left + H_right + s * (H_left - H_right));
 }
 
-void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H, const thrust::device_vector<double>& u, thrust::device_vector<double>& horizontal, const unsigned int N_cols) {
+void compute_horizontal_interface_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<double>& H, 
+		const thrust::device_vector<double>& u, 
+		thrust::device_vector<double>& horizontal, const unsigned int N_cols,
+		cudaStream_t stream) {
 
     launch_kernel(
       computeHorizontalInternalKernel_interface,
       idStaggeredInternalVectHorizontal.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -99,6 +127,7 @@ void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned i
     launch_kernel(
       computeHorizontalWestKernel_interface,
       idStaggeredBoundaryVectWest.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -109,6 +138,7 @@ void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned i
     launch_kernel(
       computeHorizontalEastKernel_interface,
       idStaggeredBoundaryVectEast.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -118,7 +148,6 @@ void compute_horizontal_interface_wrapper(const thrust::device_vector<unsigned i
 
 }
 
-//==============================================================================
 // Vertical upwind
 __global__ void computeVerticalInternalKernel_interface(
     const unsigned int* ids,
@@ -136,8 +165,10 @@ __global__ void computeVerticalInternalKernel_interface(
   
   double H_left = H[IDnorth]; 
   double H_right = H[IDsouth];
+
+  double v_cc = v[Id];
   
-  double s = (v[Id] > 0.0) - (v[Id] < 0.0);
+  double s = (v_cc > 0.0) - (v_cc < 0.0);
 
   vertical[Id] =
           (H_left + H_right) * .5 + s * (H_left - H_right) * .5;
@@ -161,7 +192,9 @@ __global__ void computeVerticalNorthKernel_interface(
   double H_left = 0;
   double H_right = H[Id];
 
-  double s = (v[Id + N_cols] > 0.0) - (v[Id + N_cols] < 0.0);
+  double v_right = v[Id + N_cols];
+
+  double s = (v_right > 0.0) - (v_right < 0.0);
 
   vertical[Id] = (H_left + H_right) * .5 +
                      s * (H_left - H_right) * .5;
@@ -183,21 +216,29 @@ __global__ void computeVerticalSouthKernel_interface(
   
   double H_left = H[Id - N_cols]; 
   double H_right = 0;
+
+  double v_left = v[Id - N_cols];
   
-  double s = (v[Id - N_cols] > 0.0) - (v[Id - N_cols] < 0.0);
+  double s = (v_left > 0.0) - (v_left < 0.0);
 
   vertical[Id] = (H_left + H_right) * .5 +
                      s * (H_left - H_right) * .5;
 
 }
 
-void compute_vertical_interface_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H, const thrust::device_vector<double>& v, thrust::device_vector<double>& vertical, const unsigned int N_cols) {
+void compute_vertical_interface_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<double>& H, 
+		const thrust::device_vector<double>& v, 
+		thrust::device_vector<double>& vertical, const unsigned int N_cols,
+		cudaStream_t stream) {
 
     launch_kernel(
       computeVerticalInternalKernel_interface,
       idStaggeredInternalVectVertical.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(v.data()),
@@ -208,6 +249,7 @@ void compute_vertical_interface_wrapper(const thrust::device_vector<unsigned int
     launch_kernel(
       computeVerticalNorthKernel_interface,
       idStaggeredBoundaryVectNorth.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(v.data()),
@@ -218,154 +260,77 @@ void compute_vertical_interface_wrapper(const thrust::device_vector<unsigned int
     launch_kernel(
       computeVerticalSouthKernel_interface,
       idStaggeredBoundaryVectSouth.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(vertical.data()),
       N_cols
     );
+
 }
 
 //==============================================================================
+
+__global__ void computeKernel_friction(
+    const unsigned int* ids,
+    const double* H_interface_dir,
+    const double* vel,
+    const double* M_expo_r_dir_vect,
+    double* alfa_dir,
+    const double* M_gamma_dt_DSV_dir_,
+    double M_dt_DSV, double M_coeff, double M_H_min, 
+    double M_expo, unsigned int M_frictionModel,
+    unsigned int n)
+{
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int Id = ids[i];
+
+  const float H_int = fmaxf((float)H_interface_dir[Id], (float)M_H_min);
+  const float exponent = (float)M_expo_r_dir_vect[Id];
+
+  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
+  const float den = __expf(expo1 * __logf(H_int));
+  double alfa = 1.0;
+
+  if (den > (float)M_H_min) {
+    const float vel_abs = fmaxf(fabsf((float)vel[Id]), 1e-12f);
+    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
+
+    const float pow_vel = __expf(expo2 * __logf(vel_abs));
+
+    double coeff =
+            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * vel_abs / den *
+            (M_frictionModel > 0);
+
+    coeff = fmax(
+            coeff,
+            M_dt_DSV * M_gamma_dt_DSV_dir_[Id] *
+            pow_vel / den);
+
+    alfa = 1.0 / (1.0 + coeff);
+  }
+  alfa_dir[Id] = alfa;
+}
+
 // Horizontal friction
-__global__ void computeHorizontalInternalKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_horizontal,
-    const double* u,
-    const double* M_expo_r_x_vect,
-    double* alfa_x,
-    const double* M_gamma_dt_DSV_x_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_x_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_u = __expf(expo2 * __logf(u_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
-            pow_u / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_x[Id] = alfa;
-}
-
-__global__ void computeHorizontalWestKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_horizontal,
-    const double* u,
-    const double* M_expo_r_x_vect,
-    double* alfa_x,
-    const double* M_gamma_dt_DSV_x_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_x_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_u = __expf(expo2 * __logf(u_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
-            pow_u / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_x[Id] = alfa;
-}
-
-__global__ void computeHorizontalEastKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_horizontal,
-    const double* u,
-    const double* M_expo_r_x_vect,
-    double* alfa_x,
-    const double* M_gamma_dt_DSV_x_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_horizontal[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_x_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float u_abs = fmaxf(fabsf((float)u[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_u = __expf(expo2 * __logf(u_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * u_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_x_[Id] *
-            pow_u / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_x[Id] = alfa;
-}
-
-void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H_interface_horizontal, const thrust::device_vector<double>& u, const thrust::device_vector<double>& M_expo_r_x_vect, 
-		      thrust::device_vector<double>& alfa_x, const thrust::device_vector<double>& M_gamma_dt_DSV_x_, double M_dt_DSV, double M_coeff, double M_H_min, 
-                double M_expo, unsigned int M_frictionModel) {
+void compute_horizontal_friction_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<double>& H_interface_horizontal, 
+		const thrust::device_vector<double>& u, const thrust::device_vector<double>& M_expo_r_x_vect, 
+		      thrust::device_vector<double>& alfa_x, 
+	        const thrust::device_vector<double>& M_gamma_dt_DSV_x_, 
+		double M_dt_DSV, double M_coeff, double M_H_min, 
+                double M_expo, unsigned int M_frictionModel, cudaStream_t stream) {
 
     launch_kernel(
-      computeHorizontalInternalKernel_friction,
+      computeKernel_friction,
       idStaggeredInternalVectHorizontal.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
       thrust::raw_pointer_cast(H_interface_horizontal.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -377,8 +342,9 @@ void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned in
     );
 
     launch_kernel(
-      computeHorizontalWestKernel_friction,
+      computeKernel_friction,
       idStaggeredBoundaryVectWest.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
       thrust::raw_pointer_cast(H_interface_horizontal.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -390,8 +356,9 @@ void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned in
     );
 
     launch_kernel(
-      computeHorizontalEastKernel_friction,
+      computeKernel_friction,
       idStaggeredBoundaryVectEast.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
       thrust::raw_pointer_cast(H_interface_horizontal.data()),
       thrust::raw_pointer_cast(u.data()),
@@ -404,146 +371,24 @@ void compute_horizontal_friction_wrapper(const thrust::device_vector<unsigned in
 
 }
 
-//==============================================================================
 // Vertical friction
-__global__ void computeVerticalInternalKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_vertical,
-    const double* v,
-    const double* M_expo_r_y_vect,
-    double* alfa_y,
-    const double* M_gamma_dt_DSV_y_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_y_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_v = __expf(expo2 * __logf(v_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
-            pow_v / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_y[Id] = alfa;
-}
-
-__global__ void computeVerticalNorthKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_vertical,
-    const double* v,
-    const double* M_expo_r_y_vect,
-    double* alfa_y,
-    const double* M_gamma_dt_DSV_y_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_y_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_v = __expf(expo2 * __logf(v_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
-            pow_v / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_y[Id] = alfa;
-}
-
-__global__ void computeVerticalSouthKernel_friction(
-    const unsigned int* ids,
-    const double* H_interface_vertical,
-    const double* v,
-    const double* M_expo_r_y_vect,
-    double* alfa_y,
-    const double* M_gamma_dt_DSV_y_,
-    double M_dt_DSV, double M_coeff, double M_H_min, 
-    double M_expo, unsigned int M_frictionModel,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const unsigned int Id = ids[i];
-
-  const float H_int = fmaxf((float)H_interface_vertical[Id], (float)M_H_min);
-  const float exponent = (float)M_expo_r_y_vect[Id];
-
-  const float expo1 = (float)M_expo + exponent * (M_frictionModel == 2);
-  const float den = __expf(expo1 * __logf(H_int));
-  double alfa = 1.0;
-
-  if (den > (float)M_H_min) {
-    const float v_abs = fmaxf(fabsf((float)v[Id]), 1e-12f);
-    const float expo2 = 1.0f - exponent * (M_frictionModel == 2);
-
-    const float pow_v = __expf(expo2 * __logf(v_abs));
-
-    double coeff =
-            M_gamma_dt_DSV(M_dt_DSV, M_coeff) * v_abs / den *
-            (M_frictionModel > 0);
-
-    coeff = fmax(
-            coeff,
-            M_dt_DSV * M_gamma_dt_DSV_y_[Id] *
-            pow_v / den);
-
-    alfa = 1.0 / (1.0 + coeff);
-  }
-  alfa_y[Id] = alfa;
-}
-
-void compute_vertical_friction_wrapper(const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H_interface_vertical, const thrust::device_vector<double>& v, const thrust::device_vector<double>& M_expo_r_y_vect, 
-		      thrust::device_vector<double>& alfa_y, const thrust::device_vector<double>& M_gamma_dt_DSV_y_, double M_dt_DSV, double M_coeff, double M_H_min, 
-                double M_expo, unsigned int M_frictionModel) {
+void compute_vertical_friction_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<double>& H_interface_vertical, 
+		const thrust::device_vector<double>& v, 
+		const thrust::device_vector<double>& M_expo_r_y_vect, 
+		      thrust::device_vector<double>& alfa_y, 
+		const thrust::device_vector<double>& M_gamma_dt_DSV_y_, 
+		double M_dt_DSV, double M_coeff, double M_H_min, 
+                double M_expo, unsigned int M_frictionModel,
+		cudaStream_t stream) {
 
     launch_kernel(
-      computeVerticalInternalKernel_friction,
+      computeKernel_friction,
       idStaggeredInternalVectVertical.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
       thrust::raw_pointer_cast(H_interface_vertical.data()),
       thrust::raw_pointer_cast(v.data()),
@@ -555,8 +400,9 @@ void compute_vertical_friction_wrapper(const thrust::device_vector<unsigned int>
     );
 
     launch_kernel(
-      computeVerticalNorthKernel_friction,
+      computeKernel_friction,
       idStaggeredBoundaryVectNorth.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
       thrust::raw_pointer_cast(H_interface_vertical.data()),
       thrust::raw_pointer_cast(v.data()),
@@ -568,8 +414,9 @@ void compute_vertical_friction_wrapper(const thrust::device_vector<unsigned int>
     );
 
     launch_kernel(
-      computeVerticalSouthKernel_friction,
+      computeKernel_friction,
       idStaggeredBoundaryVectSouth.size(),
+      stream,
       thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
       thrust::raw_pointer_cast(H_interface_vertical.data()),
       thrust::raw_pointer_cast(v.data()),
@@ -584,6 +431,647 @@ void compute_vertical_friction_wrapper(const thrust::device_vector<unsigned int>
 
 //==============================================================================
 
+__global__ void computeTemperatureKernel(
+    const unsigned int* idBasinVect, 
+    double* T_raster, double* melt_mask,
+    const double* orography,
+    const double T, const double Temp_diff,
+    const double height_th, const double T_crit,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int j = idBasinVect[i];
+  T_raster[j] = T + Temp_diff * (orography[j] - height_th);
+  melt_mask[j] = (T_raster[j] > T_crit) ? 1.0 : 0.0;
+}
+
+void computeTemperature_wrapper(
+    const thrust::device_vector<unsigned int> &idBasinVect,
+    thrust::device_vector<double> &T_raster,
+    thrust::device_vector<double> &melt_mask,
+    const thrust::device_vector<double> &orography,
+    const double T, const double Temp_diff,
+    const double height_th, const double T_crit,
+    cudaStream_t stream) {
+
+  launch_kernel(computeTemperatureKernel, idBasinVect.size(), stream,
+    thrust::raw_pointer_cast(idBasinVect.data()),
+    thrust::raw_pointer_cast(T_raster.data()),
+    thrust::raw_pointer_cast(melt_mask.data()),
+    thrust::raw_pointer_cast(orography.data()),
+    T, Temp_diff, height_th, T_crit);
+}
+
+//==============================================================================
+
+__global__ void computeETKernel(
+    const unsigned int* idBasinVect,
+    double* ET_vec,
+    const double* orography,
+    const double Ra,
+    const double t_mean_base,
+    const double t_max_base,
+    const double t_min_base,
+    const double Temp_diff,
+    const double height_th,
+    const unsigned int ET_model,
+    const unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const unsigned int k = idBasinVect[i];
+
+  const double t_mean = t_mean_base + Temp_diff * (orography[k] - height_th);
+  const double t_max  = t_max_base  + Temp_diff * (orography[k] - height_th);
+  const double t_min  = t_min_base  + Temp_diff * (orography[k] - height_th);
+
+  ET_vec[k] = .0023 * Ra * (t_mean + 17.8) *
+              sqrt(t_max - t_min) * (1.e-3 / (24 * 3600));
+}
+
+void computeET_wrapper(
+    const thrust::device_vector<unsigned int> &idBasinVect,
+    thrust::device_vector<double> &ET_vec,
+    const thrust::device_vector<double> &orography,
+    const double Ra,
+    const double t_mean_base,
+    const double t_max_base,
+    const double t_min_base,
+    const double Temp_diff,
+    const double height_th,
+    const unsigned int ET_model,
+    cudaStream_t stream) {
+
+  if (ET_model == 0) return;
+
+  launch_kernel(computeETKernel,
+    idBasinVect.size(),
+    stream,
+    thrust::raw_pointer_cast(idBasinVect.data()),
+    thrust::raw_pointer_cast(ET_vec.data()),
+    thrust::raw_pointer_cast(orography.data()),
+    Ra, t_mean_base, t_max_base, t_min_base,
+    Temp_diff, height_th, ET_model);
+}
+
+//==============================================================================
+
+__global__ void computeKernelHorizontalInternal_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_x,
+    const double* h,
+    double* h_interface_x,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int ii = Id / (N_cols + 1), // u
+	IDeast = Id - ii,                      // H
+	IDwest = Id - ii - 1;                  // H
+
+  const double &h_left = h[IDwest], &h_right = h[IDeast];
+
+  const double k_c_left = coeff[IDwest], k_c_right = coeff[IDeast];
+
+
+  h_interface_x[Id] = n_x[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+}
+
+__global__ void computeKernelHorizontalWest_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_x,
+    const double* h,
+    double* h_interface_x,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int ii = Id / (N_cols + 1);
+  const double h_left = 0, h_right = h[Id - ii];
+  const double k_c_left = 0., k_c_right = coeff[Id - ii];
+
+  h_interface_x[Id] = n_x[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+}
+
+__global__ void computeKernelHorizontalEast_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_x,
+    const double* h,
+    double* h_interface_x,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int ii = Id / (N_cols + 1);
+  const double h_left = h[Id - ii - 1], h_right = 0;
+  const double k_c_left = coeff[Id - ii - 1], k_c_right = 0.;
+
+  h_interface_x[Id] = n_x[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+}
+
+
+// Horizontal gravitational layer
+void computeResidualsHorizontal_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<double>& coeff,
+		const thrust::device_vector<double>& n_x,
+		const thrust::device_vector<double>& h, 
+		thrust::device_vector<double>& h_interface_x, 
+                const unsigned int N_cols, cudaStream_t stream) {
+
+    launch_kernel(
+      computeKernelHorizontalInternal_gravitational,
+      idStaggeredInternalVectHorizontal.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_x.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_x.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeKernelHorizontalWest_gravitational,
+      idStaggeredBoundaryVectWest.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_x.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_x.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeKernelHorizontalEast_gravitational,
+      idStaggeredBoundaryVectEast.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_x.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_x.data()),
+      N_cols
+    );
+
+}
+
+__global__ void computeKernelVerticalInternal_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_y,
+    const double* h,
+    double* h_interface_y,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int IDsouth = Id, // H
+	IDnorth = Id - N_cols;       // H
+
+  const double h_left = h[IDnorth], h_right = h[IDsouth];
+
+  const double k_c_left = coeff[IDnorth], k_c_right = coeff[IDsouth];
+
+  h_interface_y[Id] = n_y[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+}
+
+__global__ void computeKernelVerticalNorth_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_y,
+    const double* h,
+    double* h_interface_y,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  const double h_left = 0, h_right = h[Id];
+
+  const double k_c_left = 0., k_c_right = coeff[Id];
+
+  h_interface_y[Id] = n_y[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+
+}
+
+__global__ void computeKernelVerticalSouth_gravitational(
+    const unsigned int* ids,
+    const double* coeff,
+    const double* n_y,
+    const double* h,
+    double* h_interface_y,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  const double h_left = h[Id - N_cols], h_right = 0;
+
+  const double k_c_left = coeff[Id - N_cols], k_c_right = 0.;
+
+  h_interface_y[Id] = n_y[Id] *
+	  ((k_c_left * h_left + k_c_right * h_right) +
+	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
+	  .5;
+
+}
+
+// Vertical gravitational layer
+void computeResidualsVertical_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<double>& coeff,
+		const thrust::device_vector<double>& n_y,
+		const thrust::device_vector<double>& h, 
+		thrust::device_vector<double>& h_interface_y, 
+                const unsigned int N_cols, cudaStream_t stream) {
+
+    launch_kernel(
+      computeKernelVerticalInternal_gravitational,
+      idStaggeredInternalVectVertical.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_y.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_y.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeKernelVerticalNorth_gravitational,
+      idStaggeredBoundaryVectNorth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_y.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_y.data()),
+      N_cols
+    );
+
+    launch_kernel(
+      computeKernelVerticalSouth_gravitational,
+      idStaggeredBoundaryVectSouth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(coeff.data()),
+      thrust::raw_pointer_cast(n_y.data()),
+      thrust::raw_pointer_cast(h.data()),
+      thrust::raw_pointer_cast(h_interface_y.data()),
+      N_cols
+    );
+
+}
+
+//==============================================================================
+
+__global__ void computeupdateSnowGravLayers(
+    const unsigned int* ids,
+    const double* T_raster,
+    const double* melt_mask,
+    double* h_sn,
+    double* h_G,
+    const double* ET_vec,
+    const double* DP_infiltrated,
+    const double* DP_total,
+    const double c1_min,
+    const double dt_min,
+    const double T_thr,
+    const unsigned int N_cols,
+    const double* h_interface_x,
+    const double* h_interface_y,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto k = ids[i];
+    
+  const unsigned int ii = k / N_cols;	
+  const double S_coeff = 4.62e-10 * h_sn[k] * (T_raster[k] - T_thr) * melt_mask[k];
+  const double Res_x_cell = h_interface_x[k + 1 + ii] - h_interface_x[k + ii];
+  const double Res_y_cell = h_interface_y[k + N_cols] - h_interface_y[k];	  
+  h_G[k] = fmax(h_G[k] + (S_coeff - ET_vec[k]) * dt_min + 
+		  DP_infiltrated[k] * dt_min - c1_min * (Res_x_cell + Res_y_cell), 0.);
+  h_sn[k] += DP_total[k] * (1. - melt_mask[k]) * dt_min - S_coeff * dt_min;
+}
+
+// Snow and Gravitational layer updates
+void updateSnowGravLayers_wrapper(
+        const thrust::device_vector<unsigned int>& idBasinVect, 
+	const thrust::device_vector<double>& T_raster, 
+	const thrust::device_vector<double>& melt_mask, 
+	thrust::device_vector<double>& h_sn, 
+	thrust::device_vector<double>& h_G, 
+	const thrust::device_vector<double>& ET_vec, 
+	const thrust::device_vector<double>& DP_infiltrated, 
+	const thrust::device_vector<double>& DP_total, 
+	const double c1_min, 
+	const double dt_min, 
+	const double T_thr,
+	const unsigned int N_cols, 
+	const thrust::device_vector<double>& h_interface_x,
+	const thrust::device_vector<double>& h_interface_y, cudaStream_t stream) {
+ 
+     launch_kernel(
+      computeupdateSnowGravLayers,
+      idBasinVect.size(),
+      stream,
+      thrust::raw_pointer_cast(idBasinVect.data()),
+      thrust::raw_pointer_cast(T_raster.data()),
+      thrust::raw_pointer_cast(melt_mask.data()),
+      thrust::raw_pointer_cast(h_sn.data()),
+      thrust::raw_pointer_cast(h_G.data()),
+      thrust::raw_pointer_cast(ET_vec.data()),
+      thrust::raw_pointer_cast(DP_infiltrated.data()),
+      thrust::raw_pointer_cast(DP_total.data()),
+      c1_min, dt_min, T_thr, 
+      N_cols, 
+      thrust::raw_pointer_cast(h_interface_x.data()), 
+      thrust::raw_pointer_cast(h_interface_y.data())
+    );
+
+}
+
+//==============================================================================
+
+__global__ void computePrecipitation(
+    const unsigned int* ids,
+    const double time,
+    const double c,
+    const bool M_isInitialLoss,
+    const double* M_time_spacing_vect,
+    const double* S,
+    const double* melt_mask,
+    const double* Hyetograph,
+    const double* IDW_weights,
+    double* DP_total,
+    double* DP_cumulative,
+    double* DP_infiltrated,
+    const double* h_G,
+    const double* H,
+    const unsigned int N_cols,
+    const unsigned int* offset_hy,
+    const unsigned int Hyetograph_size,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto IDcenter = ids[i];
+
+  const auto H_cell = H[IDcenter];
+  const auto h_G_cell = h_G[IDcenter];
+  const auto S_cell = S[IDcenter];
+  const auto melt_mask_cell = melt_mask[IDcenter];
+
+  double DP_total_cell = 0, DP_cumulative_cell = 0, DP_infiltrated_cell = 0;
+
+  const double deltaSoilMoisture = h_G_cell - S_cell;
+  const bool cond_cc = (((H_cell + h_G_cell) < (c * S_cell)) && M_isInitialLoss);
+	
+  const double weight = (S_cell > 0 && deltaSoilMoisture < 0.) ? 
+	  (deltaSoilMoisture/S_cell)*(deltaSoilMoisture/S_cell) : 0.;
+
+  // SCS-CN method and Initial and Constant Loss Model
+  for (unsigned int Id = 0; Id < Hyetograph_size; Id++) {
+
+      const unsigned int i_index = floor(time / (M_time_spacing_vect[Id] * 3600));
+
+      const double rainfall_intensity = Hyetograph[offset_hy[Id] + i_index] * 
+	      IDW_weights[IDcenter*Hyetograph_size + Id];
+  
+      const double infiltrationRate = cond_cc ? rainfall_intensity*melt_mask_cell
+	      : weight*rainfall_intensity*melt_mask_cell;
+      const double potential_runoff = cond_cc ? 0. 
+	      : fmax(rainfall_intensity*melt_mask_cell-infiltrationRate, 0.);
+
+      DP_total_cell += rainfall_intensity;
+      DP_cumulative_cell += potential_runoff;
+      DP_infiltrated_cell += infiltrationRate;
+
+  }
+
+  DP_total[IDcenter] = DP_total_cell;
+  DP_cumulative[IDcenter] = DP_cumulative_cell;
+  DP_infiltrated[IDcenter] = DP_infiltrated_cell;
+
+}
+
+// Compute the precipitation in the computational domain
+void computePrecipitation_wrapper(
+        const thrust::device_vector<unsigned int>& idBasinVect,
+        const double time, const double c,
+        const bool M_isInitialLoss,
+	const thrust::device_vector<double>& M_time_spacing_vect,
+        const thrust::device_vector<double>& S,
+	const thrust::device_vector<double>& melt_mask,
+	const thrust::device_vector<double>& Hyetograph,
+        const thrust::device_vector<double>& IDW_weights,
+	thrust::device_vector<double>& DP_total,
+	thrust::device_vector<double>& DP_cumulative, 
+	thrust::device_vector<double>& DP_infiltrated,
+	const thrust::device_vector<double>& h_G, 
+	const thrust::device_vector<double>& H, 
+	const unsigned int N_cols, 
+	const thrust::device_vector<unsigned int>& offset_hy,
+	const unsigned int Hyetograph_size,
+	cudaStream_t stream) {
+ 
+     launch_kernel(
+      computePrecipitation,
+      idBasinVect.size(),
+      stream,
+      thrust::raw_pointer_cast(idBasinVect.data()),
+      time, c, M_isInitialLoss,
+      thrust::raw_pointer_cast(M_time_spacing_vect.data()),
+      thrust::raw_pointer_cast(S.data()),
+      thrust::raw_pointer_cast(melt_mask.data()),
+      thrust::raw_pointer_cast(Hyetograph.data()),
+      thrust::raw_pointer_cast(IDW_weights.data()),
+      thrust::raw_pointer_cast(DP_total.data()),
+      thrust::raw_pointer_cast(DP_cumulative.data()),
+      thrust::raw_pointer_cast(DP_infiltrated.data()),
+      thrust::raw_pointer_cast(h_G.data()),
+      thrust::raw_pointer_cast(H.data()),
+      N_cols,
+      thrust::raw_pointer_cast(offset_hy.data()),
+      Hyetograph_size
+    );
+
+}
+
+//==============================================================================
+
+__global__ void computeKernel_sediment(
+    const unsigned int* ids,
+    double* Gamma_dir_1,
+    double* Gamma_dir_2,
+    const double* S_dir_mod,
+    const double* vel,
+    const double c1,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+
+  const auto vel_Id = vel[Id];
+
+  const double coeff_right = c1 * S_dir_mod[Id] * vel_Id * (.5 - .5 * signum_dev(vel_Id));
+  const double coeff_left  = c1 * S_dir_mod[Id] * vel_Id * (.5 + .5 * signum_dev(vel_Id));
+
+  Gamma_dir_1[Id] = coeff_right;
+  Gamma_dir_2[Id] = coeff_left;
+}
+
+// Horizontal sediment
+void computeResidualsTruncatedHorizontal_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		thrust::device_vector<double>& Gamma_x_1, thrust::device_vector<double>& Gamma_x_2, 
+		const thrust::device_vector<double>& S_x_mod, 
+		const thrust::device_vector<double>& u, 
+                const double c1, cudaStream_t stream) {
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredInternalVectHorizontal.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(Gamma_x_1.data()),
+      thrust::raw_pointer_cast(Gamma_x_2.data()),
+      thrust::raw_pointer_cast(S_x_mod.data()),
+      thrust::raw_pointer_cast(u.data()),
+      c1
+    );
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredBoundaryVectWest.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(Gamma_x_1.data()),
+      thrust::raw_pointer_cast(Gamma_x_2.data()),
+      thrust::raw_pointer_cast(S_x_mod.data()),
+      thrust::raw_pointer_cast(u.data()),
+      c1
+    );
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredBoundaryVectEast.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(Gamma_x_1.data()),
+      thrust::raw_pointer_cast(Gamma_x_2.data()),
+      thrust::raw_pointer_cast(S_x_mod.data()),
+      thrust::raw_pointer_cast(u.data()),
+      c1
+    );
+
+}
+
+// Vertical sediment
+void computeResidualsTruncatedVertical_wrapper(
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+                thrust::device_vector<double>& Gamma_y_1, thrust::device_vector<double>& Gamma_y_2,
+		const thrust::device_vector<double>& S_y_mod,
+		const thrust::device_vector<double>& v,
+		const double c1, cudaStream_t stream) {
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredInternalVectVertical.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(Gamma_y_1.data()),
+      thrust::raw_pointer_cast(Gamma_y_2.data()),
+      thrust::raw_pointer_cast(S_y_mod.data()),
+      thrust::raw_pointer_cast(v.data()),
+      c1
+    );
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredBoundaryVectNorth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(Gamma_y_1.data()),
+      thrust::raw_pointer_cast(Gamma_y_2.data()),
+      thrust::raw_pointer_cast(S_y_mod.data()),
+      thrust::raw_pointer_cast(v.data()),
+      c1
+    );
+
+    launch_kernel(
+      computeKernel_sediment,
+      idStaggeredBoundaryVectSouth.size(),
+      stream,
+      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(Gamma_y_1.data()),
+      thrust::raw_pointer_cast(Gamma_y_2.data()),
+      thrust::raw_pointer_cast(S_y_mod.data()),
+      thrust::raw_pointer_cast(v.data()),
+      c1
+    );
+
+}
+
+
+
+//==============================================================================
 /// A 5-point Laplacian on a g x g grid with Dirichlet boundary conditions.
 /// This code allocates. The caller must free.
 void make_laplace_matrix(int * n_out,

@@ -101,19 +101,23 @@ endif()
 # ------------------------------------------------------------------------------
 # Compile options
 # ------------------------------------------------------------------------------
-
 if(ENABLE_CUDA)
-target_compile_options(main.exe PRIVATE
-    $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G -g -O0>
-    $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math -arch=sm_90>
-)
+    target_compile_options(main.exe PRIVATE
+        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G -O0>
+        $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CXX>>:-pg -g -O0>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math -arch=sm_90>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-O3>
+    )
 else()
-target_compile_options(main.exe PRIVATE
-    $<$<CONFIG:Debug>:-g -O0>
-    $<$<CONFIG:Release>:-O3>
-)
+    target_compile_options(main.exe PRIVATE
+        $<$<CONFIG:Debug>:-pg -g -O0>
+        $<$<CONFIG:Release>:-O3>
+    )
 endif()
 
+target_link_options(main.exe PRIVATE
+    $<$<CONFIG:Debug>:-pg>
+)
 # ------------------------------------------------------------------------------
 # Link libraries
 # ------------------------------------------------------------------------------
