@@ -250,7 +250,7 @@ void computeAdjacencies(
     T &idBasinVect,
     T &idBasinVectReIndex,
 
-    const unsigned int &N_rows, const unsigned int &N_cols)
+    const unsigned int N_rows, const unsigned int N_cols)
 {
   // +-----------------------------------------------+
   // |                 Basin H IDs                   |
@@ -802,6 +802,7 @@ void resize_rasters(
     std::vector<std::tuple<bool, int>> &excluded_ids,
     V_type&additional_source_term,
 
+    std::vector<unsigned int>&basin_mask_Vec,
     V_type&orography,
     V_type&h_G, V_type&h_sd,
     V_type&h_sn,
@@ -842,7 +843,7 @@ void resize_rasters(
     "V_type must contain double"
   );
 
-  V_type basin_mask_Vec, slope_cell;
+  V_type slope_cell;
   U_type idBasinVectReIndex;
 
   output_dir = "../Outputs/" + std::to_string(currentSimNumber) + "/";

@@ -59,6 +59,29 @@ if(ENABLE_CUDA)
         code_init.cpp
         PROPERTIES LANGUAGE CUDA
     )
+
+    # ------------------------------------------------------------------------------
+    # NetCDF
+    # ------------------------------------------------------------------------------
+
+    find_program(NC_CONFIG nc-config 
+	    HINTS ${CMAKE_PREFIX_PATH}/bin 
+	    $ENV{CONDA_PREFIX}/bin)
+    if(NC_CONFIG)
+	    execute_process(COMMAND ${NC_CONFIG} --libs
+		    OUTPUT_VARIABLE NetCDF_LIBRARIES
+		    OUTPUT_STRIP_TRAILING_WHITESPACE)
+	    execute_process(COMMAND ${NC_CONFIG} --includedir
+		    OUTPUT_VARIABLE NetCDF_INCLUDE_DIRS
+		    OUTPUT_STRIP_TRAILING_WHITESPACE)
+	    message(STATUS "NetCDF found: ${NC_CONFIG}")
+	    message(STATUS "  libs:     ${NetCDF_LIBRARIES}")
+	    message(STATUS "  includes: ${NetCDF_INCLUDE_DIRS}")
+    else()
+	    message(FATAL_ERROR "nc-config not found")
+    endif()
+
+
 endif()
 
 # ------------------------------------------------------------------------------
@@ -102,7 +125,8 @@ endif()
 # Compile options
 # ------------------------------------------------------------------------------
 if(ENABLE_CUDA)
-    target_compile_options(main.exe PRIVATE
+        target_compile_options(main.exe PRIVATE
+	$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G -O0>
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CXX>>:-pg -g -O0>
         $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math -arch=sm_90>
@@ -130,5 +154,7 @@ target_link_libraries(main.exe PRIVATE Eigen3::Eigen)
 
 if(ENABLE_CUDA)
     target_link_libraries(main.exe PRIVATE CUDA::cudart CUDA::cublas CUDA::cusparse)
-endif()
 
+    target_include_directories(main.exe PRIVATE ${NetCDF_INCLUDE_DIRS})
+    target_link_libraries(main.exe PRIVATE ${NetCDF_LIBRARIES})
+endif()

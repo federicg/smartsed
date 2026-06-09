@@ -1640,8 +1640,8 @@ void buildMatrix(
     const T_type &orography, const T_type &u_star,
     const T_type &v_star, const T_type &u,
     const T_type &v, const T_type &H,
-    const unsigned int N_cols, const unsigned int N_rows,
-    const unsigned int N, const double c1, const double c3,
+    const unsigned int N_cols,
+    const double c1, const double c3,
     const double H_min, const T_type &precipitation,
     const double dt_DSV, const T_type &alfa_x,
     const T_type &alfa_y,
@@ -1652,24 +1652,34 @@ void buildMatrix(
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth,
     const U_type &idBasinVect,
+#ifndef ENABLE_CUDA
     const U_type &idBasinVect_not_excluded,
     const U_type
         &idStaggeredInternalVectHorizontal_not_excluded,
     const U_type
         &idStaggeredInternalVectVertical_not_excluded,
+#endif
     const U_type &idBasinVectReIndex,
     const bool isNonReflectingBC, const bool isH,
-    T_type &additional_source_term
 
 #ifdef ENABLE_CUDA
-    , cudaStream_t stream = 0  // default stream if not specified
-#else    
-    , const std::vector<std::tuple<bool, int>> &excluded_ids,
+    const int *d_A_rows, const int *d_A_columns, double *d_A_values, Vec &rhs, const int nnz,
+    cudaStream_t stream = 0  // default stream if not specified
+#else
+    T_type &additional_source_term, const std::vector<std::tuple<bool, int>> &excluded_ids,
     std::vector<Eigen::Triplet<double>> &coefficients, Eigen::VectorXd &rhs
 #endif
     ) {
 
 #ifdef ENABLE_CUDA
+
+  buildMatrix_wrapper(H_int_x, H_int_y, orography, 
+		  u_star, v_star, u, v, H, N_cols, c1, c3, H_min, precipitation,
+		  dt_DSV, alfa_x, alfa_y, idStaggeredInternalVectHorizontal, 
+		  idStaggeredInternalVectVertical, idStaggeredBoundaryVectWest, 
+		  idStaggeredBoundaryVectEast, idStaggeredBoundaryVectNorth, 
+		  idStaggeredBoundaryVectSouth, idBasinVect, idBasinVectReIndex,
+		  isNonReflectingBC, nnz, d_A_rows, d_A_columns, d_A_values, rhs, stream);
 
 #else
 	    
@@ -2003,22 +2013,75 @@ void updateVel(
 
 //==============================================================================
 
-void compute_dt_adaptive(const std::vector<double> &H,
-                         const std::vector<double> &H_old,
-                         const std::vector<double> &H_oldold,
-                         const std::vector<unsigned int> &idBasinVect,
-                         double &dt,
-                         const double &local_estimator_time_tolerance,
-                         const double &time, const double &timed,
-                         const double &timedd);
+template <class T_type, class U_type>
+void compute_dt_adaptive(const T_type &H,
+                         const T_type &H_old,
+                         const T_type &H_oldold,
+                         const U_type &idBasinVect,
+                         double& dt,
+                         const double local_estimator_time_tolerance,
+                         const double time, const double timed,
+                         const double timedd) {
+
+  // capture all constants for the functor
+  const double time_ = time, timed_ = timed, timedd_ = timedd;	
+
+  // get raw pointers before the lambda
+  const double* H_ptr      = thrust::raw_pointer_cast(H.data());
+  const double* H_old_ptr  = thrust::raw_pointer_cast(H_old.data());
+  const double* H_oldd_ptr = thrust::raw_pointer_cast(H_oldold.data());
+
+  // functor: given an index, compute the Nu_hmean_cell contribution
+  auto compute_nu = [=] __host__ __device__ (unsigned int Id) -> double {
+
+	  const double hcell      = H_ptr[Id];
+	  const double hcell_old  = H_old_ptr[Id];
+	  const double hcell_oldd = H_oldd_ptr[Id];
+
+	  const double dh_t = (hcell - hcell_old) / (time_ - timed_);
+
+	  const double h1 = hcell_oldd / ((timedd_ - timed_) * (timedd_ - time_));
+	  const double h2 = hcell_old  / ((timed_  - timedd_) * (timed_  - time_));
+	  const double h3 = hcell      / ((time_   - timedd_) * (time_   - timed_));
+
+	  const double a_coeff = h1 + h2 + h3;
+	  const double b_coeff = -(h1 * (time_ + timed_) +
+			  h2 * (time_ + timedd_) +
+			  h3 * (timed_ + timedd_));
+
+	  const double Nu_hmean_cell =
+		  (1. / 3. * a_coeff * a_coeff *
+		   (time_ * time_ + time_ * timed_ + timed_ * timed_) +
+		   a_coeff * (b_coeff - dh_t) * (time_ + timed_) +
+		   (b_coeff - dh_t) * (b_coeff - dh_t));
+
+	  return Nu_hmean_cell * (time_ - timed_) * (time_ - timed_);
+  };
+
+  // reduce over idBasinVect
+  double nu_htot = thrust::transform_reduce(
+		  idBasinVect.begin(),
+		  idBasinVect.end(),
+		  compute_nu,
+		  0.0,
+		  thrust::plus<double>());
+
+
+  double dt_candidate =
+      local_estimator_time_tolerance / std::sqrt(nu_htot) * (time - timed);
+
+  // compute new dt
+  dt = (nu_htot > 0 && dt_candidate < dt) ? dt_candidate : dt;
+
+}
 
 //==============================================================================
 
 template <class T>
 static inline T maxdt_compute(const T vel_max_x, const T vel_max_y,
                               const T Hmax,      const T pixel_size,
-			      const T gravity,
-			      const T dt_DSV_given, const T t_final) {
+			      const T gravity) {
+
   static_assert(std::is_same<T, double>::value, 
 		  "maxdt_compute only supports double");
 
@@ -2031,9 +2094,6 @@ static inline T maxdt_compute(const T vel_max_x, const T vel_max_y,
   dt = std::min(dt, Co_cel * pixel_size /
                     (cel + std::numeric_limits<T>::epsilon()));
 
-  dt = (dt_DSV_given > 0.0) ? std::min(dt, dt_DSV_given) : dt;
-  dt = (t_final      > 0.0) ? std::min(dt, t_final) : dt;
-
   return dt;
 }
 
@@ -2042,8 +2102,7 @@ static inline T maxdt_compute(const T vel_max_x, const T vel_max_y,
 template <class T_type>
 double maxdt(const T_type &u, const T_type &v,
              const double Hmax, const double pixel_size,
-             const double gravity,
-             const double dt_DSV_given, const double t_final) {
+             const double gravity) {
 
 #ifdef ENABLE_CUDA
 
@@ -2053,9 +2112,6 @@ double maxdt(const T_type &u, const T_type &v,
   const double vel_max_y = std::max(v_mm.max_val, std::abs(v_mm.min_val));
   const double vel_max_x = std::max(u_mm.max_val, std::abs(u_mm.min_val));
 
-  return maxdt_compute(vel_max_x, vel_max_y, Hmax, pixel_size,
-                       gravity, dt_DSV_given, t_final);
-
 #else
  
   const double vel_max_y = std::max(*std::max_element(v.begin(), v.end()),
@@ -2063,10 +2119,10 @@ double maxdt(const T_type &u, const T_type &v,
   const double vel_max_x = std::max(*std::max_element(u.begin(), u.end()),
                                     std::abs(*std::min_element(u.begin(), u.end())));
 
-  return maxdt_compute(vel_max_x, vel_max_y, Hmax, pixel_size,
-                       gravity, dt_DSV_given, t_final);
-
 #endif
+
+  return maxdt_compute(vel_max_x, vel_max_y, Hmax, pixel_size, gravity);
+
 }
 
 //==============================================================================
@@ -2379,5 +2435,13 @@ void computeResidualsTruncated(
   }
 #endif
 }
+
+//==============================================================================
+
+void make_sparsity_pattern(thrust::host_vector<unsigned int>& idBasinVect,
+		std::vector<unsigned int>& basin_mask, 
+		thrust::host_vector<unsigned int>& idBasinVectReIndex,
+		int *row_offsets, int* columns,
+		unsigned int const N_rows, unsigned int const N_cols);
 
 //==============================================================================

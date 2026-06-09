@@ -506,6 +506,155 @@ typedef struct VecStruct {
 
 //==============================================================================
 
+__device__ int findPosition(const int* d_A_rows, const int* d_A_columns,
+                             int row, int col);
+
+
+__global__ void buildMatrix_cell_center(
+              const unsigned int* ids,
+              const double* H,
+	      const double* precipitation,
+	      const unsigned int* idBasinVectReIndex,
+	      const double dt_DSV,
+	      double* rhs,
+	      const int* d_A_rows,
+	      const int* d_A_columns,
+	      double* d_A_values,
+	      unsigned int n);
+
+
+__global__ void buildMatrix_horizontal_internal(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* orography,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double c3,
+		const double H_min,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+
+__global__ void buildMatrix_horizontal_West(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+ 
+__global__ void buildMatrix_horizontal_East(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+
+
+
+__global__ void buildMatrix_vertical_internal(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* orography,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double c3,
+		const double H_min,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+
+__global__ void buildMatrix_vertical_North(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+
+__global__ void buildMatrix_vertical_South(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n);
+
+void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x, 
+		const thrust::device_vector<double>& H_int_y, 
+		const thrust::device_vector<double>& orography, 
+		const thrust::device_vector<double>& u_star, 
+		const thrust::device_vector<double>& v_star, 
+		const thrust::device_vector<double>& u, 
+		const thrust::device_vector<double>& v, 
+		const thrust::device_vector<double>& H, 
+		const unsigned int N_cols, 
+		const double c1, 
+		const double c3, 
+		const double H_min, 
+		const thrust::device_vector<double>& precipitation,
+		const double dt_DSV, 
+		const thrust::device_vector<double>& alfa_x, 
+		const thrust::device_vector<double>& alfa_y, 
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth, 
+		const thrust::device_vector<unsigned int>& idBasinVect,
+		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
+		const bool isNonReflectingBC, 
+		const int nnz,
+		const int* d_A_rows, 
+		const int* d_A_columns,
+	       	double* d_A_values, 
+		Vec& rhs, cudaStream_t stream);
+
+//==============================================================================
 /// A 5-point Laplacian on a g x g grid with Dirichlet boundary conditions.
 /// This code allocates. The caller must free.
 void make_laplace_matrix(int * n_out,
@@ -531,5 +680,4 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            int                  maxIterations,
            double               tolerance);
 
-//==============================================================================
 //==============================================================================

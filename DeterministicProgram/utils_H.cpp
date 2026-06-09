@@ -15,47 +15,6 @@
 
 //==============================================================================
 
-void compute_dt_adaptive(const std::vector<double> &H,
-                         const std::vector<double> &H_old,
-                         const std::vector<double> &H_oldold,
-                         const std::vector<unsigned int> &idBasinVect,
-                         double &dt,
-                         const double &local_estimator_time_tolerance,
-                         const double &time, const double &timed,
-                         const double &timedd) {
-
-  double dh_t, h1, h2, h3, a_coeff, b_coeff, Nu_hmean_cell = 0., nu_htot = 0.;
-  for (const auto &Id : idBasinVect) {
-    const double &hcell = H[Id], &hcell_old = H_old[Id],
-                 &hcell_oldd = H_oldold[Id];
-
-    dh_t = (hcell - hcell_old) / (time - timed);
-
-    h1 = hcell_oldd / ((timedd - timed) * (timedd - time));
-    h2 = hcell_old / ((timed - timedd) * (timed - time));
-    h3 = hcell / ((time - timedd) * (time - timed));
-
-    a_coeff = h1 + h2 + h3;
-    b_coeff =
-        -(h1 * (time + timed) + h2 * (time + timedd) + h3 * (timed + timedd));
-
-    Nu_hmean_cell += (1. / 3. * a_coeff * a_coeff *
-                          (time * time + time * timed + timed * timed) +
-                      a_coeff * (b_coeff - dh_t) * (time + timed) +
-                      (b_coeff - dh_t) * (b_coeff - dh_t));
-    nu_htot += Nu_hmean_cell * (time - timed) * (time - timed);
-  }
-
-  double dt_candidate =
-      local_estimator_time_tolerance / std::sqrt(nu_htot) * (time - timed);
-
-  dt_candidate = (nu_htot > 0 && dt_candidate < dt) ? dt_candidate : dt;
-
-  dt = dt_candidate;
-}
-
-//==============================================================================
-
 double compute_dt_sediment(const double alpha, const double beta,
                            const double S_x, const double S_y,
                            const std::vector<double> &u,
@@ -104,6 +63,42 @@ int current_start_chunk(const int &rank,
              current_start_chunk(rank - 1, chunk_length_vec);
   }
   return result;
+}
+
+//==============================================================================
+
+void make_sparsity_pattern(thrust::host_vector<unsigned int>& idBasinVect,
+		std::vector<unsigned int>& basin_mask, 
+		thrust::host_vector<unsigned int>& idBasinVectReIndex,
+		int *row_offsets, int* columns,
+		unsigned int const N_rows, unsigned int const N_cols) {
+
+    int it = 0; // next unused index into `columns`/`values`
+
+#define INSERT(u,v)                                             \
+    if(0<=(u) && (u)<N_rows &&                                  \
+       0<=(v) && (v)<N_cols &&                                  \
+	basin_mask[((u) * N_cols + (v))]==1)                    \
+    {                                                           \
+        columns[it] = idBasinVectReIndex[((u) * N_cols + (v))]; \
+        ++it;                                                   \
+    }
+ 
+    int row = 0;
+    row_offsets[row] = 0;
+    for (const auto Id : idBasinVect) {
+	const int i = (int)(Id / N_cols);
+	const int j = (int)(Id % N_cols);
+ 
+	// Our sparsity pattern is a star-stencil
+	INSERT(i - 1, j    );
+        INSERT(i    , j - 1);
+        INSERT(i    , j    );
+        INSERT(i    , j + 1);
+        INSERT(i + 1, j    );
+        row_offsets[++row] = it;
+    }
+#undef INSERT
 }
 
 //==============================================================================

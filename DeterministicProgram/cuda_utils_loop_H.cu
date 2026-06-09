@@ -948,9 +948,7 @@ void computePrecipitation_wrapper(
 
 }
 
-
 //==============================================================================
-
 
 __global__ void bilinearInterpolationHorizontal(
     const unsigned int* __restrict__ ids,
@@ -1362,72 +1360,469 @@ void computeResidualsTruncatedVertical_wrapper(
 
 }
 
-
-
 //==============================================================================
-/// A 5-point Laplacian on a g x g grid with Dirichlet boundary conditions.
-/// This code allocates. The caller must free.
-void make_laplace_matrix(int * n_out,
-                         int **row_offsets_out, 
-                         int **columns_out, 
-                         double **values_out) {
-    int grid = 700; // grid resolution
 
-    int n = grid * grid;
-    *n_out = n;
-    // vertices have 5 neighbors, 
-    // but each vertex on the boundary loses 1. corners lose 2.
-    int nnz = 5 * n - 4 * grid;
+__device__ int findPosition(const int* d_A_rows, const int* d_A_columns,
+                             int row, int col) {
 
-    printf("Creating 5-point time-dependent diffusion matrix.\n"
-           " grid size: %d x %d\n"
-           " matrix rows:   %d\n"
-           " matrix cols:   %d\n"
-           " nnz:         %d\n",
-           grid, grid, n, n, nnz);
+    // linear search method: \mathcal{O}(k), replace with binary search method for wider stencil
+    for (int k = d_A_rows[row]; k < d_A_rows[row + 1]; k++)
+        if (d_A_columns[k] == col)
+            return k;
+    return -1;
+}
 
-    int* row_offsets = *row_offsets_out = (int*)malloc((n + 1) * sizeof(int));
-    int* columns     = *columns_out     = (int*)malloc(nnz * sizeof(int));
-    double* values   = *values_out      = (double*)malloc(nnz * sizeof(double));
-    assert(row_offsets);
-    assert(columns);
-    assert(values);
+__global__ void buildMatrix_cell_center(
+              const unsigned int* ids,
+              const double* H,
+	      const double* precipitation,
+	      const unsigned int* idBasinVectReIndex,
+	      const double dt_DSV,
+	      double* rhs,
+	      const int* d_A_rows,
+	      const int* d_A_columns,
+	      double* d_A_values,
+	      unsigned int n) {
+ 
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
 
-    // The Laplacian stencil looks like [-1;-1,4,-1;-1].
-    // ICHOL doesn't work great with that stencil.
-    // ICHOL is better suited when there's some more mass on the diagonal.
-    double mass = 0.04;
+  const auto Id = ids[i];
+ 
+  const auto IDreIndex = idBasinVectReIndex[Id];
 
-    int it = 0; // next unused index into `columns`/`values`
+  // Bring the first appetizer to the rhs
+  rhs[IDreIndex] = H[Id] + precipitation[Id] * dt_DSV;
 
-#define INSERT(u,v, x)                    \
-    if(0<=(u) && (u)<grid &&              \
-       0<=(v) && (v)<grid)                \
-    {                                     \
-        columns[it] = ((u) * grid + (v)); \
-        values[it] = x;                   \
-        ++it;                             \
-    }
+  // Initialize now the diagonal of the system matrix
+  int pos_diag = findPosition(d_A_rows, d_A_columns, IDreIndex, IDreIndex);
+  d_A_values[pos_diag] = 1.0;
+}
 
-    int row = 0;
-    row_offsets[row] = 0;
-    for (int i = 0; i < grid; ++i) {
-        for (int j = 0; j < grid; ++j)
-        {
-            INSERT(i - 1, j    , -1.0);
-            INSERT(i    , j - 1, -1.0);
-            INSERT(i    , j    ,  4.0 + mass);
-            INSERT(i    , j + 1, -1.0);
-            INSERT(i + 1, j    , -1.0);
-            row_offsets[++row] = it;
-        }
-    }
-    assert(it == nnz);
-#undef INSERT
+
+__global__ void buildMatrix_horizontal_internal(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* orography,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double c3,
+		const double H_min,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+
+  const unsigned int ii = Id / (N_cols + 1),
+                       IDleft = Id - ii - 1,           // H
+		       IDright = Id - ii,                             // H
+		       IDleftReIndex = idBasinVectReIndex[IDleft],   // H
+		       IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_x[Id];
+  const double coeff_m = H_interface * alfa_x[Id];
+
+  const bool is_nonDry = H_interface > H_min;
+
+  // Insert values in the RHS be careful here to the +=!
+  if (is_nonDry) {
+    const auto u_star_Id = u_star[Id];
+    const auto orography_right = orography[IDright];
+    const auto orography_left = orography[IDleft];
+
+    atomicAdd(&rhs[IDleftReIndex],
+              -c1 * (+coeff_m * u_star_Id) -
+              (orography_left - orography_right) * c3 * coeff_m);
+
+    atomicAdd(&rhs[IDrightReIndex],
+              -c1 * (-coeff_m * u_star_Id) -
+              (orography_right - orography_left) * c3 * coeff_m);
+  }
+
+  // Insert values now in the system matrix
+  // row=IDleftReIndex,  col=IDleftReIndex  (diagonal of left row)
+  int pos_ll = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDleftReIndex);
+
+  // row=IDleftReIndex,  col=IDrightReIndex (off-diagonal of left row)
+  int pos_lr = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDrightReIndex);
+
+  // row=IDrightReIndex, col=IDleftReIndex  (off-diagonal of right row)
+  int pos_rl = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDleftReIndex);
+
+  // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
+  int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
+
+  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 1e-6);
+  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
+
+  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 1e-6);
+  atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
+}
+
+__global__ void buildMatrix_horizontal_West(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+ 
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int ii = Id / (N_cols + 1), IDright = Id - ii,
+	IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_x[Id];
+
+  const double coeff_m = H_interface * alfa_x[Id];
+
+  if (H_interface > H_min) {
+      rhs[IDrightReIndex] +=
+	      isNonReflectingBC * (-c1 * (-coeff_m * u_star[Id]));
+  }
+  
+}
+
+__global__ void buildMatrix_horizontal_East(
+		const unsigned int* ids,
+                const double* H_int_x,
+		const double* alfa_x,
+                const unsigned int* idBasinVectReIndex,
+		const double* u_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+ 
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  
+  const unsigned int ii = Id / (N_cols + 1), IDleft = Id - ii - 1,
+	IDleftReIndex = idBasinVectReIndex[IDleft]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_x[Id];
+
+  const double coeff_m = H_interface * alfa_x[Id];
+
+  if (H_interface > H_min) {
+      rhs[IDleftReIndex] += isNonReflectingBC * (-c1 * (+coeff_m * u_star[Id]));
+  }
+
+}
+
+__global__ void buildMatrix_vertical_internal(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* orography,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double c3,
+		const double H_min,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int IDleft = Id - N_cols,          // H
+	IDright = Id,                                 // H
+	IDleftReIndex = idBasinVectReIndex[IDleft],   // H
+	IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_y[Id];
+
+  const double coeff_m = H_interface * alfa_y[Id];
+
+  const bool is_nonDry = H_interface > H_min;
+
+  // Insert values in the RHS be careful here to the +=!
+  if (is_nonDry) {
+    const auto v_star_Id = v_star[Id];
+    const auto orography_right = orography[IDright];
+    const auto orography_left = orography[IDleft];
+
+    atomicAdd(&rhs[IDleftReIndex],
+              -c1 * (+coeff_m * v_star_Id) -
+              (orography_left - orography_right) * c3 * coeff_m);
+
+    atomicAdd(&rhs[IDrightReIndex],
+              -c1 * (-coeff_m * v_star_Id) -
+              (orography_right - orography_left) * c3 * coeff_m);
+  }
+
+  // Insert values now in the system matrix
+  // row=IDleftReIndex,  col=IDleftReIndex  (diagonal of left row)
+  int pos_ll = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDleftReIndex);
+
+  // row=IDleftReIndex,  col=IDrightReIndex (off-diagonal of left row)
+  int pos_lr = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDrightReIndex);
+
+  // row=IDrightReIndex, col=IDleftReIndex  (off-diagonal of right row)
+  int pos_rl = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDleftReIndex);
+
+  // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
+  int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
+
+  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 1e-6);
+  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
+
+  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 1e-6);
+  atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
+
+}
+
+__global__ void buildMatrix_vertical_North(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+ 
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+ 
+  const unsigned int IDright = Id,
+	IDrightReIndex = idBasinVectReIndex[IDright]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_y[Id];
+
+  const double coeff_m = H_interface * alfa_y[Id];
+
+  if (H_interface > H_min) {
+      rhs[IDrightReIndex] +=
+          isNonReflectingBC * (-c1 * (-coeff_m * v_star[Id]));
+  }
+
+}
+
+__global__ void buildMatrix_vertical_South(
+		const unsigned int* ids,
+                const double* H_int_y,
+		const double* alfa_y,
+                const unsigned int* idBasinVectReIndex,
+		const double* v_star,
+		const unsigned int N_cols,
+		const double c1, 
+		const double H_min,
+		const bool isNonReflectingBC,
+		double* rhs,
+		const int* d_A_rows,
+		const int* d_A_columns,
+		double* d_A_values,
+		unsigned int n) {
+ 
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  
+  const unsigned int IDleft = Id - N_cols,        // H
+        IDleftReIndex = idBasinVectReIndex[IDleft]; // H
+
+  // define H at interfaces
+  const auto H_interface = H_int_y[Id];
+
+  const double coeff_m = H_interface * alfa_y[Id];
+
+  if (H_interface > H_min) {
+      rhs[IDleftReIndex] += isNonReflectingBC * (-c1 * (+coeff_m * v_star[Id]));
+  }
+
+}
+
+
+
+
+void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
+		const thrust::device_vector<double>& H_int_y,
+		const thrust::device_vector<double>& orography,
+		const thrust::device_vector<double>& u_star,
+		const thrust::device_vector<double>& v_star,
+		const thrust::device_vector<double>& u,
+		const thrust::device_vector<double>& v,
+		const thrust::device_vector<double>& H,
+		const unsigned int N_cols,
+		const double c1,
+		const double c3,
+		const double H_min,
+		const thrust::device_vector<double>& precipitation,
+		const double dt_DSV,
+		const thrust::device_vector<double>& alfa_x,
+		const thrust::device_vector<double>& alfa_y,
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
+		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
+		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<unsigned int>& idBasinVect,
+		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
+		const bool isNonReflectingBC,
+		const int nnz,
+		const int* d_A_rows, 
+		const int* d_A_columns,
+	       	double* d_A_values,
+		Vec& rhs, cudaStream_t stream) {
+
+    // zero BEFORE kernels
+    cudaMemsetAsync(d_A_values, 0, nnz * sizeof(double), stream);
+
+    //--------------------------------------------------------------------------
+    // Cell-centered contributions
+    launch_kernel(
+	buildMatrix_cell_center,
+	idBasinVect.size(),
+	stream,
+	thrust::raw_pointer_cast(idBasinVect.data()),
+        thrust::raw_pointer_cast(H.data()),
+	thrust::raw_pointer_cast(precipitation.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	dt_DSV, rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+
+    //--------------------------------------------------------------------------
+    // Horizontal contributions
+    launch_kernel(
+	buildMatrix_horizontal_internal,
+	idStaggeredInternalVectHorizontal.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+	thrust::raw_pointer_cast(H_int_x.data()),
+        thrust::raw_pointer_cast(alfa_x.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(orography.data()),
+	thrust::raw_pointer_cast(u_star.data()),
+	N_cols, c1, c3, H_min,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+    launch_kernel(
+	buildMatrix_horizontal_West,
+        idStaggeredBoundaryVectWest.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+	thrust::raw_pointer_cast(H_int_x.data()),
+        thrust::raw_pointer_cast(alfa_x.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(u_star.data()),
+	N_cols, c1, H_min, isNonReflectingBC,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+
+    launch_kernel(
+	buildMatrix_horizontal_East,
+        idStaggeredBoundaryVectEast.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+	thrust::raw_pointer_cast(H_int_x.data()),
+        thrust::raw_pointer_cast(alfa_x.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(u_star.data()),
+	N_cols, c1, H_min, isNonReflectingBC,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+
+    //--------------------------------------------------------------------------
+    // Vertical contributions
+    launch_kernel(
+	buildMatrix_vertical_internal,
+        idStaggeredInternalVectVertical.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+	thrust::raw_pointer_cast(H_int_y.data()),
+        thrust::raw_pointer_cast(alfa_y.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(orography.data()),
+	thrust::raw_pointer_cast(v_star.data()),
+	N_cols, c1, c3, H_min,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+    launch_kernel(
+	buildMatrix_vertical_North,
+        idStaggeredBoundaryVectNorth.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+	thrust::raw_pointer_cast(H_int_y.data()),
+        thrust::raw_pointer_cast(alfa_y.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(v_star.data()),
+	N_cols, c1, H_min, isNonReflectingBC,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
+
+    launch_kernel(
+	buildMatrix_vertical_South,
+        idStaggeredBoundaryVectSouth.size(),
+	stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+	thrust::raw_pointer_cast(H_int_y.data()),
+        thrust::raw_pointer_cast(alfa_y.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	thrust::raw_pointer_cast(v_star.data()),
+	N_cols, c1, H_min, isNonReflectingBC,
+	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+    );
+
 }
 
 //==============================================================================
-
+// https://github.com/NVIDIA/cuda-samples
 int gpu_CG(cublasHandle_t       cublasHandle,
            cusparseHandle_t     cusparseHandle,
            int                  m,
@@ -1443,6 +1838,7 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            void*                d_bufferMV,
            int                  maxIterations,
            double               tolerance) {
+
     const double zero      = 0.0;
     const double one       = 1.0;
     const double minus_one = -1.0;
@@ -1606,9 +2002,71 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 }
 
 //==============================================================================
-//==============================================================================
 
 #if 0 == 1
+/// A 5-point Laplacian on a g x g grid with Dirichlet boundary conditions.
+/// This code allocates. The caller must free.
+void make_laplace_matrix(int * n_out,
+                         int **row_offsets_out, 
+                         int **columns_out, 
+                         double **values_out) {
+    int grid = 700; // grid resolution
+
+    int n = grid * grid;
+    *n_out = n;
+    // vertices have 5 neighbors, 
+    // but each vertex on the boundary loses 1. corners lose 2.
+    int nnz = 5 * n - 4 * grid;
+
+    printf("Creating 5-point time-dependent diffusion matrix.\n"
+           " grid size: %d x %d\n"
+           " matrix rows:   %d\n"
+           " matrix cols:   %d\n"
+           " nnz:         %d\n",
+           grid, grid, n, n, nnz);
+
+    int* row_offsets = *row_offsets_out = (int*)malloc((n + 1) * sizeof(int));
+    int* columns     = *columns_out     = (int*)malloc(nnz * sizeof(int));
+    double* values   = *values_out      = (double*)malloc(nnz * sizeof(double));
+    assert(row_offsets);
+    assert(columns);
+    assert(values);
+
+    // The Laplacian stencil looks like [-1;-1,4,-1;-1].
+    // ICHOL doesn't work great with that stencil.
+    // ICHOL is better suited when there's some more mass on the diagonal.
+    double mass = 0.04;
+
+    int it = 0; // next unused index into `columns`/`values`
+
+#define INSERT(u,v, x)                    \
+    if(0<=(u) && (u)<grid &&              \
+       0<=(v) && (v)<grid)                \
+    {                                     \
+        columns[it] = ((u) * grid + (v)); \
+        values[it] = x;                   \
+        ++it;                             \
+    }
+
+    int row = 0;
+    row_offsets[row] = 0;
+    for (int i = 0; i < grid; ++i) {
+        for (int j = 0; j < grid; ++j)
+        {
+            INSERT(i - 1, j    , -1.0);
+            INSERT(i    , j - 1, -1.0);
+            INSERT(i    , j    ,  4.0 + mass);
+            INSERT(i    , j + 1, -1.0);
+            INSERT(i + 1, j    , -1.0);
+            row_offsets[++row] = it;
+        }
+    }
+    assert(it == nnz);
+#undef INSERT
+}
+
+//==============================================================================
+
 int main(int argc, char** argv) {
     const int    maxIterations = 10000;
     const double tolerance     = 1e-8f;
