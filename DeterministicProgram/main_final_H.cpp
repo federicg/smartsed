@@ -628,13 +628,16 @@ int main(int argc, char **argv) {
     int structural_zero;
     CHECK_CUSPARSE( cusparseXcsric02_zeroPivot(cusparseHandle, infoM,
 			    &structural_zero) )
-/*
+
     //--------------------------------------------------------------------------
     // Set the NetCDF library
     int ncid;
-    int t_dimid, y_dimid, x_dimid, yf_dimid, xf_dimid;
+    int t_dimid, y_dimid, x_dimid, yu_dimid, xu_dimid, yv_dimid, xv_dimid;
     int // coordinate variable ids
-	    xc_varid, yc_varid, xf_varid, yf_varid, t_varid;
+	    xc_varid, yc_varid,
+	    xu_varid, yu_varid,   // u face coordinates
+	    xv_varid, yv_varid,   // v face coordinates
+	    t_varid;
     int // field variable ids
 	    H_varid, h_sn_varid, h_G_varid, h_sd_varid,
 	    u_varid, v_varid;
@@ -643,10 +646,12 @@ int main(int argc, char **argv) {
 
     // dimensions
     nc_def_dim(ncid, "time", NC_UNLIMITED, &t_dimid);
-    nc_def_dim(ncid, "y",    N_rows,       &y_dimid);   // cell centers
-    nc_def_dim(ncid, "x",    N_cols,       &x_dimid);   // cell centers
-    nc_def_dim(ncid, "yf",   N_rows + 1,   &yf_dimid);  // y faces (v)
-    nc_def_dim(ncid, "xf",   N_cols + 1,   &xf_dimid);  // x faces (u)
+    nc_def_dim(ncid, "y",    N_rows,       &y_dimid);    // cell center rows
+    nc_def_dim(ncid, "x",    N_cols,       &x_dimid);    // cell center cols
+    nc_def_dim(ncid, "yu",   N_rows,       &yu_dimid);   // u rows  (same as center)
+    nc_def_dim(ncid, "xu",   N_cols + 1,   &xu_dimid);   // u cols  (one extra)
+    nc_def_dim(ncid, "yv",   N_rows + 1,   &yv_dimid);   // v rows  (one extra)
+    nc_def_dim(ncid, "xv",   N_cols,       &xv_dimid);   // v cols  (same as center)
 
     // time coordinate
     nc_def_var(ncid, "time", NC_DOUBLE, 1, &t_dimid, &t_varid);
@@ -657,18 +662,26 @@ int main(int argc, char **argv) {
     // cell center coordinates
     nc_def_var(ncid, "xc", NC_DOUBLE, 1, &x_dimid,  &xc_varid);
     nc_def_var(ncid, "yc", NC_DOUBLE, 1, &y_dimid,  &yc_varid);
-    nc_put_att_text(ncid, xc_varid, "units",         9, "degrees_E");
-    nc_put_att_text(ncid, xc_varid, "standard_name", 9, "longitude");
-    nc_put_att_text(ncid, yc_varid, "units",         9, "degrees_N");
-    nc_put_att_text(ncid, yc_varid, "standard_name", 8, "latitude");
+    nc_put_att_text(ncid, xc_varid, "units",         1, "m");
+    nc_put_att_text(ncid, xc_varid, "standard_name", 21, "projection_x_coordinate");
+    nc_put_att_text(ncid, yc_varid, "units",         1, "m");
+    nc_put_att_text(ncid, yc_varid, "standard_name", 21, "projection_y_coordinate");
 
-    // face coordinates
-    nc_def_var(ncid, "xf", NC_DOUBLE, 1, &xf_dimid, &xf_varid);
-    nc_def_var(ncid, "yf", NC_DOUBLE, 1, &yf_dimid, &yf_varid);
-    nc_put_att_text(ncid, xf_varid, "units",         9, "degrees_E");
-    nc_put_att_text(ncid, xf_varid, "standard_name", 9, "longitude");
-    nc_put_att_text(ncid, yf_varid, "units",         9, "degrees_N");
-    nc_put_att_text(ncid, yf_varid, "standard_name", 8, "latitude");
+    // u face coordinates
+    nc_def_var(ncid, "xu", NC_DOUBLE, 1, &xu_dimid, &xu_varid);
+    nc_def_var(ncid, "yu", NC_DOUBLE, 1, &yu_dimid, &yu_varid);
+    nc_put_att_text(ncid, xu_varid, "units",         1, "m");
+    nc_put_att_text(ncid, xu_varid, "standard_name", 21, "projection_x_coordinate");
+    nc_put_att_text(ncid, yu_varid, "units",         1, "m");
+    nc_put_att_text(ncid, yu_varid, "standard_name", 21, "projection_y_coordinate");
+
+    // v face coordinates
+    nc_def_var(ncid, "xv", NC_DOUBLE, 1, &xv_dimid, &xv_varid);
+    nc_def_var(ncid, "yv", NC_DOUBLE, 1, &yv_dimid, &yv_varid);
+    nc_put_att_text(ncid, xv_varid, "units",         1, "m");
+    nc_put_att_text(ncid, xv_varid, "standard_name", 21, "projection_x_coordinate");
+    nc_put_att_text(ncid, yv_varid, "units",         1, "m");
+    nc_put_att_text(ncid, yv_varid, "standard_name", 21, "projection_y_coordinate");
 
     double fill = -9999.0;
 
@@ -682,13 +695,13 @@ int main(int argc, char **argv) {
     nc_put_att_double(ncid, H_varid, "_FillValue", NC_DOUBLE, 1, &fill);
 
     nc_def_var(ncid, "h_sn", NC_DOUBLE, 3, dims_center, &h_sn_varid);
-    nc_put_att_text(ncid, h_sn_varid, "long_name",   11, "snow depth");
+    nc_put_att_text(ncid, h_sn_varid, "long_name",   10, "snow depth");
     nc_put_att_text(ncid, h_sn_varid, "units",        1, "m");
     nc_put_att_text(ncid, h_sn_varid, "coordinates",  5, "yc xc");
     nc_put_att_double(ncid, h_sn_varid, "_FillValue", NC_DOUBLE, 1, &fill);
 
     nc_def_var(ncid, "h_G", NC_DOUBLE, 3, dims_center, &h_G_varid);
-    nc_put_att_text(ncid, h_G_varid, "long_name",   13, "ground water");
+    nc_put_att_text(ncid, h_G_varid, "long_name",   12, "ground water");
     nc_put_att_text(ncid, h_G_varid, "units",        1, "m");
     nc_put_att_text(ncid, h_G_varid, "coordinates",  5, "yc xc");
     nc_put_att_double(ncid, h_G_varid, "_FillValue", NC_DOUBLE, 1, &fill);
@@ -700,48 +713,49 @@ int main(int argc, char **argv) {
     nc_put_att_double(ncid, h_sd_varid, "_FillValue", NC_DOUBLE, 1, &fill);
 
     // ── staggered variables ─────────────────────────────────
-    int dims_u[3] = {t_dimid, y_dimid,  xf_dimid};  // staggered in x
-    int dims_v[3] = {t_dimid, yf_dimid, x_dimid };  // staggered in y
+    int dims_u[3] = {t_dimid, yu_dimid, xu_dimid};  // staggered in x
+    int dims_v[3] = {t_dimid, yv_dimid, xv_dimid};  // staggered in y
 
     nc_def_var(ncid, "u", NC_DOUBLE, 3, dims_u, &u_varid);
     nc_put_att_text(ncid, u_varid, "long_name",   10, "x-velocity");
     nc_put_att_text(ncid, u_varid, "units",        3, "m/s");
-    nc_put_att_text(ncid, u_varid, "coordinates",  5, "yc xf");  // staggered in x
+    nc_put_att_text(ncid, u_varid, "coordinates",  5, "yu xu");
     nc_put_att_double(ncid, u_varid, "_FillValue", NC_DOUBLE, 1, &fill);
 
     nc_def_var(ncid, "v", NC_DOUBLE, 3, dims_v, &v_varid);
     nc_put_att_text(ncid, v_varid, "long_name",   10, "y-velocity");
     nc_put_att_text(ncid, v_varid, "units",        3, "m/s");
-    nc_put_att_text(ncid, v_varid, "coordinates",  5, "yf xc");  // staggered in y
+    nc_put_att_text(ncid, v_varid, "coordinates",  5, "yv xv");
     nc_put_att_double(ncid, v_varid, "_FillValue", NC_DOUBLE, 1, &fill);
 
-    // global attributes
-    nc_put_att_text(ncid, NC_GLOBAL, "Conventions", 6,  "CF-1.8");
-    nc_put_att_text(ncid, NC_GLOBAL, "title",       20, "Hydrological simulation");
+    // global attributes — add CRS info
+    nc_put_att_text(ncid, NC_GLOBAL, "Conventions",  6, "CF-1.8");
+    nc_put_att_text(ncid, NC_GLOBAL, "title",        20, "Hydrological simulation");
+    nc_put_att_text(ncid, NC_GLOBAL, "crs",          22, "EPSG:32632");  // UTM zone 32N
 
     nc_enddef(ncid);
 
     // separate coordinate arrays for each grid
-    std::vector<double> xc(N_cols),     yc(N_rows);      // cell centers
-    std::vector<double> xu(N_cols + 1), yu(N_rows);      // u faces (staggered in x)
-    std::vector<double> xv(N_cols),     yv(N_rows + 1);  // v faces (staggered in y)
+    std::vector<double> xc(N_cols),     yc(N_rows);
+    std::vector<double> xu(N_cols + 1), yu(N_rows);
+    std::vector<double> xv(N_cols),     yv(N_rows + 1);
 
-    // top-left origins from ESRI yllcorner (bottom-left) → flip Y
-    const double originY_c = yllcorner   + N_rows       * pixel_size;
-    const double originY_u = yllcorner_u + N_rows       * pixel_size;  // same nrows as centers
-    const double originY_v = yllcorner_v + (N_rows + 1) * pixel_size;  // one extra row
+    // top-left origins
+    const double originY_c = yllcorner             + N_rows       * pixel_size;
+    const double originY_u = yllcorner_staggered_u + N_rows       * pixel_size;
+    const double originY_v = yllcorner_staggered_v + (N_rows + 1) * pixel_size;
 
     // cell center coordinates
-    for (int i = 0; i < N_cols;     i++) xc[i] = xllcorner   + (i + 0.5) * pixel_size;
-    for (int j = 0; j < N_rows;     j++) yc[j] = originY_c   - (j + 0.5) * pixel_size;
+    for (int i = 0; i < N_cols;     i++) xc[i] = xllcorner             + (i + 0.5) * pixel_size;
+    for (int j = 0; j < N_rows;     j++) yc[j] = originY_c             - (j + 0.5) * pixel_size;
 
-    // u face coordinates (staggered in x: N_cols+1, same N_rows)
-    for (int i = 0; i < N_cols + 1; i++) xu[i] = xllcorner_u + (i + 0.5) * pixel_size;
-    for (int j = 0; j < N_rows;     j++) yu[j] = originY_u   - (j + 0.5) * pixel_size;
+    // u face coordinates
+    for (int i = 0; i < N_cols + 1; i++) xu[i] = xllcorner_staggered_u + (i + 0.5) * pixel_size;
+    for (int j = 0; j < N_rows;     j++) yu[j] = originY_u             - (j + 0.5) * pixel_size;
 
-    // v face coordinates (staggered in y: same N_cols, N_rows+1)
-    for (int i = 0; i < N_cols;     i++) xv[i] = xllcorner_v + (i + 0.5) * pixel_size;
-    for (int j = 0; j < N_rows + 1; j++) yv[j] = originY_v   - (j + 0.5) * pixel_size;
+    // v face coordinates
+    for (int i = 0; i < N_cols;     i++) xv[i] = xllcorner_staggered_v + (i + 0.5) * pixel_size;
+    for (int j = 0; j < N_rows + 1; j++) yv[j] = originY_v             - (j + 0.5) * pixel_size;
 
     // write coordinate arrays once
     nc_put_var_double(ncid, xc_varid, xc.data());
@@ -749,8 +763,36 @@ int main(int argc, char **argv) {
     nc_put_var_double(ncid, xu_varid, xu.data());
     nc_put_var_double(ncid, yu_varid, yu.data());
     nc_put_var_double(ncid, xv_varid, xv.data());
-    nc_put_var_double(ncid, yv_varid, yv.data());
-*/
+    nc_put_var_double(ncid, yv_varid, yv.data());    
+
+
+    // helper lambda to avoid duplication ──
+    auto saveToNetCDF = [&](size_t t_idx, double t_val) {
+	    // copy all fields to host
+	    H_pot    = H;
+	    h_sn_pot = h_sn;
+	    h_G_pot  = h_G;
+	    h_sd_pot = h_sd;
+	    u_pot    = u;
+	    v_pot    = v;
+
+	    // write time value
+	    nc_put_var1_double(ncid, t_varid, &t_idx, &t_val);
+
+	    // write fields
+	    size_t start[3]   = {t_idx, 0, 0};
+	    size_t count_c[3] = {1, (size_t)N_rows,     (size_t)N_cols    };
+	    size_t count_u[3] = {1, (size_t)N_rows,     (size_t)N_cols + 1};
+	    size_t count_v[3] = {1, (size_t)N_rows + 1, (size_t)N_cols    };
+
+	    nc_put_vara_double(ncid, H_varid,    start, count_c, H_pot.data());
+	    nc_put_vara_double(ncid, h_sn_varid, start, count_c, h_sn_pot.data());
+	    nc_put_vara_double(ncid, h_G_varid,  start, count_c, h_G_pot.data());
+	    nc_put_vara_double(ncid, h_sd_varid, start, count_c, h_sd_pot.data());
+	    nc_put_vara_double(ncid, u_varid,    start, count_u, u_pot.data());
+	    nc_put_vara_double(ncid, v_varid,    start, count_v, v_pot.data());
+    };
+
 #else
     A.resize(idBasinVect_excluded.size(), idBasinVect_excluded.size());
     A.setZero();
@@ -1419,73 +1461,24 @@ int main(int argc, char **argv) {
         }
       }
 #else
-/*
+
       if (spit_out_solutions_each_time_step) {
- 
-	// copy all fields to host
-        H_pot    = H;
-        h_sn_pot = h_sn;
-        h_G_pot  = h_G;
-        h_sd_pot = h_sd;
-        u_pot    = u;
-        v_pot    = v;
 
-        // write time value
-        double t_val = t * dt;
-        size_t t_idx = iter++;
-        nc_put_var1_double(ncid, t_varid, &t_idx, &t_val);
-
-        // write fields
-        size_t start[3]   = {(size_t)t_idx, 0, 0};
-        size_t count_c[3] = {1, (size_t)N_rows,     (size_t)N_cols    };  // cell centered
-        size_t count_u[3] = {1, (size_t)N_rows,     (size_t)N_cols + 1};  // u staggered
-        size_t count_v[3] = {1, (size_t)N_rows + 1, (size_t)N_cols    };  // v staggered
-
-        nc_put_vara_double(ncid, H_varid,    start, count_c, H_pot.data());
-        nc_put_vara_double(ncid, h_sn_varid, start, count_c, h_sn_pot.data());
-        nc_put_vara_double(ncid, h_G_varid,  start, count_c, h_G_pot.data());
-        nc_put_vara_double(ncid, h_sd_varid, start, count_c, h_sd_pot.data());
-        nc_put_vara_double(ncid, u_varid,    start, count_u, u_pot.data());
-        nc_put_vara_double(ncid, v_varid,    start, count_v, v_pot.data());
+	      saveToNetCDF(iter++, time);
 
       } else {
 
-        if (std::floor(time / (frequency_save * 3600)) >
-            std::floor((time - dt_DSV) / (frequency_save * 3600))) {
-  
-       		if (rank == 0)
-			std::cout << "Saving solution ..., current saving " << iter
-				<< std::endl;
-       
-		// copy all fields to host
-		H_pot    = H;
-		h_sn_pot = h_sn;
-		h_G_pot  = h_G;
-		h_sd_pot = h_sd;
-		u_pot    = u;
-		v_pot    = v;
+	      if (std::floor(time / (frequency_save * 3600)) >
+			      std::floor((time - dt_DSV) / (frequency_save * 3600))) {
 
-		// write time value
-		double t_val = t * dt;
-		size_t t_idx = iter++;
-		nc_put_var1_double(ncid, t_varid, &t_idx, &t_val);
+		      if (rank == 0)
+			      std::cout << "Saving solution ..., current saving "
+				      << iter << std::endl;
 
-		// write fields
-		size_t start[3]   = {(size_t)t_idx, 0, 0};
-		size_t count_c[3] = {1, (size_t)N_rows,     (size_t)N_cols    };  // cell centered
-		size_t count_u[3] = {1, (size_t)N_rows,     (size_t)N_cols + 1};  // u staggered
-		size_t count_v[3] = {1, (size_t)N_rows + 1, (size_t)N_cols    };  // v staggered
-
-		nc_put_vara_double(ncid, H_varid,    start, count_c, H_pot.data());
-		nc_put_vara_double(ncid, h_sn_varid, start, count_c, h_sn_pot.data());
-		nc_put_vara_double(ncid, h_G_varid,  start, count_c, h_G_pot.data());
-		nc_put_vara_double(ncid, h_sd_varid, start, count_c, h_sd_pot.data());
-		nc_put_vara_double(ncid, u_varid,    start, count_u, u_pot.data());
-		nc_put_vara_double(ncid, v_varid,    start, count_v, v_pot.data());
-
-        }
+		      saveToNetCDF(iter++, time);
+	      }
       }
-*/
+
 
 #endif
       // +-----------------------------------------------+
