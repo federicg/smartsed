@@ -49,6 +49,8 @@ if(ENABLE_CUDA)
     enable_language(CUDA)
     find_package(CUDAToolkit REQUIRED)
 
+    set(CMAKE_CUDA_ARCHITECTURES 86)
+
     set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
@@ -129,9 +131,14 @@ if(ENABLE_CUDA)
 	$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G -O0>
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CXX>>:-pg -g -O0>
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math -arch=sm_90>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-O3 --use_fast_math>
         $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CXX>>:-O3>
     )
+
+    target_link_options(main.exe PRIVATE
+        -Wl,-rpath,${CMAKE_PREFIX_PATH}/lib
+    )
+
 else()
     target_compile_options(main.exe PRIVATE
         $<$<CONFIG:Debug>:-pg -g -O0>
