@@ -1914,6 +1914,14 @@ void updateVel(
 
 #ifdef ENABLE_CUDA
 
+  updateVel_wrapper(u, v, u_star, v_star, alfa_x, alfa_y,
+      static_cast<unsigned int>(N_rows), static_cast<unsigned int>(N_cols),
+      c2, H_min, eta, H, orography,
+      idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
+      idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+      idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+      static_cast<int>(isNonReflectingBC), stream);
+
 #else
   // +-----------------------------------------------+
   // |           Update Vertical Velocity            |
@@ -2025,19 +2033,12 @@ void compute_dt_adaptive(const T_type &H,
                          const double timedd) {
 
   // capture all constants for the functor
-  const double time_ = time, timed_ = timed, timedd_ = timedd;	
+  const double time_ = time, timed_ = timed, timedd_ = timedd;
 
-  // get raw pointers before the lambda
-  const double* H_ptr      = thrust::raw_pointer_cast(H.data());
-  const double* H_old_ptr  = thrust::raw_pointer_cast(H_old.data());
-  const double* H_oldd_ptr = thrust::raw_pointer_cast(H_oldold.data());
-
-  // functor: given an index, compute the Nu_hmean_cell contribution
-  auto compute_nu = [=] __host__ __device__ (unsigned int Id) -> double {
-
-	  const double hcell      = H_ptr[Id];
-	  const double hcell_old  = H_old_ptr[Id];
-	  const double hcell_oldd = H_oldd_ptr[Id];
+  auto nu_cell = [=](unsigned int Id) -> double {
+	  const double hcell      = H[Id];
+	  const double hcell_old  = H_old[Id];
+	  const double hcell_oldd = H_oldold[Id];
 
 	  const double dh_t = (hcell - hcell_old) / (time_ - timed_);
 
@@ -2059,13 +2060,34 @@ void compute_dt_adaptive(const T_type &H,
 	  return Nu_hmean_cell * (time_ - timed_) * (time_ - timed_);
   };
 
-  // reduce over idBasinVect
+#ifdef ENABLE_CUDA
+  // GPU path: thrust transform_reduce dispatches to device if iterators are device iterators
+  const double* H_ptr      = thrust::raw_pointer_cast(H.data());
+  const double* H_old_ptr  = thrust::raw_pointer_cast(H_old.data());
+  const double* H_oldd_ptr = thrust::raw_pointer_cast(H_oldold.data());
+  auto compute_nu = [=] __host__ __device__ (unsigned int Id) -> double {
+	  const double hcell      = H_ptr[Id];
+	  const double hcell_old  = H_old_ptr[Id];
+	  const double hcell_oldd = H_oldd_ptr[Id];
+	  const double dh_t = (hcell - hcell_old) / (time_ - timed_);
+	  const double h1 = hcell_oldd / ((timedd_ - timed_) * (timedd_ - time_));
+	  const double h2 = hcell_old  / ((timed_  - timedd_) * (timed_  - time_));
+	  const double h3 = hcell      / ((time_   - timedd_) * (time_   - timed_));
+	  const double a_coeff = h1 + h2 + h3;
+	  const double b_coeff = -(h1 * (time_ + timed_) + h2 * (time_ + timedd_) + h3 * (timed_ + timedd_));
+	  const double Nu_hmean_cell =
+		  (1./3.*a_coeff*a_coeff*(time_*time_+time_*timed_+timed_*timed_) +
+		   a_coeff*(b_coeff-dh_t)*(time_+timed_) + (b_coeff-dh_t)*(b_coeff-dh_t));
+	  return Nu_hmean_cell * (time_ - timed_) * (time_ - timed_);
+  };
   double nu_htot = thrust::transform_reduce(
-		  idBasinVect.begin(),
-		  idBasinVect.end(),
-		  compute_nu,
-		  0.0,
-		  thrust::plus<double>());
+		  idBasinVect.begin(), idBasinVect.end(),
+		  compute_nu, 0.0, thrust::plus<double>());
+#else
+  // CPU path: plain loop
+  double nu_htot = 0.0;
+  for (auto Id : idBasinVect) nu_htot += nu_cell(Id);
+#endif
 
 
   double dt_candidate =
@@ -2439,11 +2461,19 @@ void computeResidualsTruncated(
 
 //==============================================================================
 
+#ifdef ENABLE_CUDA
 void make_sparsity_pattern(thrust::host_vector<unsigned int>& idBasinVect,
-		std::vector<unsigned int>& basin_mask, 
+		std::vector<unsigned int>& basin_mask,
 		thrust::host_vector<unsigned int>& idBasinVectReIndex,
 		int *row_offsets, int* columns,
 		unsigned int const N_rows, unsigned int const N_cols);
+#else
+void make_sparsity_pattern(std::vector<unsigned int>& idBasinVect,
+		std::vector<unsigned int>& basin_mask,
+		std::vector<unsigned int>& idBasinVectReIndex,
+		int *row_offsets, int* columns,
+		unsigned int const N_rows, unsigned int const N_cols);
+#endif
 
 //==============================================================================
 #endif

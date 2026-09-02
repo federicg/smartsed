@@ -1964,6 +1964,298 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 
 //==============================================================================
 
+__global__ void updateH_kernel(
+    const unsigned int* ids,
+    const unsigned int* idBasinVectReIndex,
+    double* H,
+    double* eta,
+    const double* orography,
+    const double* d_X,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id        = ids[i];
+    const unsigned int IDreIndex = idBasinVectReIndex[Id];
+
+    H[Id]   = fabs(d_X[IDreIndex]);
+    eta[Id] = H[Id] + orography[Id];
+}
+
+void updateH_wrapper(
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<unsigned int>& idBasinVectReIndex,
+    thrust::device_vector<double>& H,
+    thrust::device_vector<double>& eta,
+    const thrust::device_vector<double>& orography,
+    const double* d_X,
+    cudaStream_t stream)
+{
+    launch_kernel(updateH_kernel, idBasinVect.size(), stream,
+        thrust::raw_pointer_cast(idBasinVect.data()),
+        thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+        thrust::raw_pointer_cast(H.data()),
+        thrust::raw_pointer_cast(eta.data()),
+        thrust::raw_pointer_cast(orography.data()),
+        d_X);
+}
+
+//==============================================================================
+// updateVel kernels
+
+__global__ void updateVelHorizontalInternal(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id    = ids[i];
+    const unsigned int ii    = Id / (N_cols + 1);
+    const unsigned int IDeast = Id - ii;
+    const unsigned int IDwest = Id - ii - 1;
+
+    const double H_e = H[IDeast], H_w = H[IDwest];
+    const double eta_diff = -eta[IDeast] + eta[IDwest];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = (H_e + H_w) * 0.5 + s * (-H_e + H_w) * 0.5;
+
+    if (H_interface > H_min)
+        u[Id] = alfa_x[Id] * (u_star[Id] - c2 * (eta[IDeast] - eta[IDwest]));
+    else
+        u[Id] = 0.0;
+}
+
+__global__ void updateVelHorizontalWest(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id    = ids[i];
+    const unsigned int ii    = Id / (N_cols + 1);
+    const unsigned int IDeast = Id - ii + 1;
+    const unsigned int IDwest = Id - ii;
+
+    const double H_w = H[IDwest];
+    const double eta_diff = -eta[IDeast] + eta[IDwest];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = H_w * 0.5 + s * (-H_w) * 0.5;
+
+    if (H_interface > H_min)
+        u[Id] = isNonReflectingBC * alfa_x[Id] * u_star[Id];
+    else
+        u[Id] = 0.0;
+}
+
+__global__ void updateVelHorizontalEast(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id    = ids[i];
+    const unsigned int ii    = Id / (N_cols + 1);
+    const unsigned int IDeast = Id - ii - 1;
+    const unsigned int IDwest = Id - ii - 2;
+
+    const double H_e = H[IDeast];
+    const double eta_diff = -eta[IDeast] + eta[IDwest];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = H_e * 0.5 + s * H_e * 0.5;
+
+    if (H_interface > H_min)
+        u[Id] = isNonReflectingBC * alfa_x[Id] * u_star[Id];
+    else
+        u[Id] = 0.0;
+}
+
+__global__ void updateVelVerticalInternal(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id     = ids[i];
+    const unsigned int IDsouth = Id;
+    const unsigned int IDnorth = Id - N_cols;
+
+    const double H_s = H[IDsouth], H_n = H[IDnorth];
+    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = (H_s + H_n) * 0.5 + s * (-H_s + H_n) * 0.5;
+
+    if (H_interface > H_min)
+        v[Id] = alfa_y[Id] * (v_star[Id] - c2 * (eta[IDsouth] - eta[IDnorth]));
+    else
+        v[Id] = 0.0;
+}
+
+__global__ void updateVelVerticalNorth(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id     = ids[i];
+    const unsigned int IDnorth = Id;
+    const unsigned int IDsouth = Id + N_cols;
+
+    const double H_n = H[IDnorth];
+    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = H_n * 0.5 + s * (-H_n) * 0.5;
+
+    if (H_interface > H_min)
+        v[Id] = isNonReflectingBC * alfa_y[Id] * v_star[Id];
+    else
+        v[Id] = 0.0;
+}
+
+__global__ void updateVelVerticalSouth(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    const unsigned int Id     = ids[i];
+    const unsigned int IDsouth = Id - N_cols;
+    const unsigned int IDnorth = Id - 2 * N_cols;
+
+    const double H_s = H[IDsouth];
+    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+
+    const double H_interface = H_s * 0.5 + s * H_s * 0.5;
+
+    if (H_interface > H_min)
+        v[Id] = isNonReflectingBC * alfa_y[Id] * v_star[Id];
+    else
+        v[Id] = 0.0;
+}
+
+void updateVel_wrapper(
+    thrust::device_vector<double>& u,
+    thrust::device_vector<double>& v,
+    const thrust::device_vector<double>& u_star,
+    const thrust::device_vector<double>& v_star,
+    const thrust::device_vector<double>& alfa_x,
+    const thrust::device_vector<double>& alfa_y,
+    unsigned int N_rows, unsigned int N_cols,
+    double c2, double H_min,
+    const thrust::device_vector<double>& eta,
+    const thrust::device_vector<double>& H,
+    const thrust::device_vector<double>& orography,
+    const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
+    const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+    int isNonReflectingBC,
+    cudaStream_t stream)
+{
+    const double* H_ptr   = thrust::raw_pointer_cast(H.data());
+    const double* eta_ptr = thrust::raw_pointer_cast(eta.data());
+    double* u_ptr         = thrust::raw_pointer_cast(u.data());
+    double* v_ptr         = thrust::raw_pointer_cast(v.data());
+    const double* us_ptr  = thrust::raw_pointer_cast(u_star.data());
+    const double* vs_ptr  = thrust::raw_pointer_cast(v_star.data());
+    const double* ax_ptr  = thrust::raw_pointer_cast(alfa_x.data());
+    const double* ay_ptr  = thrust::raw_pointer_cast(alfa_y.data());
+
+    // vertical
+    launch_kernel(updateVelVerticalInternal,
+        idStaggeredInternalVectVertical.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+        v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, N_cols);
+
+    launch_kernel(updateVelVerticalNorth,
+        idStaggeredBoundaryVectNorth.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+        v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
+
+    launch_kernel(updateVelVerticalSouth,
+        idStaggeredBoundaryVectSouth.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+        v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
+
+    // horizontal
+    launch_kernel(updateVelHorizontalInternal,
+        idStaggeredInternalVectHorizontal.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+        u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, N_cols);
+
+    launch_kernel(updateVelHorizontalWest,
+        idStaggeredBoundaryVectWest.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+        u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
+
+    launch_kernel(updateVelHorizontalEast,
+        idStaggeredBoundaryVectEast.size(), stream,
+        thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+        u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
+}
+
+//==============================================================================
+
 #if 0 == 1
 /// A 5-point Laplacian on a g x g grid with Dirichlet boundary conditions.
 /// This code allocates. The caller must free.

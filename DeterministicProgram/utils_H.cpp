@@ -67,9 +67,15 @@ int current_start_chunk(const int &rank,
 
 //==============================================================================
 
+#ifdef ENABLE_CUDA
 void make_sparsity_pattern(thrust::host_vector<unsigned int>& idBasinVect,
-		std::vector<unsigned int>& basin_mask, 
+		std::vector<unsigned int>& basin_mask,
 		thrust::host_vector<unsigned int>& idBasinVectReIndex,
+#else
+void make_sparsity_pattern(std::vector<unsigned int>& idBasinVect,
+		std::vector<unsigned int>& basin_mask,
+		std::vector<unsigned int>& idBasinVectReIndex,
+#endif
 		int *row_offsets, int* columns,
 		unsigned int const N_rows, unsigned int const N_cols) {
 

@@ -677,13 +677,127 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            Vec                  d_R_aux,
            Vec                  d_P,
            Vec                  d_T,
-           Vec                  d_tmp, 
+           Vec                  d_tmp,
            void*                d_bufferMV,
 	   cusparseSpSVDescr_t  spsvDescrL,
            cusparseSpSVDescr_t  spsvDescrLT,
            int                  maxIterations,
            double               tolerance,
 	   const bool           use_preconditioner);
+
+//==============================================================================
+// Scatter CG solution d_X back into H and update eta = H + orography
+__global__ void updateH_kernel(
+    const unsigned int* ids,
+    const unsigned int* idBasinVectReIndex,
+    double* H,
+    double* eta,
+    const double* orography,
+    const double* d_X,
+    unsigned int n);
+
+void updateH_wrapper(
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<unsigned int>& idBasinVectReIndex,
+    thrust::device_vector<double>& H,
+    thrust::device_vector<double>& eta,
+    const thrust::device_vector<double>& orography,
+    const double* d_X,
+    cudaStream_t stream);
+
+//==============================================================================
+// updateVel: horizontal kernels
+__global__ void updateVelHorizontalInternal(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void updateVelHorizontalWest(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void updateVelHorizontalEast(
+    const unsigned int* ids,
+    double* u,
+    const double* u_star,
+    const double* alfa_x,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n);
+
+// updateVel: vertical kernels
+__global__ void updateVelVerticalInternal(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void updateVelVerticalNorth(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n);
+
+__global__ void updateVelVerticalSouth(
+    const unsigned int* ids,
+    double* v,
+    const double* v_star,
+    const double* alfa_y,
+    const double* H,
+    const double* eta,
+    double c2, double H_min,
+    int isNonReflectingBC,
+    unsigned int N_cols,
+    unsigned int n);
+
+void updateVel_wrapper(
+    thrust::device_vector<double>& u,
+    thrust::device_vector<double>& v,
+    const thrust::device_vector<double>& u_star,
+    const thrust::device_vector<double>& v_star,
+    const thrust::device_vector<double>& alfa_x,
+    const thrust::device_vector<double>& alfa_y,
+    unsigned int N_rows, unsigned int N_cols,
+    double c2, double H_min,
+    const thrust::device_vector<double>& eta,
+    const thrust::device_vector<double>& H,
+    const thrust::device_vector<double>& orography,
+    const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
+    const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
+    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+    int isNonReflectingBC,
+    cudaStream_t stream);
 
 //==============================================================================
 #endif

@@ -13,6 +13,9 @@
 //! MPI
 #include <mpi.h>
 
+//! wall-clock benchmarking of the time loop
+#include <chrono>
+
 #ifdef ENABLE_CUDA
 //! NetCDF
 #include <netcdf.h>
@@ -53,7 +56,7 @@ int main(int argc, char **argv) {
 
   const unsigned int steps_per_hour =
       dataFile("discretization/steps_per_hour", 10);
-  const double max_Days = dataFile("discretization/max_Days", 20.);
+  const unsigned int max_Days = dataFile("discretization/max_Days", 20);
   const double starting_day = dataFile("discretization/starting_day", 0);
   const double H_min = dataFile("discretization/H_min", 0.001);
   const double T_thr = dataFile("discretization/T_thr", 0);
@@ -90,6 +93,16 @@ int main(int argc, char **argv) {
   const bool spit_out_solutions_each_time_step =
       dataFile("debug/spit_out_solutions_each_time_step", false);
 
+  // DEBUG: if true, exit right after completing the first time step
+  const bool stop_after_first_step =
+      dataFile("debug/stop_after_first_step", false);
+
+  // BENCH: if > 0, stop the time loop after this many accepted steps and
+  //        print a wall-clock / field-fingerprint report (0 = run normally).
+  //        Command-line "-steps N" overrides the datafile value.
+  const unsigned int max_bench_steps = command_line.follow(
+      static_cast<int>(dataFile("debug/max_steps", 0)), "-steps");
+
   const double frequency_save = dataFile("debug/frequency_save", 24.);
 
   const std::string precipitation_file =
@@ -101,6 +114,10 @@ int main(int argc, char **argv) {
   const int number_stations = dataFile("files/meteo_data/number_stations", 1);
 
   const int number_gauges = dataFile("discretization/number_gauges", 1);
+
+  // BENCH counters (see max_bench_steps / stop_after_first_step)
+  unsigned int bench_completed_steps = 0;
+  unsigned int bench_loop_iters = 0;
 
   const double nstep = steps_per_hour * max_Days * 24;
   const double t_final = max_Days * 24 * 3600;
@@ -865,7 +882,11 @@ int main(int argc, char **argv) {
     cudaEventCreate(&e_alfa_y);
 #endif
 
+    const auto bench_t0 = std::chrono::steady_clock::now();
+
     while (!is_last_step) {
+
+      ++bench_loop_iters;
 
       if (rank == 0) {
         std::cout << "Simulation progress: " << time / t_final * 100 << " %"
@@ -1121,6 +1142,27 @@ int main(int argc, char **argv) {
       minH = deviceMin(d_X.ptr, m);
       maxH = deviceMax(d_X.ptr, m);
 
+      if (minH < -H_min) {
+        dt_DSV = dt_DSV / 10.;
+        if (dt_DSV == 0) {
+          if (rank == 0)
+            std::cout << "dt has gone to zero, sorry, STOP!" << std::endl;
+          exit(-1.);
+        }
+        c1_DSV_ = c1_DSV(dt_DSV, pixel_size);
+        c2_DSV_ = c2_DSV(c1_DSV_);
+        c3_DSV_ = c3_DSV(c1_DSV_);
+        continue;
+      }
+
+      // Preserve previous H for adaptive time-step estimator
+      H_oldold.swap(H_old);
+      H_old.swap(H);
+
+      // Scatter solver result into H and update eta = H + orography
+      updateH_wrapper(idBasinVect_excluded, idBasinVectReIndex_excluded,
+                      H, eta, orography, d_X.ptr, S(7));
+
 #endif
 
       // +-----------------------------------------------+
@@ -1135,6 +1177,36 @@ int main(int argc, char **argv) {
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
                 idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(7)));
+
+      // +-----------------------------------------------+
+      // |        Debug field stats (validation)         |
+      // +-----------------------------------------------+
+      if (spit_out_solutions_each_time_step && rank == 0) {
+#ifdef ENABLE_CUDA
+        cudaDeviceSynchronize();
+        thrust::host_vector<double> _hG_h(h_G.begin(), h_G.end());
+        thrust::host_vector<double> _hsn_h(h_sn.begin(), h_sn.end());
+        thrust::host_vector<double> _u_h(u.begin(), u.end());
+        thrust::host_vector<double> _v_h(v.begin(), v.end());
+#else
+        const auto& _hG_h  = h_G;
+        const auto& _hsn_h = h_sn;
+        const auto& _u_h   = u;
+        const auto& _v_h   = v;
+#endif
+        auto field_stats = [&](const auto& f, const auto& ids) {
+          double mx = 0., l2 = 0.;
+          for (auto id : ids) { double v = f[id]; if (std::abs(v)>mx) mx=std::abs(v); l2+=v*v; }
+          return std::make_pair(mx, std::sqrt(l2));
+        };
+        auto [hG_mx, hG_l2]   = field_stats(_hG_h,  idBasinVect_excluded);
+        auto [hsn_mx, hsn_l2] = field_stats(_hsn_h, idBasinVect_excluded);
+        auto [u_mx,   u_l2]   = field_stats(_u_h,   idStaggeredInternalVectHorizontal_excluded);
+        auto [v_mx,   v_l2]   = field_stats(_v_h,   idStaggeredInternalVectVertical_excluded);
+        printf("[STATS t=%.4f] h_G: max=%.10e l2=%.10e | h_sn: max=%.10e l2=%.10e | u: max=%.10e l2=%.10e | v: max=%.10e l2=%.10e\n",
+               time, hG_mx, hG_l2, hsn_mx, hsn_l2, u_mx, u_l2, v_mx, v_l2);
+        fflush(stdout);
+      }
 
       // +-----------------------------------------------+
       // |             Sediment Transport                |
@@ -1449,7 +1521,7 @@ int main(int argc, char **argv) {
                      yllcorner, pixel_size, NODATA_value, iter, u, v, h_sd);
         saveSolution(output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,
                      yllcorner, pixel_size, NODATA_value, iter, u, v,
-                     W_Gav_cum);
+                     W_Gav_cum_pot);
         saveSolution(output_dir + "hG_", " ", N_rows, N_cols, xllcorner,
                      yllcorner, pixel_size, NODATA_value, iter, u, v, h_G);
         saveSolution(output_dir + "hsn_", " ", N_rows, N_cols, xllcorner,
@@ -1482,7 +1554,7 @@ int main(int argc, char **argv) {
                        h_sd);
           saveSolution(output_dir + "w_cum_", " ", N_rows, N_cols, xllcorner,
                        yllcorner, pixel_size, NODATA_value, currentDay, u, v,
-                       W_Gav_cum);
+                       W_Gav_cum_pot);
           saveSolution(output_dir + "hG_", " ", N_rows, N_cols, xllcorner,
                        yllcorner, pixel_size, NODATA_value, currentDay, u, v,
                        h_G);
@@ -1533,8 +1605,80 @@ int main(int argc, char **argv) {
         check_last = true;
       }
 
+      // +-----------------------------------------------+
+      // |   BENCH: count accepted step, maybe stop      |
+      // +-----------------------------------------------+
+      ++bench_completed_steps;
+      if (stop_after_first_step ||
+          (max_bench_steps > 0 && bench_completed_steps >= max_bench_steps)) {
+        if (rank == 0)
+          std::cout << "[BENCH] stopping after " << bench_completed_steps
+                    << " accepted step(s)" << std::endl;
+        break;
+      }
+
     } // End Time Loop
- 
+
+    // +-------------------------------------------------------------+
+    // |   BENCH report: wall-clock of the time loop + field        |
+    // |   fingerprints (compare CPU vs CUDA run for validation)    |
+    // +-------------------------------------------------------------+
+    {
+#ifdef ENABLE_CUDA
+      cudaDeviceSynchronize();
+#endif
+      const double bench_wall_s =
+          std::chrono::duration<double>(
+              std::chrono::steady_clock::now() - bench_t0)
+              .count();
+
+      auto bench_fp = [&](const char *nm, const auto &fld, const auto &ids) {
+#ifdef ENABLE_CUDA
+        const thrust::host_vector<double> h(fld.begin(), fld.end());
+        const thrust::host_vector<unsigned int> ih(ids.begin(), ids.end());
+#else
+        const auto &h = fld;
+        const auto &ih = ids;
+#endif
+        long double s = 0.0L, s2 = 0.0L, mx = 0.0L;
+        for (auto id : ih) {
+          const long double x = static_cast<long double>(h[id]);
+          const long double a = x < 0.0L ? -x : x;
+          s += x;
+          s2 += x * x;
+          if (a > mx)
+            mx = a;
+        }
+        if (rank == 0)
+          printf("[FP] %-4s n=%zu  sum=%+.10Le  l2=%.10Le  max=%.10Le\n", nm,
+                 static_cast<size_t>(ih.size()), s, std::sqrt(s2), mx);
+      };
+
+      if (rank == 0) {
+        printf("[BENCH] backend=%s  accepted_steps=%u  loop_iters=%u  "
+               "wall_s=%.6f  per_step_ms=%.4f  per_iter_ms=%.4f\n",
+#ifdef ENABLE_CUDA
+               "CUDA",
+#else
+               "CPU",
+#endif
+               bench_completed_steps, bench_loop_iters, bench_wall_s,
+               bench_completed_steps
+                   ? 1.0e3 * bench_wall_s / bench_completed_steps
+                   : 0.0,
+               bench_loop_iters ? 1.0e3 * bench_wall_s / bench_loop_iters : 0.0);
+      }
+      bench_fp("H", H, idBasinVect_excluded);
+      bench_fp("eta", eta, idBasinVect_excluded);
+      bench_fp("hG", h_G, idBasinVect_excluded);
+      bench_fp("hsn", h_sn, idBasinVect_excluded);
+      bench_fp("hsd", h_sd, idBasinVect_excluded);
+      bench_fp("u", u, idStaggeredInternalVectHorizontal_excluded);
+      bench_fp("v", v, idStaggeredInternalVectVertical_excluded);
+      if (rank == 0)
+        fflush(stdout);
+    }
+
 #ifdef ENABLE_CUDA    
 
     // cleanup ──────────────────────

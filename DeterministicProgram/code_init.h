@@ -1,12 +1,10 @@
 #ifndef CODE_INIT_H
 #define CODE_INIT_H
 
-
-#include "utils_H.h"
-
 //! std library
 #include <array>
 #include <cstdint>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -21,6 +19,7 @@
 #include <unsupported/Eigen/SparseExtra>
 
 //==============================================================================
+// Vector2D must be defined before utils_H.h is included (circular include guard)
 
 class Vector2D {
 
@@ -117,6 +116,10 @@ Vector2D operator*(Vector2D const &vector, double const &factor);
 
 //! Operator * (multiplication by scalar on the left)
 Vector2D operator*(double const &factor, Vector2D const &vector);
+
+//==============================================================================
+
+#include "utils_H.h"
 
 //==============================================================================
 
