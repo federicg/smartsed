@@ -1,4 +1,5 @@
-#pragma once
+#ifndef UTILS_H_H
+#define UTILS_H_H
 
 //! std library
 #include <array>
@@ -2445,3 +2446,4 @@ void make_sparsity_pattern(thrust::host_vector<unsigned int>& idBasinVect,
 		unsigned int const N_rows, unsigned int const N_cols);
 
 //==============================================================================
+#endif

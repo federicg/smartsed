@@ -79,6 +79,9 @@ int main(int argc, char **argv) {
   const bool is_sediment_transport =
       dataFile("physics/is_sediment_transport", true);
 
+  const bool restart_soilMoisture =
+      dataFile("files/initial_conditions/restart_soilMoisture", false);
+
   const bool spit_out_matrix = dataFile("debug/spit_out_matrix", false);
   const std::string matrix_name = dataFile("debug/matrix_name", "/tmp/matrix_");
   const std::string vector_name = dataFile("debug/vector_name", "/tmp/vector_");
@@ -121,7 +124,7 @@ int main(int argc, char **argv) {
   }
 
   // execute R script
-  if (totSimNumber >= 0 && rank == 0) {
+  if (totSimNumber >= 0 && rank == 0 && !restart_soilMoisture) {
     const std::string bashCommand =
         std::string("Rscript "
                     "../Geostatistics/"
@@ -407,7 +410,6 @@ int main(int argc, char **argv) {
 
 #endif
 
-
     // +-----------------------------------------------+
     // |                    Rain                       |
     // +-----------------------------------------------+
@@ -489,7 +491,7 @@ int main(int argc, char **argv) {
                        idStaggeredBoundaryVectSouth_excluded, friction_model,
                        n_manning, dt_DSV, d_90, roughness_vect, 0., N_rows,
                        N_cols, slope_x, slope_y);
-     
+    
     // +-----------------------------------------------+
     // |             Start the time loop               |
     // +-----------------------------------------------+
@@ -553,7 +555,7 @@ int main(int argc, char **argv) {
                            cudaMemcpyHostToDevice) )
 
     CHECK_CUDA( cudaMemset(d_A_values, 0, nnz * sizeof(double)) )
-    CHECK_CUDA( cudaMemset(d_L_values, 0, nnz * sizeof(double)) )
+    CHECK_CUDA( cudaMemset(d_L_values, 1, nnz * sizeof(double)) )
     CHECK_CUDA( cudaMemset(d_X.ptr,    0, m   * sizeof(double)) )
 
     // free host memory once uploaded — no longer needed
@@ -615,11 +617,6 @@ int main(int argc, char **argv) {
                         d_A_rows, d_A_columns, infoM, &bufferSizeIC) )
     CHECK_CUDA( cudaMalloc(&d_bufferIC, bufferSizeIC) )
 
-    // need some valid values in d_L_values for analysis
-    // (structure is what matters, not the actual values)
-    CHECK_CUDA( cudaMemcpy(d_L_values, d_A_values,
-			    nnz * sizeof(double),
-			    cudaMemcpyDeviceToDevice) )
 
     CHECK_CUSPARSE( cusparseDcsric02_analysis(
 			    cusparseHandle, m, nnz, descrM, d_L_values,
@@ -629,6 +626,35 @@ int main(int argc, char **argv) {
     CHECK_CUSPARSE( cusparseXcsric02_zeroPivot(cusparseHandle, infoM,
 			    &structural_zero) )
 
+    cusparseSpSVDescr_t spsvDescrL, spsvDescrLT;
+    void *d_bufferL, *d_bufferLT;
+    size_t bufferSizeL, bufferSizeLT;
+    const double one = 1.0;
+
+    CHECK_CUSPARSE( cusparseSpSV_createDescr(&spsvDescrL) )
+    CHECK_CUSPARSE( cusparseSpSV_createDescr(&spsvDescrLT) )
+
+    CHECK_CUSPARSE( cusparseSpSV_bufferSize(
+			    cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+			    &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
+			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, &bufferSizeL) )
+    CHECK_CUSPARSE( cusparseSpSV_bufferSize(
+			    cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
+			    &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
+			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, &bufferSizeLT) )
+
+    CHECK_CUDA( cudaMalloc(&d_bufferL,  bufferSizeL) )
+    CHECK_CUDA( cudaMalloc(&d_bufferLT, bufferSizeLT) )
+
+    CHECK_CUSPARSE( cusparseSpSV_analysis(
+			    cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+			    &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
+			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, d_bufferL) )
+    CHECK_CUSPARSE( cusparseSpSV_analysis(
+			    cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
+			    &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
+			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, d_bufferLT) )
+    
     //--------------------------------------------------------------------------
     // Set the NetCDF library
     int ncid;
@@ -642,7 +668,7 @@ int main(int argc, char **argv) {
 	    H_varid, h_sn_varid, h_G_varid, h_sd_varid,
 	    u_varid, v_varid;
 
-    nc_create("output.nc", NC_NETCDF4, &ncid);
+    nc_create((output_dir + "output.nc").c_str(), NC_NETCDF4, &ncid);
 
     // dimensions
     nc_def_dim(ncid, "time", NC_UNLIMITED, &t_dimid);
@@ -763,8 +789,7 @@ int main(int argc, char **argv) {
     nc_put_var_double(ncid, xu_varid, xu.data());
     nc_put_var_double(ncid, yu_varid, yu.data());
     nc_put_var_double(ncid, xv_varid, xv.data());
-    nc_put_var_double(ncid, yv_varid, yv.data());    
-
+    nc_put_var_double(ncid, yv_varid, yv.data());
 
     // helper lambda to avoid duplication ──
     auto saveToNetCDF = [&](size_t t_idx, double t_val) {
@@ -799,6 +824,8 @@ int main(int argc, char **argv) {
     H_basin.setZero(idBasinVect_excluded.size()); 
     rhs.setZero(idBasinVect_excluded.size());
 #endif
+    //std::cout << "stop here!!"<< std::endl;
+    //return 0; 
 
 #ifdef ENABLE_CUDA
     maxH = deviceMax(H);
@@ -1085,10 +1112,14 @@ int main(int argc, char **argv) {
       printf("CG loop:\n"); //TODO: check the stream used here after, because it should depend on the stream used in buildMatrix
       gpu_CG(cublasHandle, cusparseHandle, m,
 		      matA, matL, d_B, d_X, d_R, d_R_aux, d_P, d_T,
-		      d_tmp, d_bufferMV, 
+		      d_tmp, d_bufferMV, spsvDescrL, spsvDescrLT,
 		      1000,  // max iterations 
-		      1e-6); // tolerance
-     //--------------------------------------------------------------------------
+		      1e-6,  // tolerance
+		      false);
+      //--------------------------------------------------------------------------
+
+      minH = deviceMin(d_X.ptr, m);
+      maxH = deviceMax(d_X.ptr, m);
 
 #endif
 
@@ -1104,11 +1135,11 @@ int main(int argc, char **argv) {
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
                 idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(7)));
-/*
+
       // +-----------------------------------------------+
       // |             Sediment Transport                |
       // +-----------------------------------------------+
-
+/*
       if (is_sediment_transport) {
         // tic();
 
@@ -1531,6 +1562,24 @@ int main(int argc, char **argv) {
     CHECK_CUSPARSE( cusparseDestroyMatDescr(descrM) )
     CHECK_CUDA( cudaFree(d_bufferIC) )
     CHECK_CUDA( cudaFree(d_bufferMV) )
+
+    CHECK_CUSPARSE( cusparseSpSV_destroyDescr(spsvDescrL) )
+    CHECK_CUSPARSE( cusparseSpSV_destroyDescr(spsvDescrLT) )
+    CHECK_CUDA( cudaFree(d_bufferL) )
+    CHECK_CUDA( cudaFree(d_bufferLT) )
+
+    // add to cleanup:
+    CHECK_CUDA( cudaFree(d_A_rows) )
+    CHECK_CUDA( cudaFree(d_A_columns) )
+    CHECK_CUDA( cudaFree(d_A_values) )
+    CHECK_CUDA( cudaFree(d_L_values) )
+    CHECK_CUDA( cudaFree(d_B.ptr) )
+    CHECK_CUDA( cudaFree(d_X.ptr) )
+    CHECK_CUDA( cudaFree(d_R.ptr) )
+    CHECK_CUDA( cudaFree(d_R_aux.ptr) )
+    CHECK_CUDA( cudaFree(d_P.ptr) )
+    CHECK_CUDA( cudaFree(d_T.ptr) )
+    CHECK_CUDA( cudaFree(d_tmp.ptr) )
 #endif
 
   } // End Monte Carlo loop

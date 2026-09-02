@@ -1,4 +1,6 @@
-#pragma once
+#ifndef CODE_INIT_H
+#define CODE_INIT_H
+
 
 #include "utils_H.h"
 
@@ -1959,3 +1961,4 @@ void resize_rasters(
 }
 
 //==============================================================================
+#endif

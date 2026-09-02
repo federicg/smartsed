@@ -1,4 +1,5 @@
-#pragma once
+#ifndef CUDA_UTILS_LOOP_H_CUH
+#define CUDA_UTILS_LOOP_H_CUH
 
 //! set CUDA headers
 #include <cuda_runtime.h>
@@ -50,8 +51,9 @@
 #endif
 
 
-
+double deviceMax(const double* raw_ptr, size_t n);
 double deviceMax(const thrust::device_vector<double> &v);
+double deviceMin(const double* raw_ptr, size_t n);
 double deviceMin(const thrust::device_vector<double> &v);
 double deviceSum(const thrust::device_vector<double> &v);
 
@@ -675,9 +677,13 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            Vec                  d_R_aux,
            Vec                  d_P,
            Vec                  d_T,
-           Vec                  d_tmp,
+           Vec                  d_tmp, 
            void*                d_bufferMV,
+	   cusparseSpSVDescr_t  spsvDescrL,
+           cusparseSpSVDescr_t  spsvDescrLT,
            int                  maxIterations,
-           double               tolerance);
+           double               tolerance,
+	   const bool           use_preconditioner);
 
 //==============================================================================
+#endif
