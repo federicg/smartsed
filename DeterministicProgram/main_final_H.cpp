@@ -1499,11 +1499,23 @@ int main(int argc, char **argv) {
                             temp.melt_mask, precipitation.DP_total, W_Gav,
                             1.e-3 * M_PI, dt_sed, S(7));
 #endif
-/*
+
         if (rank == 0)
           std::cout << "# steps for solid transport, " << numberOfSteps
                     << std::endl;
 
+#ifdef ENABLE_CUDA
+        // numberOfSteps sub-steps of h_sd advection on S(7) (Gamma_* and W_Gav
+        // were produced above on the same stream). The static-subbasin
+        // additional_source_term routing is not carried on the GPU.
+        computeSedimentTransport_wrapper(
+            numberOfSteps,
+            idHorizontalAll_excluded, horizontalTag_excluded,
+            idVerticalAll_excluded, verticalTag_excluded,
+            idBasinVect_excluded,
+            Gamma_vect_x_1, Gamma_vect_x_2, Gamma_vect_y_1, Gamma_vect_y_2,
+            h_sd, h_interface_x, h_interface_y, W_Gav, N_cols, S(7));
+#else
         for (unsigned int kk = 0; kk < numberOfSteps; kk++) {
 
           additional_source_term.assign(N, 0.);
@@ -1623,7 +1635,8 @@ int main(int argc, char **argv) {
                         additional_source_term[Id];
           }
         }
-*/
+#endif
+
       } // End of if(sediment_transport)
 
       // +-----------------------------------------------+

@@ -1007,6 +1007,149 @@ void computeWGav_wrapper(
 }
 
 //==============================================================================
+// Sediment transport sub-stepping (EPM). Per sub-step: assemble the h_sd
+// advection fluxes h_interface_{x,y} from the Gamma coefficients and the
+// current h_sd, then update h_sd. The CPU reference also routes fluxes from
+// excluded (static-subbasin) cells to their pour point via additional_source
+// _term; that approximation is not carried on the GPU, so it is dropped here
+// (== 0 everywhere on the GPU).
+//
+// Face-flux kernels: same tag layout as the gravitational merge
+// (0=internal, 1=West/North, 2=East/South) and the same index stencils; only
+// the closing formula differs (Gamma_1*h_right + Gamma_2*h_left, with
+// Gamma_1/Gamma_2 the right/left coefficients from computeResidualsTruncated).
+
+__global__ void computeKernel_sedFluxHorizontal(
+    const unsigned int* ids,
+    const unsigned int* tag,
+    const double* Gamma_x_1,   // right coeff
+    const double* Gamma_x_2,   // left coeff
+    const double* h_sd,
+    double* h_interface_x,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  const unsigned int t  = tag[i];
+  const unsigned int ii = Id / (N_cols + 1);
+
+  double h_left, h_right;
+  if (t == 0) {              // internal
+    h_left  = h_sd[Id - ii - 1];
+    h_right = h_sd[Id - ii];
+  } else if (t == 1) {       // West
+    h_left  = 0.0;
+    h_right = h_sd[Id - ii];
+  } else {                   // East
+    h_left  = h_sd[Id - ii - 1];
+    h_right = 0.0;
+  }
+
+  h_interface_x[Id] = Gamma_x_1[Id] * h_right + Gamma_x_2[Id] * h_left;
+}
+
+__global__ void computeKernel_sedFluxVertical(
+    const unsigned int* ids,
+    const unsigned int* tag,
+    const double* Gamma_y_1,
+    const double* Gamma_y_2,
+    const double* h_sd,
+    double* h_interface_y,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  const unsigned int t = tag[i];
+
+  double h_left, h_right;
+  if (t == 0) {              // internal: IDnorth = Id - N_cols, IDsouth = Id
+    h_left  = h_sd[Id - N_cols];
+    h_right = h_sd[Id];
+  } else if (t == 1) {       // North
+    h_left  = 0.0;
+    h_right = h_sd[Id];
+  } else {                   // South
+    h_left  = h_sd[Id - N_cols];
+    h_right = 0.0;
+  }
+
+  h_interface_y[Id] = Gamma_y_1[Id] * h_right + Gamma_y_2[Id] * h_left;
+}
+
+__global__ void computeKernel_sedUpdate(
+    const unsigned int* ids,
+    const double* h_interface_x,
+    const double* h_interface_y,
+    const double* W_Gav,
+    double* h_sd,
+    const unsigned int N_cols,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto Id = ids[i];
+  const unsigned int ii = Id / N_cols;
+
+  const double Res_x_cell = h_interface_x[Id + 1 + ii] - h_interface_x[Id + ii];
+  const double Res_y_cell = h_interface_y[Id + N_cols] - h_interface_y[Id];
+
+  h_sd[Id] += -(Res_x_cell + Res_y_cell) + W_Gav[Id];
+}
+
+void computeSedimentTransport_wrapper(
+    const unsigned int numberOfSteps,
+    const thrust::device_vector<unsigned int>& idHorizontalAll,
+    const thrust::device_vector<unsigned int>& horizontalTag,
+    const thrust::device_vector<unsigned int>& idVerticalAll,
+    const thrust::device_vector<unsigned int>& verticalTag,
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<double>& Gamma_x_1,
+    const thrust::device_vector<double>& Gamma_x_2,
+    const thrust::device_vector<double>& Gamma_y_1,
+    const thrust::device_vector<double>& Gamma_y_2,
+          thrust::device_vector<double>& h_sd,
+          thrust::device_vector<double>& h_interface_x,
+          thrust::device_vector<double>& h_interface_y,
+    const thrust::device_vector<double>& W_Gav,
+    const unsigned int N_cols, cudaStream_t stream) {
+
+  const double* gx1 = thrust::raw_pointer_cast(Gamma_x_1.data());
+  const double* gx2 = thrust::raw_pointer_cast(Gamma_x_2.data());
+  const double* gy1 = thrust::raw_pointer_cast(Gamma_y_1.data());
+  const double* gy2 = thrust::raw_pointer_cast(Gamma_y_2.data());
+  double* hsd  = thrust::raw_pointer_cast(h_sd.data());
+  double* hix  = thrust::raw_pointer_cast(h_interface_x.data());
+  double* hiy  = thrust::raw_pointer_cast(h_interface_y.data());
+  const double* wg = thrust::raw_pointer_cast(W_Gav.data());
+
+  // All three launches per sub-step share `stream`, so on that stream they
+  // run in order: flux_x, flux_y, then the h_sd update that reads both, then
+  // the next sub-step's flux kernels that read the updated h_sd.
+  for (unsigned int kk = 0; kk < numberOfSteps; ++kk) {
+    launch_kernel(computeKernel_sedFluxHorizontal, idHorizontalAll.size(), stream,
+      thrust::raw_pointer_cast(idHorizontalAll.data()),
+      thrust::raw_pointer_cast(horizontalTag.data()),
+      gx1, gx2, hsd, hix, N_cols);
+
+    launch_kernel(computeKernel_sedFluxVertical, idVerticalAll.size(), stream,
+      thrust::raw_pointer_cast(idVerticalAll.data()),
+      thrust::raw_pointer_cast(verticalTag.data()),
+      gy1, gy2, hsd, hiy, N_cols);
+
+    launch_kernel(computeKernel_sedUpdate, idBasinVect.size(), stream,
+      thrust::raw_pointer_cast(idBasinVect.data()),
+      hix, hiy, wg, hsd, N_cols);
+  }
+}
+
+//==============================================================================
 
 __device__ int findPosition(const int* d_A_rows, const int* d_A_columns,
                              int row, int col) {

@@ -233,6 +233,44 @@ void computeWGav_wrapper(
           thrust::device_vector<double>& W_Gav,
     const double pi_1e3, const double dt_sed, cudaStream_t stream);
 
+// Sediment transport sub-stepping: numberOfSteps iterations of
+// (assemble h_interface_{x,y} from Gamma + h_sd) then (update h_sd). Face
+// kernels use the same 0/1/2 tag layout as the gravitational merge.
+__global__ void computeKernel_sedFluxHorizontal(
+    const unsigned int* ids, const unsigned int* tag,
+    const double* Gamma_x_1, const double* Gamma_x_2,
+    const double* h_sd, double* h_interface_x,
+    const unsigned int N_cols, unsigned int n);
+
+__global__ void computeKernel_sedFluxVertical(
+    const unsigned int* ids, const unsigned int* tag,
+    const double* Gamma_y_1, const double* Gamma_y_2,
+    const double* h_sd, double* h_interface_y,
+    const unsigned int N_cols, unsigned int n);
+
+__global__ void computeKernel_sedUpdate(
+    const unsigned int* ids,
+    const double* h_interface_x, const double* h_interface_y,
+    const double* W_Gav, double* h_sd,
+    const unsigned int N_cols, unsigned int n);
+
+void computeSedimentTransport_wrapper(
+    const unsigned int numberOfSteps,
+    const thrust::device_vector<unsigned int>& idHorizontalAll,
+    const thrust::device_vector<unsigned int>& horizontalTag,
+    const thrust::device_vector<unsigned int>& idVerticalAll,
+    const thrust::device_vector<unsigned int>& verticalTag,
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<double>& Gamma_x_1,
+    const thrust::device_vector<double>& Gamma_x_2,
+    const thrust::device_vector<double>& Gamma_y_1,
+    const thrust::device_vector<double>& Gamma_y_2,
+          thrust::device_vector<double>& h_sd,
+          thrust::device_vector<double>& h_interface_x,
+          thrust::device_vector<double>& h_interface_y,
+    const thrust::device_vector<double>& W_Gav,
+    const unsigned int N_cols, cudaStream_t stream);
+
 //==============================================================================
 
 // Gravitational layer, merged internal+West+East / internal+North+South
