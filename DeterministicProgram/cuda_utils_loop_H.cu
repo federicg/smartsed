@@ -992,28 +992,36 @@ __global__ void bilinearInterpolationHorizontal(
   double x = (double)col - vel_x * scale;
   double y = (double)row - vel_y * scale;
 
+  double x_1 = floor(x), y_1 = floor(y);
+  double x_2 = x_1 + 1., y_2 = y_1 + 1.;
 
-  // Branchless clamp — u-grid is nrows x (ncols+1)
-  x = fmax(0.0, fmin(x, (double)ncols));
-  y = fmax(0.0, fmin(y, (double)(nrows - 1)));
+  // Same edge nudging as the CPU reference: when the departure point lands
+  // exactly on (or within one cell of) the last valid grid line, shift the
+  // stencil in by one cell instead of reading out of bounds.
+  if (x_1 == (double)ncols)          { x_2 -= 1.; x_1 -= 1.; x -= 1.; }
+  if (x_2 == 0.)                     { x_2 += 1.; x_1 += 1.; x += 1.; }
+  if (y_1 == (double)(nrows - 1))    { y_2 -= 1.; y_1 -= 1.; y -= 1.; }
+  if (y_2 == 0.)                     { y_2 += 1.; y_1 += 1.; y += 1.; }
 
-  const int x_1 = (int)floor(x);
-  const int y_1 = (int)floor(y);
-  const int x_2 = min(x_1 + 1, (int)ncols);
-  const int y_2 = min(y_1 + 1, (int)(nrows - 1));
+  // Departure point more than one cell beyond the domain edge: no upstream
+  // information is available, so treat it as zero (matches CPU reference).
+  if (x_2 < 0. || x_1 > (double)ncols || y_2 < 0. || y_1 > (double)(nrows - 1)) {
+    u_star[Id] = 0.;
+    return;
+  }
 
   // Flat indices into u-grid, stride is (ncols+1)
   const int stride = (int)(ncols + 1);
-  const int Id_11  = x_1 + y_1 * stride;
-  const int Id_12  = x_1 + y_2 * stride;
-  const int Id_21  = x_2 + y_1 * stride;
-  const int Id_22  = x_2 + y_2 * stride;
+  const int Id_11  = (int)x_1 + (int)y_1 * stride;
+  const int Id_12  = (int)x_1 + (int)y_2 * stride;
+  const int Id_21  = (int)x_2 + (int)y_1 * stride;
+  const int Id_22  = (int)x_2 + (int)y_2 * stride;
 
   // Bilinear weights
-  const double w_x2 = (double)x_2 - x;
-  const double w_x1 = x - (double)x_1;
-  const double w_y2 = (double)y_2 - y;
-  const double w_y1 = y - (double)y_1;
+  const double w_x2 = x_2 - x;
+  const double w_x1 = x - x_1;
+  const double w_y2 = y_2 - y;
+  const double w_y1 = y - y_1;
 
   // Interpolate with FMA
   const double a = fma(__ldg(&u[Id_11]), w_x2, __ldg(&u[Id_21]) * w_x1);
@@ -1137,26 +1145,35 @@ __global__ void bilinearInterpolationVertical(
   double x = (double)col - vel_x * scale;
   double y = (double)row - vel_y * scale;
 
-  // Branchless clamp
-  x = fmax(0.0, fmin(x, (double)(ncols - 1)));
-  y = fmax(0.0, fmin(y, (double)(nrows)));
+  double x_1 = floor(x), y_1 = floor(y);
+  double x_2 = x_1 + 1., y_2 = y_1 + 1.;
 
-  const int x_1 = (int)floor(x);
-  const int y_1 = (int)floor(y);
-  const int x_2 = min(x_1 + 1, (int)(ncols - 1));
-  const int y_2 = min(y_1 + 1, (int)(nrows));
+  // Same edge nudging as the CPU reference: when the departure point lands
+  // exactly on (or within one cell of) the last valid grid line, shift the
+  // stencil in by one cell instead of reading out of bounds.
+  if (x_1 == (double)(ncols - 1))    { x_2 -= 1.; x_1 -= 1.; x -= 1.; }
+  if (x_2 == 0.)                     { x_2 += 1.; x_1 += 1.; x += 1.; }
+  if (y_1 == (double)nrows)          { y_2 -= 1.; y_1 -= 1.; y -= 1.; }
+  if (y_2 == 0.)                     { y_2 += 1.; y_1 += 1.; y += 1.; }
+
+  // Departure point more than one cell beyond the domain edge: no upstream
+  // information is available, so treat it as zero (matches CPU reference).
+  if (x_2 < 0. || x_1 > (double)(ncols - 1) || y_2 < 0. || y_1 > (double)nrows) {
+    v_star[Id] = 0.;
+    return;
+  }
 
   // Flat indices into v-grid
-  const int Id_11 = x_1 + y_1 * (int)ncols;
-  const int Id_12 = x_1 + y_2 * (int)ncols;
-  const int Id_21 = x_2 + y_1 * (int)ncols;
-  const int Id_22 = x_2 + y_2 * (int)ncols;
+  const int Id_11 = (int)x_1 + (int)y_1 * (int)ncols;
+  const int Id_12 = (int)x_1 + (int)y_2 * (int)ncols;
+  const int Id_21 = (int)x_2 + (int)y_1 * (int)ncols;
+  const int Id_22 = (int)x_2 + (int)y_2 * (int)ncols;
 
   // Bilinear weights
-  const double w_x2 = (double)x_2 - x;
-  const double w_x1 = x - (double)x_1;
-  const double w_y2 = (double)y_2 - y;
-  const double w_y1 = y - (double)y_1;
+  const double w_x2 = x_2 - x;
+  const double w_x1 = x - x_1;
+  const double w_y2 = y_2 - y;
+  const double w_y1 = y - y_1;
 
   // Interpolate with FMA
   const double a = fma(__ldg(&v[Id_11]), w_x2, __ldg(&v[Id_21]) * w_x1);

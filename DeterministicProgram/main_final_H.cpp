@@ -521,10 +521,25 @@ int main(int argc, char **argv) {
 
     const int m = idBasinVect_excluded.size();
     const int num_offsets = m + 1;
-    const int nnz = 5*m - idStaggeredBoundaryVectNorth_excluded.size() 
-	    - idStaggeredBoundaryVectSouth_excluded.size()
-	    - idStaggeredBoundaryVectEast_excluded.size()
-	    - idStaggeredBoundaryVectWest_excluded.size();
+
+    //--------------------------------------------------------------------------
+    // Build the CSR sparsity pattern first and take nnz from the pattern itself.
+    // The old closed-form  nnz = 5*m - <domain-boundary faces>  is wrong as soon
+    // as the basin contains excluded cells (pour points / steep cells): the
+    // star-stencil then writes a different number of entries, the CSR is
+    // under-allocated and corrupts, and cuSPARSE aborts in the IC factorization.
+    // This bit only at the finest grid (10 m) where excluded cells are common.
+    int*    h_A_rows    = (int*)malloc(num_offsets * sizeof(int));
+    int*    h_A_columns = (int*)malloc((size_t)5 * m * sizeof(int)); // safe upper bound
+
+    make_sparsity_pattern(idBasinVect_excluded_pot, basin_mask_Vec,
+                          idBasinVectReIndex_excluded_pot,
+                          h_A_rows, h_A_columns,
+                          N_rows, N_cols);
+
+    const int nnz = h_A_rows[m];
+    if (rank == 0)
+      std::cout << "[sparsity] m = " << m << ", nnz = " << nnz << std::endl;
 
     //--------------------------------------------------------------------------
     // allocate device memory for CSR matrices
@@ -554,16 +569,6 @@ int main(int argc, char **argv) {
     CHECK_CUSPARSE( cusparseCreateDnVec(&d_P.vec,     m, d_P.ptr,   CUDA_R_64F) )
     CHECK_CUSPARSE( cusparseCreateDnVec(&d_T.vec,     m, d_T.ptr,   CUDA_R_64F) )
     CHECK_CUSPARSE( cusparseCreateDnVec(&d_tmp.vec,   m, d_tmp.ptr, CUDA_R_64F) )
- 
-    // build on the host side the h_A_rows and h_A_columns and then copy to device later
-    int*    h_A_rows    = (int*)malloc(num_offsets * sizeof(int));
-    int*    h_A_columns = (int*)malloc(nnz * sizeof(int));
-
-    // Build here the sparsity pattern that is fixed during the time loop!
-    make_sparsity_pattern(idBasinVect_excluded_pot, basin_mask_Vec, 
-		    idBasinVectReIndex_excluded_pot,
-		    h_A_rows, h_A_columns,
-		    N_rows, N_cols);
 
     // copy the CSR matrices and vectors into device memory
     CHECK_CUDA( cudaMemcpy(d_A_rows, h_A_rows, num_offsets * sizeof(int),
@@ -1015,7 +1020,7 @@ int main(int argc, char **argv) {
 	cudaStreamWaitEvent(S(7), e_H_interface_x, 0);
 	cudaStreamWaitEvent(S(7), e_H_interface_y, 0);
 #endif
-
+/*
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, c1_DSV_, c3_DSV_,
                   0, precipitation.DP_cumulative, dt_DSV, alfa.alfa_x,
@@ -1177,7 +1182,7 @@ int main(int argc, char **argv) {
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
                 idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(7)));
-
+*/
       // +-----------------------------------------------+
       // |        Debug field stats (validation)         |
       // +-----------------------------------------------+
