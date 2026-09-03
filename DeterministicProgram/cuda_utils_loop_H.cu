@@ -1399,6 +1399,19 @@ __device__ int findPosition(const int* d_A_rows, const int* d_A_columns,
     return -1;
 }
 
+// A miss means the precomputed CSR sparsity pattern does not contain a
+// (row,col) slot that a buildMatrix_* kernel needs. Writing to d_A_values[-1]
+// would silently corrupt device memory instead of failing, so trap instead:
+// this aborts the kernel (and the CUDA context) loudly rather than letting
+// an out-of-bounds write surface later as an unrelated cuSPARSE failure.
+__device__ __forceinline__ void checkPosition(int pos, int row, int col) {
+    if (pos < 0) {
+        printf("buildMatrix: CSR position not found for (row=%d, col=%d) "
+               "-- sparsity pattern mismatch, aborting.\n", row, col);
+        __trap();
+    }
+}
+
 __global__ void buildMatrix_cell_center(
               const unsigned int* ids,
               const double* H,
@@ -1423,6 +1436,7 @@ __global__ void buildMatrix_cell_center(
 
   // Initialize now the diagonal of the system matrix
   int pos_diag = findPosition(d_A_rows, d_A_columns, IDreIndex, IDreIndex);
+  checkPosition(pos_diag, IDreIndex, IDreIndex);
   d_A_values[pos_diag] = 1.0;
 }
 
@@ -1489,10 +1503,20 @@ __global__ void buildMatrix_horizontal_internal(
   // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
   int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
 
-  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 1e-6);
-  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
+  checkPosition(pos_ll, IDleftReIndex,  IDleftReIndex);
+  checkPosition(pos_lr, IDleftReIndex,  IDrightReIndex);
+  checkPosition(pos_rl, IDrightReIndex, IDleftReIndex);
+  checkPosition(pos_rr, IDrightReIndex, IDrightReIndex);
 
-  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 1e-6);
+  // Off-diagonal: a dry interface contributes true zero coupling, matching
+  // the CPU reference exactly (a declared-but-zero CSR slot is
+  // mathematically identical to an absent one).
+  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 0.0);
+  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 0.0);
+
+  // Diagonal: keep a small floor on dry rows so the fixed sparsity pattern
+  // never carries a structural zero into the IC(0) pivot.
+  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
   atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
 }
 
@@ -1629,10 +1653,20 @@ __global__ void buildMatrix_vertical_internal(
   // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
   int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
 
-  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 1e-6);
-  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
+  checkPosition(pos_ll, IDleftReIndex,  IDleftReIndex);
+  checkPosition(pos_lr, IDleftReIndex,  IDrightReIndex);
+  checkPosition(pos_rl, IDrightReIndex, IDleftReIndex);
+  checkPosition(pos_rr, IDrightReIndex, IDrightReIndex);
 
-  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 1e-6);
+  // Off-diagonal: a dry interface contributes true zero coupling, matching
+  // the CPU reference exactly (a declared-but-zero CSR slot is
+  // mathematically identical to an absent one).
+  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 0.0);
+  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 0.0);
+
+  // Diagonal: keep a small floor on dry rows so the fixed sparsity pattern
+  // never carries a structural zero into the IC(0) pivot.
+  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
   atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
 
 }
