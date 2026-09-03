@@ -81,15 +81,26 @@ void make_sparsity_pattern(std::vector<unsigned int>& idBasinVect,
 
     int it = 0; // next unused index into `columns`/`values`
 
+    // Solve-cell bitmap taken straight from idBasinVect, so the pattern is always
+    // consistent with idBasinVectReIndex and with the number of unknowns
+    // m = idBasinVect.size().  The `basin_mask` argument is the *non-excluded*
+    // mask and must NOT be used here: it would couple solve rows to excluded
+    // cells, write more entries than the CSR was sized for and corrupt it
+    // (this is what crashed the 10 m case in the IC factorization).
+    (void)basin_mask;
+    std::vector<unsigned char> is_solve((size_t)N_rows * N_cols, 0);
+    for (const auto Id : idBasinVect)
+        is_solve[Id] = 1;
+
 #define INSERT(u,v)                                             \
-    if(0<=(u) && (u)<N_rows &&                                  \
-       0<=(v) && (v)<N_cols &&                                  \
-	basin_mask[((u) * N_cols + (v))]==1)                    \
+    if(0<=(u) && (u)<(int)N_rows &&                             \
+       0<=(v) && (v)<(int)N_cols &&                             \
+	is_solve[((u) * N_cols + (v))]==1)                      \
     {                                                           \
         columns[it] = idBasinVectReIndex[((u) * N_cols + (v))]; \
         ++it;                                                   \
     }
- 
+
     int row = 0;
     row_offsets[row] = 0;
     for (const auto Id : idBasinVect) {
