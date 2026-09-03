@@ -209,6 +209,30 @@ void computeResidualsTruncated_wrapper(
 		const thrust::device_vector<double>& vel,
                 const double c1, cudaStream_t stream);
 
+// Gravitational-layer sediment production W_Gav (base EPM term only; the CPU
+// per-pour-point additional_source_term from the static excluded-subbasin
+// approximation is not carried on the GPU). pi_1e3 = 1.e-3 * M_PI folded on
+// the host to keep the multiply order identical to the CPU reference.
+__global__ void computeKernel_WGav(
+    const unsigned int* ids,
+    const double* Z_Gav,
+    const double* T_raster,
+    const double* melt_mask,
+    const double* DP_total,
+    double* W_Gav,
+    const double pi_1e3,
+    const double dt_sed,
+    unsigned int n);
+
+void computeWGav_wrapper(
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<double>& Z_Gav,
+    const thrust::device_vector<double>& T_raster,
+    const thrust::device_vector<double>& melt_mask,
+    const thrust::device_vector<double>& DP_total,
+          thrust::device_vector<double>& W_Gav,
+    const double pi_1e3, const double dt_sed, cudaStream_t stream);
+
 //==============================================================================
 
 // Gravitational layer, merged internal+West+East / internal+North+South

@@ -958,6 +958,55 @@ void computeResidualsTruncated_wrapper(
 }
 
 //==============================================================================
+// Gravitational-layer sediment production W_Gav (EPM). Elementwise over basin
+// cells. The CPU reference adds a per-pour-point additional_source_term coming
+// from the static excluded-subbasin approximation; that approximation is not
+// carried on the GPU, so this kernel computes only the base EPM term.
+__global__ void computeKernel_WGav(
+    const unsigned int* ids,
+    const double* Z_Gav,
+    const double* T_raster,
+    const double* melt_mask,
+    const double* DP_total,
+    double* W_Gav,
+    const double pi_1e3,   // 1.e-3 * M_PI, folded on the host to match the CPU
+    const double dt_sed,
+    unsigned int n) {
+
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+
+  const auto k = ids[i];
+
+  W_Gav[k] = pi_1e3 * Z_Gav[k] *
+             sqrt(fabs((.1 + .1 * T_raster[k]) * melt_mask[k])) *
+             DP_total[k] * dt_sed;
+}
+
+void computeWGav_wrapper(
+    const thrust::device_vector<unsigned int>& idBasinVect,
+    const thrust::device_vector<double>& Z_Gav,
+    const thrust::device_vector<double>& T_raster,
+    const thrust::device_vector<double>& melt_mask,
+    const thrust::device_vector<double>& DP_total,
+          thrust::device_vector<double>& W_Gav,
+    const double pi_1e3, const double dt_sed, cudaStream_t stream) {
+
+    launch_kernel(
+      computeKernel_WGav,
+      idBasinVect.size(),
+      stream,
+      thrust::raw_pointer_cast(idBasinVect.data()),
+      thrust::raw_pointer_cast(Z_Gav.data()),
+      thrust::raw_pointer_cast(T_raster.data()),
+      thrust::raw_pointer_cast(melt_mask.data()),
+      thrust::raw_pointer_cast(DP_total.data()),
+      thrust::raw_pointer_cast(W_Gav.data()),
+      pi_1e3, dt_sed
+    );
+}
+
+//==============================================================================
 
 __device__ int findPosition(const int* d_A_rows, const int* d_A_columns,
                              int row, int col) {

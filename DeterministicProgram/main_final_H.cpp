@@ -1464,8 +1464,9 @@ int main(int argc, char **argv) {
 
 #ifndef ENABLE_CUDA
         additional_source_term.assign(N, 0.);
-#endif
-/*
+
+        // route the excluded (static-subbasin) cells' production to their pour
+        // point -- CPU only, this approximation is not carried on the GPU.
         for (const auto &k : idBasinVect) {
           const auto &current_tuple = excluded_ids[k];
           if (std::get<0>(current_tuple)) {
@@ -1488,7 +1489,17 @@ int main(int argc, char **argv) {
                          precipitation.DP_total[k] * dt_sed +
                      additional_source_term[k];
         }
-
+#else
+        // GPU: base EPM production term only (no additional_source_term).
+        // T_raster/melt_mask (S(4)) and DP_total (S(6)) are produced earlier
+        // this iteration; make S(7) wait for them before the kernel.
+        cudaStreamWaitEvent(S(7), e_temperature, 0);
+        cudaStreamWaitEvent(S(7), e_precip, 0);
+        computeWGav_wrapper(idBasinVect_excluded, Z_Gav, temp.T_raster,
+                            temp.melt_mask, precipitation.DP_total, W_Gav,
+                            1.e-3 * M_PI, dt_sed, S(7));
+#endif
+/*
         if (rank == 0)
           std::cout << "# steps for solid transport, " << numberOfSteps
                     << std::endl;
