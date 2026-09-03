@@ -1441,15 +1441,29 @@ __global__ void buildMatrix_cell_center(
 }
 
 
-__global__ void buildMatrix_horizontal_internal(
-		const unsigned int* ids,
+// Cell-centered gather replacing the old face-centered scatter
+// (buildMatrix_horizontal_internal + buildMatrix_vertical_internal). One
+// thread per basin cell owns exactly one CSR row and one rhs slot, so every
+// write here is a plain (non-atomic) read-modify-write: no other thread ever
+// touches this row's diagonal/off-diagonal entries or this cell's rhs slot.
+// Boundary faces (this cell's neighbor is outside the basin) are left to the
+// unchanged buildMatrix_{horizontal,vertical}_{West,East,North,South}
+// kernels, exactly as before -- this kernel only ever handles internal
+// (basin-basin) neighbor pairs.
+__global__ void buildMatrix_cell_gather(
+		const unsigned int* ids,               // idBasinVect, size n=m
                 const double* H_int_x,
+                const double* H_int_y,
 		const double* alfa_x,
-                const unsigned int* idBasinVectReIndex,
+		const double* alfa_y,
 		const double* orography,
 		const double* u_star,
+		const double* v_star,
+		const unsigned int* basin_mask,        // size N (raw grid)
+                const unsigned int* idBasinVectReIndex,
 		const unsigned int N_cols,
-		const double c1, 
+		const unsigned int N,                  // basin_mask.size()
+		const double c1,
 		const double c3,
 		const double H_min,
 		double* rhs,
@@ -1458,66 +1472,116 @@ __global__ void buildMatrix_horizontal_internal(
 		double* d_A_values,
 		unsigned int n) {
 
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
+  unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= n) return;
 
-  const auto Id = ids[i];
+  const unsigned int k  = ids[idx];
+  const unsigned int ii = k / N_cols;
+  const unsigned int jj = k - ii * N_cols;
+  const unsigned int R  = idBasinVectReIndex[k];
 
-  const unsigned int ii = Id / (N_cols + 1),
-                       IDleft = Id - ii - 1,           // H
-		       IDright = Id - ii,                             // H
-		       IDleftReIndex = idBasinVectReIndex[IDleft],   // H
-		       IDrightReIndex = idBasinVectReIndex[IDright]; // H
+  const int pos_diag = findPosition(d_A_rows, d_A_columns, (int)R, (int)R);
+  checkPosition(pos_diag, R, R);
 
-  // define H at interfaces
-  const auto H_interface = H_int_x[Id];
-  const double coeff_m = H_interface * alfa_x[Id];
+  double diag_acc = 0.0;
+  double rhs_acc  = 0.0;
 
-  const bool is_nonDry = H_interface > H_min;
+  // ---- West ----
+  if (jj > 0 && basin_mask[k - 1] == 1) {
+    const unsigned int face   = k + ii;      // my west face (u-grid)
+    const unsigned int neigh  = k - 1;
+    const unsigned int neighR = idBasinVectReIndex[neigh];
+    const double H_interface  = H_int_x[face];
+    const double coeff_m      = H_interface * alfa_x[face];
+    const bool   is_nonDry    = H_interface > H_min;
 
-  // Insert values in the RHS be careful here to the +=!
-  if (is_nonDry) {
-    const auto u_star_Id = u_star[Id];
-    const auto orography_right = orography[IDright];
-    const auto orography_left = orography[IDleft];
+    const int pos_off = findPosition(d_A_rows, d_A_columns, (int)R, (int)neighR);
+    checkPosition(pos_off, R, neighR);
 
-    atomicAdd(&rhs[IDleftReIndex],
-              -c1 * (+coeff_m * u_star_Id) -
-              (orography_left - orography_right) * c3 * coeff_m);
-
-    atomicAdd(&rhs[IDrightReIndex],
-              -c1 * (-coeff_m * u_star_Id) -
-              (orography_right - orography_left) * c3 * coeff_m);
+    if (is_nonDry) {
+      diag_acc += c3 * coeff_m;
+      rhs_acc  += -c1 * (-coeff_m * u_star[face]) -
+                  (orography[k] - orography[neigh]) * c3 * coeff_m;
+      d_A_values[pos_off] = -c3 * coeff_m;
+    } else {
+      diag_acc += 1e-6;
+      d_A_values[pos_off] = 0.0;
+    }
   }
 
-  // Insert values now in the system matrix
-  // row=IDleftReIndex,  col=IDleftReIndex  (diagonal of left row)
-  int pos_ll = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDleftReIndex);
+  // ---- East ----
+  if (jj < N_cols - 1 && basin_mask[k + 1] == 1) {
+    const unsigned int face   = k + ii + 1;  // my east face (u-grid)
+    const unsigned int neigh  = k + 1;
+    const unsigned int neighR = idBasinVectReIndex[neigh];
+    const double H_interface  = H_int_x[face];
+    const double coeff_m      = H_interface * alfa_x[face];
+    const bool   is_nonDry    = H_interface > H_min;
 
-  // row=IDleftReIndex,  col=IDrightReIndex (off-diagonal of left row)
-  int pos_lr = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDrightReIndex);
+    const int pos_off = findPosition(d_A_rows, d_A_columns, (int)R, (int)neighR);
+    checkPosition(pos_off, R, neighR);
 
-  // row=IDrightReIndex, col=IDleftReIndex  (off-diagonal of right row)
-  int pos_rl = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDleftReIndex);
+    if (is_nonDry) {
+      diag_acc += c3 * coeff_m;
+      rhs_acc  += -c1 * (+coeff_m * u_star[face]) -
+                  (orography[k] - orography[neigh]) * c3 * coeff_m;
+      d_A_values[pos_off] = -c3 * coeff_m;
+    } else {
+      diag_acc += 1e-6;
+      d_A_values[pos_off] = 0.0;
+    }
+  }
 
-  // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
-  int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
+  // ---- North ----
+  if (k >= N_cols && basin_mask[k - N_cols] == 1) {
+    const unsigned int face   = k;           // my north face (v-grid)
+    const unsigned int neigh  = k - N_cols;
+    const unsigned int neighR = idBasinVectReIndex[neigh];
+    const double H_interface  = H_int_y[face];
+    const double coeff_m      = H_interface * alfa_y[face];
+    const bool   is_nonDry    = H_interface > H_min;
 
-  checkPosition(pos_ll, IDleftReIndex,  IDleftReIndex);
-  checkPosition(pos_lr, IDleftReIndex,  IDrightReIndex);
-  checkPosition(pos_rl, IDrightReIndex, IDleftReIndex);
-  checkPosition(pos_rr, IDrightReIndex, IDrightReIndex);
+    const int pos_off = findPosition(d_A_rows, d_A_columns, (int)R, (int)neighR);
+    checkPosition(pos_off, R, neighR);
 
-  // Off-diagonal: a dry interface contributes true zero coupling, matching
-  // the CPU reference exactly (a declared-but-zero CSR slot is
-  // mathematically identical to an absent one).
-  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 0.0);
-  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 0.0);
+    if (is_nonDry) {
+      diag_acc += c3 * coeff_m;
+      rhs_acc  += -c1 * (-coeff_m * v_star[face]) -
+                  (orography[k] - orography[neigh]) * c3 * coeff_m;
+      d_A_values[pos_off] = -c3 * coeff_m;
+    } else {
+      diag_acc += 1e-6;
+      d_A_values[pos_off] = 0.0;
+    }
+  }
 
-  // Diagonal: keep a small floor on dry rows so the fixed sparsity pattern
-  // never carries a structural zero into the IC(0) pivot.
-  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
-  atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
+  // ---- South ----
+  if (k + N_cols < N && basin_mask[k + N_cols] == 1) {
+    const unsigned int face   = k + N_cols;  // my south face (v-grid)
+    const unsigned int neigh  = k + N_cols;
+    const unsigned int neighR = idBasinVectReIndex[neigh];
+    const double H_interface  = H_int_y[face];
+    const double coeff_m      = H_interface * alfa_y[face];
+    const bool   is_nonDry    = H_interface > H_min;
+
+    const int pos_off = findPosition(d_A_rows, d_A_columns, (int)R, (int)neighR);
+    checkPosition(pos_off, R, neighR);
+
+    if (is_nonDry) {
+      diag_acc += c3 * coeff_m;
+      rhs_acc  += -c1 * (+coeff_m * v_star[face]) -
+                  (orography[k] - orography[neigh]) * c3 * coeff_m;
+      d_A_values[pos_off] = -c3 * coeff_m;
+    } else {
+      diag_acc += 1e-6;
+      d_A_values[pos_off] = 0.0;
+    }
+  }
+
+  // Only this thread ever touches row R / rhs[R] beyond buildMatrix_cell_center
+  // (which ran earlier on the same stream), so a plain += is safe here.
+  d_A_values[pos_diag] += diag_acc;
+  rhs[R] += rhs_acc;
 }
 
 __global__ void buildMatrix_horizontal_West(
@@ -1588,86 +1652,6 @@ __global__ void buildMatrix_horizontal_East(
   if (H_interface > H_min) {
       rhs[IDleftReIndex] += isNonReflectingBC * (-c1 * (+coeff_m * u_star[Id]));
   }
-
-}
-
-__global__ void buildMatrix_vertical_internal(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* orography,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double c3,
-		const double H_min,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
- 
-  const unsigned int IDleft = Id - N_cols,          // H
-	IDright = Id,                                 // H
-	IDleftReIndex = idBasinVectReIndex[IDleft],   // H
-	IDrightReIndex = idBasinVectReIndex[IDright]; // H
-
-  // define H at interfaces
-  const auto H_interface = H_int_y[Id];
-
-  const double coeff_m = H_interface * alfa_y[Id];
-
-  const bool is_nonDry = H_interface > H_min;
-
-  // Insert values in the RHS be careful here to the +=!
-  if (is_nonDry) {
-    const auto v_star_Id = v_star[Id];
-    const auto orography_right = orography[IDright];
-    const auto orography_left = orography[IDleft];
-
-    atomicAdd(&rhs[IDleftReIndex],
-              -c1 * (+coeff_m * v_star_Id) -
-              (orography_left - orography_right) * c3 * coeff_m);
-
-    atomicAdd(&rhs[IDrightReIndex],
-              -c1 * (-coeff_m * v_star_Id) -
-              (orography_right - orography_left) * c3 * coeff_m);
-  }
-
-  // Insert values now in the system matrix
-  // row=IDleftReIndex,  col=IDleftReIndex  (diagonal of left row)
-  int pos_ll = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDleftReIndex);
-
-  // row=IDleftReIndex,  col=IDrightReIndex (off-diagonal of left row)
-  int pos_lr = findPosition(d_A_rows, d_A_columns, IDleftReIndex,  IDrightReIndex);
-
-  // row=IDrightReIndex, col=IDleftReIndex  (off-diagonal of right row)
-  int pos_rl = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDleftReIndex);
-
-  // row=IDrightReIndex, col=IDrightReIndex (diagonal of right row)
-  int pos_rr = findPosition(d_A_rows, d_A_columns, IDrightReIndex, IDrightReIndex);
-
-  checkPosition(pos_ll, IDleftReIndex,  IDleftReIndex);
-  checkPosition(pos_lr, IDleftReIndex,  IDrightReIndex);
-  checkPosition(pos_rl, IDrightReIndex, IDleftReIndex);
-  checkPosition(pos_rr, IDrightReIndex, IDrightReIndex);
-
-  // Off-diagonal: a dry interface contributes true zero coupling, matching
-  // the CPU reference exactly (a declared-but-zero CSR slot is
-  // mathematically identical to an absent one).
-  atomicAdd(&d_A_values[pos_lr], is_nonDry ? -c3 * coeff_m : 0.0);
-  atomicAdd(&d_A_values[pos_rl], is_nonDry ? -c3 * coeff_m : 0.0);
-
-  // Diagonal: keep a small floor on dry rows so the fixed sparsity pattern
-  // never carries a structural zero into the IC(0) pivot.
-  atomicAdd(&d_A_values[pos_ll], is_nonDry ? c3 * coeff_m : 1e-6);
-  atomicAdd(&d_A_values[pos_rr], is_nonDry ? c3 * coeff_m : 1e-6);
 
 }
 
@@ -1769,9 +1753,10 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
 		const thrust::device_vector<unsigned int>& idBasinVect,
 		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
+		const thrust::device_vector<unsigned int>& basin_mask,
 		const bool isNonReflectingBC,
 		const int nnz,
-		const int* d_A_rows, 
+		const int* d_A_rows,
 		const int* d_A_columns,
 	       	double* d_A_values,
 		Vec& rhs, cudaStream_t stream) {
@@ -1792,23 +1777,30 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 	dt_DSV, rhs.ptr, d_A_rows, d_A_columns, d_A_values
     );
 
-
     //--------------------------------------------------------------------------
-    // Horizontal contributions
+    // Internal (basin-basin) horizontal + vertical contributions, gathered
+    // per basin cell -- no atomics (see buildMatrix_cell_gather).
     launch_kernel(
-	buildMatrix_horizontal_internal,
-	idStaggeredInternalVectHorizontal.size(),
+	buildMatrix_cell_gather,
+	idBasinVect.size(),
 	stream,
-        thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
-	thrust::raw_pointer_cast(H_int_x.data()),
+	thrust::raw_pointer_cast(idBasinVect.data()),
+        thrust::raw_pointer_cast(H_int_x.data()),
+        thrust::raw_pointer_cast(H_int_y.data()),
         thrust::raw_pointer_cast(alfa_x.data()),
-	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+        thrust::raw_pointer_cast(alfa_y.data()),
 	thrust::raw_pointer_cast(orography.data()),
 	thrust::raw_pointer_cast(u_star.data()),
-	N_cols, c1, c3, H_min,
+	thrust::raw_pointer_cast(v_star.data()),
+	thrust::raw_pointer_cast(basin_mask.data()),
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	N_cols, static_cast<unsigned int>(basin_mask.size()),
+	c1, c3, H_min,
 	rhs.ptr, d_A_rows, d_A_columns, d_A_values
     );
 
+    //--------------------------------------------------------------------------
+    // Boundary contributions (rhs only, matrix untouched -- unchanged)
     launch_kernel(
 	buildMatrix_horizontal_West,
         idStaggeredBoundaryVectWest.size(),
@@ -1836,22 +1828,6 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 	rhs.ptr, d_A_rows, d_A_columns, d_A_values
     );
 
-
-    //--------------------------------------------------------------------------
-    // Vertical contributions
-    launch_kernel(
-	buildMatrix_vertical_internal,
-        idStaggeredInternalVectVertical.size(),
-	stream,
-        thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
-	thrust::raw_pointer_cast(H_int_y.data()),
-        thrust::raw_pointer_cast(alfa_y.data()),
-	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
-	thrust::raw_pointer_cast(orography.data()),
-	thrust::raw_pointer_cast(v_star.data()),
-	N_cols, c1, c3, H_min,
-	rhs.ptr, d_A_rows, d_A_columns, d_A_values
-    );
 
     launch_kernel(
 	buildMatrix_vertical_North,

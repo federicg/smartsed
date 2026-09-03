@@ -525,15 +525,23 @@ __global__ void buildMatrix_cell_center(
 	      unsigned int n);
 
 
-__global__ void buildMatrix_horizontal_internal(
+// Cell-centered gather replacing the old face-centered scatter kernels
+// (buildMatrix_horizontal_internal + buildMatrix_vertical_internal). See the
+// .cu definition for why this needs no atomics.
+__global__ void buildMatrix_cell_gather(
 		const unsigned int* ids,
                 const double* H_int_x,
+                const double* H_int_y,
 		const double* alfa_x,
-                const unsigned int* idBasinVectReIndex,
+		const double* alfa_y,
 		const double* orography,
 		const double* u_star,
+		const double* v_star,
+		const unsigned int* basin_mask,
+                const unsigned int* idBasinVectReIndex,
 		const unsigned int N_cols,
-		const double c1, 
+		const unsigned int N,
+		const double c1,
 		const double c3,
 		const double H_min,
 		double* rhs,
@@ -575,23 +583,6 @@ __global__ void buildMatrix_horizontal_East(
 		unsigned int n);
 
 
-
-__global__ void buildMatrix_vertical_internal(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* orography,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double c3,
-		const double H_min,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n);
 
 __global__ void buildMatrix_vertical_North(
 		const unsigned int* ids,
@@ -649,11 +640,12 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth, 
 		const thrust::device_vector<unsigned int>& idBasinVect,
 		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
-		const bool isNonReflectingBC, 
+		const thrust::device_vector<unsigned int>& basin_mask,
+		const bool isNonReflectingBC,
 		const int nnz,
-		const int* d_A_rows, 
+		const int* d_A_rows,
 		const int* d_A_columns,
-	       	double* d_A_values, 
+	       	double* d_A_values,
 		Vec& rhs, cudaStream_t stream);
 
 //==============================================================================

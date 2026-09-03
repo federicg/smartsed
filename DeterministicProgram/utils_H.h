@@ -1682,6 +1682,7 @@ void buildMatrix(
     const bool isNonReflectingBC, const bool isH,
 
 #ifdef ENABLE_CUDA
+    const U_type &basin_mask,
     const int *d_A_rows, const int *d_A_columns, double *d_A_values, Vec &rhs, const int nnz,
     cudaStream_t stream = 0  // default stream if not specified
 #else
@@ -1692,12 +1693,13 @@ void buildMatrix(
 
 #ifdef ENABLE_CUDA
 
-  buildMatrix_wrapper(H_int_x, H_int_y, orography, 
+  buildMatrix_wrapper(H_int_x, H_int_y, orography,
 		  u_star, v_star, u, v, H, N_cols, c1, c3, H_min, precipitation,
-		  dt_DSV, alfa_x, alfa_y, idStaggeredInternalVectHorizontal, 
-		  idStaggeredInternalVectVertical, idStaggeredBoundaryVectWest, 
-		  idStaggeredBoundaryVectEast, idStaggeredBoundaryVectNorth, 
+		  dt_DSV, alfa_x, alfa_y, idStaggeredInternalVectHorizontal,
+		  idStaggeredInternalVectVertical, idStaggeredBoundaryVectWest,
+		  idStaggeredBoundaryVectEast, idStaggeredBoundaryVectNorth,
 		  idStaggeredBoundaryVectSouth, idBasinVect, idBasinVectReIndex,
+		  basin_mask,
 		  isNonReflectingBC, nnz, d_A_rows, d_A_columns, d_A_values, rhs, stream);
 
 #else
