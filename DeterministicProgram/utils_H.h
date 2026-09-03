@@ -24,6 +24,8 @@
 #ifdef ENABLE_CUDA
 #include "cuda_utils_loop_H.cuh"
 #include <thrust/extrema.h>
+#include <thrust/copy.h>
+#include <thrust/fill.h>
 #endif
 
 //! Parse library
@@ -81,6 +83,31 @@ template <class T>
 T signum(const T x) {
   return ((x > 0) ? 1.0 : (x < 0) ? -1.0 : 0.0);
 }
+
+//==============================================================================
+
+#ifdef ENABLE_CUDA
+// Build a combined id list + membership tag (0/1/2) from three id lists, for
+// GPU kernels that need to distinguish internal/boundary-1/boundary-2 faces
+// but can process them all through one launch given the tag. Pure
+// concatenation -- membership is exactly what each input list already says,
+// nothing is reclassified.
+template <class U_type>
+void build_merged_ids_and_tags(
+    const U_type &list0, const U_type &list1, const U_type &list2,
+    thrust::device_vector<unsigned int> &idAll,
+    thrust::device_vector<unsigned int> &tagAll) {
+  idAll.resize(list0.size() + list1.size() + list2.size());
+  tagAll.resize(idAll.size());
+  auto it = thrust::copy(list0.begin(), list0.end(), idAll.begin());
+  it = thrust::copy(list1.begin(), list1.end(), it);
+  thrust::copy(list2.begin(), list2.end(), it);
+  thrust::fill(tagAll.begin(), tagAll.begin() + list0.size(), 0u);
+  thrust::fill(tagAll.begin() + list0.size(),
+              tagAll.begin() + list0.size() + list1.size(), 1u);
+  thrust::fill(tagAll.begin() + list0.size() + list1.size(), tagAll.end(), 2u);
+}
+#endif
 
 //==============================================================================
 
@@ -1121,9 +1148,39 @@ public:
 
 #ifdef ENABLE_CUDA // copy to GPU the vectors
     M_expo_r_x_vect_gpu = M_expo_r_x_vect;
-    M_expo_r_y_vect_gpu = M_expo_r_y_vect; 
+    M_expo_r_y_vect_gpu = M_expo_r_y_vect;
     M_gamma_dt_DSV_x_gpu_ = M_gamma_dt_DSV_x_;
     M_gamma_dt_DSV_y_gpu_ = M_gamma_dt_DSV_y_;
+
+    // computeKernel_friction's formula is identical for internal and
+    // boundary faces (it only depends on per-face arrays that are already
+    // populated everywhere); concatenate the three id lists once here so
+    // f_x/f_y can each launch it once instead of three times.
+    idHorizontalAll_gpu.resize(idStaggeredInternalVectHorizontal.size() +
+                               idStaggeredBoundaryVectWest.size() +
+                               idStaggeredBoundaryVectEast.size());
+    {
+      auto it = thrust::copy(idStaggeredInternalVectHorizontal.begin(),
+                             idStaggeredInternalVectHorizontal.end(),
+                             idHorizontalAll_gpu.begin());
+      it = thrust::copy(idStaggeredBoundaryVectWest.begin(),
+                        idStaggeredBoundaryVectWest.end(), it);
+      thrust::copy(idStaggeredBoundaryVectEast.begin(),
+                  idStaggeredBoundaryVectEast.end(), it);
+    }
+
+    idVerticalAll_gpu.resize(idStaggeredInternalVectVertical.size() +
+                             idStaggeredBoundaryVectNorth.size() +
+                             idStaggeredBoundaryVectSouth.size());
+    {
+      auto it = thrust::copy(idStaggeredInternalVectVertical.begin(),
+                             idStaggeredInternalVectVertical.end(),
+                             idVerticalAll_gpu.begin());
+      it = thrust::copy(idStaggeredBoundaryVectNorth.begin(),
+                        idStaggeredBoundaryVectNorth.end(), it);
+      thrust::copy(idStaggeredBoundaryVectSouth.begin(),
+                  idStaggeredBoundaryVectSouth.end(), it);
+    }
 #endif
   }
 
@@ -1136,8 +1193,7 @@ public:
 #endif
 		  ) {
 #ifdef ENABLE_CUDA
-    compute_horizontal_friction_wrapper(idStaggeredInternalVectHorizontal,
-                idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+    compute_friction_wrapper(idHorizontalAll_gpu,
                 H_interface_horizontal, u, M_expo_r_x_vect_gpu,
                 alfa_x, M_gamma_dt_DSV_x_gpu_, M_dt_DSV, M_coeff, M_H_min,
                 M_expo, M_frictionModel, stream);
@@ -1214,8 +1270,7 @@ public:
 #endif
 		  ) {
 #ifdef ENABLE_CUDA
-    compute_vertical_friction_wrapper(idStaggeredInternalVectVertical,
-                idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+    compute_friction_wrapper(idVerticalAll_gpu,
                 H_interface_vertical, v, M_expo_r_y_vect_gpu,
                 alfa_y, M_gamma_dt_DSV_y_gpu_, M_dt_DSV, M_coeff, M_H_min,
                 M_expo, M_frictionModel, stream);
@@ -1332,6 +1387,7 @@ private:
       M_gamma_dt_DSV_y_;
   thrust::device_vector<double> M_expo_r_x_vect_gpu, M_expo_r_y_vect_gpu, M_gamma_dt_DSV_x_gpu_,
       M_gamma_dt_DSV_y_gpu_;
+  thrust::device_vector<unsigned int> idHorizontalAll_gpu, idVerticalAll_gpu;
 #endif
 };
 
@@ -1363,6 +1419,17 @@ public:
 
     horizontal.resize(u.size());
     vertical.resize(v.size());
+
+#ifdef ENABLE_CUDA
+    build_merged_ids_and_tags(idStaggeredInternalVectHorizontal,
+                              idStaggeredBoundaryVectWest,
+                              idStaggeredBoundaryVectEast,
+                              idHorizontalAll_gpu, horizontalTag_gpu);
+    build_merged_ids_and_tags(idStaggeredInternalVectVertical,
+                              idStaggeredBoundaryVectNorth,
+                              idStaggeredBoundaryVectSouth,
+                              idVerticalAll_gpu, verticalTag_gpu);
+#endif
   }
 
   upwind() = delete;
@@ -1374,8 +1441,7 @@ public:
 #endif
 		  ) {
 #ifdef ENABLE_CUDA
-    compute_horizontal_interface_wrapper(idStaggeredInternalVectHorizontal,
-                idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+    compute_horizontal_interface_wrapper(idHorizontalAll_gpu, horizontalTag_gpu,
                 H, u, horizontal, N_cols, stream);
 #else
     for (const auto &Id : idStaggeredInternalVectHorizontal) {
@@ -1409,8 +1475,7 @@ public:
 #endif
 		  ) {
 #ifdef ENABLE_CUDA
-    compute_vertical_interface_wrapper(idStaggeredInternalVectVertical,
-                idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+    compute_vertical_interface_wrapper(idVerticalAll_gpu, verticalTag_gpu,
                 H, v, vertical, N_cols, stream);
 #else
   for (const auto &Id : idStaggeredInternalVectVertical) {
@@ -1449,6 +1514,11 @@ private:
 
   const unsigned int &N_cols;
   const unsigned int &N_rows;
+
+#ifdef ENABLE_CUDA
+  thrust::device_vector<unsigned int> idHorizontalAll_gpu, horizontalTag_gpu,
+      idVerticalAll_gpu, verticalTag_gpu;
+#endif
 };
 
 //==============================================================================
@@ -1459,25 +1529,26 @@ void bilinearInterpolation(
     T_type &u_star, T_type &v_star,
     const unsigned int nrows, const unsigned int ncols, const double dt_DSV,
     const double pixel_size,
+#ifdef ENABLE_CUDA
+    const U_type &idHorizontalAll, const U_type &horizontalTag,
+    const U_type &idVerticalAll, const U_type &verticalTag,
+    cudaStream_t stream = 0  // default stream if not specified
+#else
     const U_type &idStaggeredInternalVectHorizontal,
     const U_type &idStaggeredInternalVectVertical,
     const U_type &idStaggeredBoundaryVectWest,
     const U_type &idStaggeredBoundaryVectEast,
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth
-#ifdef ENABLE_CUDA
-    , cudaStream_t stream = 0  // default stream if not specified
 #endif
     ) {
 
 #ifdef ENABLE_CUDA
 
-  bilinearInterpolationHorizontal_wrapper(idStaggeredInternalVectHorizontal,
-                idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+  bilinearInterpolationHorizontal_wrapper(idHorizontalAll, horizontalTag,
                 u, v, u_star, dt_DSV/pixel_size, nrows, ncols, stream);
 
-  bilinearInterpolationVertical_wrapper(idStaggeredInternalVectVertical,
-                idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+  bilinearInterpolationVertical_wrapper(idVerticalAll, verticalTag,
                 u, v, v_star, dt_DSV/pixel_size, nrows, ncols, stream);
 
 #else
@@ -1664,12 +1735,17 @@ void buildMatrix(
     const double H_min, const T_type &precipitation,
     const double dt_DSV, const T_type &alfa_x,
     const T_type &alfa_y,
+#ifdef ENABLE_CUDA
+    const U_type &idHorizontalAll, const U_type &horizontalTag,
+    const U_type &idVerticalAll, const U_type &verticalTag,
+#else
     const U_type &idStaggeredInternalVectHorizontal,
     const U_type &idStaggeredInternalVectVertical,
     const U_type &idStaggeredBoundaryVectWest,
     const U_type &idStaggeredBoundaryVectEast,
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth,
+#endif
     const U_type &idBasinVect,
 #ifndef ENABLE_CUDA
     const U_type &idBasinVect_not_excluded,
@@ -1695,10 +1771,9 @@ void buildMatrix(
 
   buildMatrix_wrapper(H_int_x, H_int_y, orography,
 		  u_star, v_star, u, v, H, N_cols, c1, c3, H_min, precipitation,
-		  dt_DSV, alfa_x, alfa_y, idStaggeredInternalVectHorizontal,
-		  idStaggeredInternalVectVertical, idStaggeredBoundaryVectWest,
-		  idStaggeredBoundaryVectEast, idStaggeredBoundaryVectNorth,
-		  idStaggeredBoundaryVectSouth, idBasinVect, idBasinVectReIndex,
+		  dt_DSV, alfa_x, alfa_y,
+		  idHorizontalAll, horizontalTag, idVerticalAll, verticalTag,
+		  idBasinVect, idBasinVectReIndex,
 		  basin_mask,
 		  isNonReflectingBC, nnz, d_A_rows, d_A_columns, d_A_values, rhs, stream);
 
@@ -1920,12 +1995,17 @@ void updateVel(
     const double N_rows, const double N_cols, const double c2,
     const double H_min, const T_type &eta,
     const T_type &H, const T_type &orography,
+#ifndef ENABLE_CUDA
     const U_type &idStaggeredInternalVectHorizontal,
     const U_type &idStaggeredInternalVectVertical,
     const U_type &idStaggeredBoundaryVectWest,
     const U_type &idStaggeredBoundaryVectEast,
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth,
+#else
+    const U_type &idHorizontalAll, const U_type &horizontalTag,
+    const U_type &idVerticalAll, const U_type &verticalTag,
+#endif
     const bool isNonReflectingBC
 #ifdef ENABLE_CUDA
     , cudaStream_t stream = 0  // default stream if not specified
@@ -1937,9 +2017,7 @@ void updateVel(
   updateVel_wrapper(u, v, u_star, v_star, alfa_x, alfa_y,
       static_cast<unsigned int>(N_rows), static_cast<unsigned int>(N_cols),
       c2, H_min, eta, H, orography,
-      idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
-      idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
-      idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+      idHorizontalAll, horizontalTag, idVerticalAll, verticalTag,
       static_cast<int>(isNonReflectingBC), stream);
 
 #else
@@ -2224,12 +2302,17 @@ void computeResiduals(
     const T_type &n_x, const T_type &n_y,
     const unsigned int N_cols,
     const T_type &coeff, // hydraulic conductivity
+#ifdef ENABLE_CUDA
+    const U_type &idHorizontalAll, const U_type &horizontalTag,
+    const U_type &idVerticalAll, const U_type &verticalTag,
+#else
     const U_type &idStaggeredInternalVectHorizontal,
     const U_type &idStaggeredInternalVectVertical,
     const U_type &idStaggeredBoundaryVectWest,
     const U_type &idStaggeredBoundaryVectEast,
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth,
+#endif
     const U_type &idBasinVect,
     const T_type &T_raster, const T_type &melt_mask,
     T_type &h_sn,
@@ -2249,14 +2332,12 @@ void computeResiduals(
 #ifdef ENABLE_CUDA
 
       computeResidualsHorizontal_wrapper(
-        idStaggeredInternalVectHorizontal,
-	idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
+        idHorizontalAll, horizontalTag,
 	coeff, n_x, h,
         h_interface_x, N_cols, stream);
- 
+
       computeResidualsVertical_wrapper(
-        idStaggeredInternalVectVertical,
-	idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
+        idVerticalAll, verticalTag,
 	coeff, n_y, h,
         h_interface_y, N_cols, stream);
 
@@ -2371,38 +2452,32 @@ void computeResidualsTruncated(
     const unsigned int N, const double c1, const T_type &S_x,
     const T_type &S_y, const double alpha, const double beta,
     const double gamma,
+#ifdef ENABLE_CUDA
+    const U_type &idHorizontalAll,
+    const U_type &idVerticalAll,
+    T_type &Gamma_x_1, T_type &Gamma_x_2,
+    T_type &Gamma_y_1, T_type &Gamma_y_2,
+    const T_type& S_x_mod, const T_type& S_y_mod, cudaStream_t stream = 0
+#else
     const U_type &idStaggeredInternalVectHorizontal,
     const U_type &idStaggeredInternalVectVertical,
     const U_type &idStaggeredBoundaryVectWest,
     const U_type &idStaggeredBoundaryVectEast,
     const U_type &idStaggeredBoundaryVectNorth,
     const U_type &idStaggeredBoundaryVectSouth,
-#ifdef ENABLE_CUDA
-    T_type &Gamma_x_1, T_type &Gamma_x_2,
-    T_type &Gamma_y_1, T_type &Gamma_y_2, 
-    const T_type& S_x_mod, const double& S_y_mod, cudaStream_t stream = 0
-#else
     std::vector<std::array<double, 2>> &Gamma_x,
     std::vector<std::array<double, 2>> &Gamma_y
 #endif
- 
+
     ) {
 
 #ifdef ENABLE_CUDA
 
-      computeResidualsTruncatedHorizontal_wrapper(
-        idStaggeredInternalVectHorizontal,
-	idStaggeredBoundaryVectWest, idStaggeredBoundaryVectEast,
-        Gamma_x_1, Gamma_x_2,
-	S_x_mod,
-        u, c1, stream);
- 
-      computeResidualsTruncatedVertical_wrapper(
-        idStaggeredInternalVectVertical,
-	idStaggeredBoundaryVectNorth, idStaggeredBoundaryVectSouth,
-        Gamma_y_1, Gamma_y_2,
-	S_y_mod,
-        v, c1, stream);
+      computeResidualsTruncated_wrapper(
+        idHorizontalAll, Gamma_x_1, Gamma_x_2, S_x_mod, u, c1, stream);
+
+      computeResidualsTruncated_wrapper(
+        idVerticalAll, Gamma_y_1, Gamma_y_2, S_y_mod, v, c1, stream);
 
 #else
   for (unsigned int ii = 0; ii < idStaggeredInternalVectHorizontal.size(); ii++) {

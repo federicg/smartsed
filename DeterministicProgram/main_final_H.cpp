@@ -374,6 +374,27 @@ int main(int argc, char **argv) {
     const thrust::device_vector<unsigned int> idBasinVect_excluded = idBasinVect_excluded_pot;
     const thrust::device_vector<unsigned int> idBasinVectReIndex_excluded = idBasinVectReIndex_excluded_pot;
 
+    // Concatenated id list + a per-entry membership tag (0=internal,
+    // 1=west/north, 2=east/south) for each staggered direction, built once
+    // here from the already-classified _excluded lists. The DSV time-loop
+    // kernels that used to take three separate id lists (upwind, gravitational
+    // residuals, sediment residuals, updateVel, buildMatrix boundary) instead
+    // take idAll+tag and run a single tag-dispatched launch. Membership is
+    // pure concatenation -- nothing is reclassified -- which matters because
+    // idStaggeredBoundaryVectNorth in particular mixes two index conventions
+    // (interior mask boundary vs. literal top grid edge) that are not safe to
+    // re-infer per face from basin_mask.
+    thrust::device_vector<unsigned int> idHorizontalAll_excluded, horizontalTag_excluded,
+                                        idVerticalAll_excluded, verticalTag_excluded;
+    build_merged_ids_and_tags(idStaggeredInternalVectHorizontal_excluded,
+                              idStaggeredBoundaryVectWest_excluded,
+                              idStaggeredBoundaryVectEast_excluded,
+                              idHorizontalAll_excluded, horizontalTag_excluded);
+    build_merged_ids_and_tags(idStaggeredInternalVectVertical_excluded,
+                              idStaggeredBoundaryVectNorth_excluded,
+                              idStaggeredBoundaryVectSouth_excluded,
+                              idVerticalAll_excluded, verticalTag_excluded);
+
     // set initial quantities for the time step adaptation
     thrust::device_vector<double> H_old = H_pot;
     thrust::device_vector<double> H_oldold = H_pot;
@@ -1025,9 +1046,8 @@ int main(int argc, char **argv) {
         computeResiduals(
             n_x, n_y, N_cols, hydraulic_conductivity,
 #ifdef ENABLE_CUDA
-	    idStaggeredInternalVectHorizontal_excluded, idStaggeredInternalVectVertical_excluded,
-	    idStaggeredBoundaryVectWest_excluded, idStaggeredBoundaryVectEast_excluded,
-	    idStaggeredBoundaryVectNorth_excluded, idStaggeredBoundaryVectSouth_excluded,
+	    idHorizontalAll_excluded, horizontalTag_excluded,
+	    idVerticalAll_excluded, verticalTag_excluded,
 	    idBasinVect_excluded,
 #else
             idStaggeredInternalVectHorizontal, idStaggeredInternalVectVertical,
@@ -1057,12 +1077,18 @@ int main(int argc, char **argv) {
       //  fill u_star and v_star with a Bilinear Interpolation
       bilinearInterpolation(u, v, u_star, v_star, N_rows, N_cols, dt_DSV,
                             pixel_size,
+#ifdef ENABLE_CUDA
+                            idHorizontalAll_excluded, horizontalTag_excluded,
+                            idVerticalAll_excluded, verticalTag_excluded
+#else
                             idStaggeredInternalVectHorizontal_excluded,
                             idStaggeredInternalVectVertical_excluded,
                             idStaggeredBoundaryVectWest_excluded,
                             idStaggeredBoundaryVectEast_excluded,
                             idStaggeredBoundaryVectNorth_excluded,
-                            idStaggeredBoundaryVectSouth_excluded CUDA_STREAM(S(7)));
+                            idStaggeredBoundaryVectSouth_excluded
+#endif
+                            CUDA_STREAM(S(7)));
 
 #ifndef ENABLE_CUDA
       coefficients.reserve(
@@ -1085,13 +1111,18 @@ int main(int argc, char **argv) {
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, c1_DSV_, c3_DSV_,
                   0, precipitation.DP_cumulative, dt_DSV, alfa.alfa_x,
-                  alfa.alfa_y, idStaggeredInternalVectHorizontal_excluded,
+                  alfa.alfa_y,
+#ifdef ENABLE_CUDA
+                  idHorizontalAll_excluded, horizontalTag_excluded,
+                  idVerticalAll_excluded, verticalTag_excluded,
+                  idBasinVect_excluded,
+#else
+                  idStaggeredInternalVectHorizontal_excluded,
                   idStaggeredInternalVectVertical_excluded,
                   idStaggeredBoundaryVectWest_excluded,
                   idStaggeredBoundaryVectEast_excluded,
                   idStaggeredBoundaryVectNorth_excluded,
                   idStaggeredBoundaryVectSouth_excluded, idBasinVect_excluded,
-#ifndef ENABLE_CUDA
                   idBasinVect, idStaggeredInternalVectHorizontal,
                   idStaggeredInternalVectVertical,
 #endif
@@ -1332,19 +1363,25 @@ int main(int argc, char **argv) {
                       H, eta, orography, d_X.ptr, S(7));
 
 #endif
-/*
+
       // +-----------------------------------------------+
       // |                  Update u, v                  |
       // +-----------------------------------------------+
 
       updateVel(u, v, u_star, v_star, alfa.alfa_x, alfa.alfa_y, N_rows, N_cols,
                 c2_DSV_, 0, eta, H, orography,
+#ifndef ENABLE_CUDA
                 idStaggeredInternalVectHorizontal_excluded,
                 idStaggeredInternalVectVertical_excluded,
                 idStaggeredBoundaryVectWest_excluded,
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
-                idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(7)));
+                idStaggeredBoundaryVectSouth_excluded,
+#else
+                idHorizontalAll_excluded, horizontalTag_excluded,
+                idVerticalAll_excluded, verticalTag_excluded,
+#endif
+                isNonReflectingBC CUDA_STREAM(S(7)));
 
       // +-----------------------------------------------+
       // |        Debug field stats (validation)         |
@@ -1375,7 +1412,7 @@ int main(int argc, char **argv) {
                time, hG_mx, hG_l2, hsn_mx, hsn_l2, u_mx, u_l2, v_mx, v_l2);
         fflush(stdout);
       }
-*/
+
       // +-----------------------------------------------+
       // |             Sediment Transport                |
       // +-----------------------------------------------+
@@ -1394,16 +1431,17 @@ int main(int argc, char **argv) {
             alfa_coeff,  // alfa
             beta_coeff,  // beta
             gamma_coeff, // gamma
+#ifdef ENABLE_CUDA
+	    idHorizontalAll_excluded, idVerticalAll_excluded,
+	    Gamma_vect_x_1, Gamma_vect_x_2, Gamma_vect_y_1, Gamma_vect_y_2,
+	    slope_x_mod, slope_y_mod CUDA_STREAM(S(11))
+#else
             idStaggeredInternalVectHorizontal_excluded,
             idStaggeredInternalVectVertical_excluded,
             idStaggeredBoundaryVectWest_excluded,
             idStaggeredBoundaryVectEast_excluded,
             idStaggeredBoundaryVectNorth_excluded,
-            idStaggeredBoundaryVectSouth_excluded, 
-#ifdef ENABLE_CUDA
-	    Gamma_vect_x_1, Gamma_vect_x_2, Gamma_vect_y_1, Gamma_vect_y_2,
-	    slope_x_mod, slope_y_mod CUDA_STREAM(S(11))
-#else
+            idStaggeredBoundaryVectSouth_excluded,
 	    Gamma_vect_x, Gamma_vect_y
 #endif
 	    );

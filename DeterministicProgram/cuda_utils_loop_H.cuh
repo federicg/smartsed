@@ -81,24 +81,10 @@ __device__ inline int signum_dev(double val);
 
 //==============================================================================
 // Horizontal upwind
-__global__ void computeHorizontalInternalKernel_interface(
+// Merged internal+West+East (0/1/2 tag), single launch.
+__global__ void computeHorizontalMergedKernel_interface(
     const unsigned int* ids,
-    const double* H,
-    const double* u,
-    double* horizontal,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeHorizontalWestKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* u,
-    double* horizontal,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeHorizontalEastKernel_interface(
-    const unsigned int* ids,
+    const unsigned int* tag,
     const double* H,
     const double* u,
     double* horizontal,
@@ -106,33 +92,17 @@ __global__ void computeHorizontalEastKernel_interface(
     unsigned int n);
 
 void compute_horizontal_interface_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H, 
-		const thrust::device_vector<double>& u, 
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
+		const thrust::device_vector<double>& H,
+		const thrust::device_vector<double>& u,
 		thrust::device_vector<double>& horizontal, const unsigned int N_cols,
 		cudaStream_t stream);
 
-// Vertical upwind
-__global__ void computeVerticalInternalKernel_interface(
+// Vertical upwind, merged internal+North+South (0/1/2 tag).
+__global__ void computeVerticalMergedKernel_interface(
     const unsigned int* ids,
-    const double* H,
-    const double* v,
-    double* vertical,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeVerticalNorthKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* v,
-    double* vertical,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeVerticalSouthKernel_interface(
-    const unsigned int* ids,
+    const unsigned int* tag,
     const double* H,
     const double* v,
     double* vertical,
@@ -140,11 +110,10 @@ __global__ void computeVerticalSouthKernel_interface(
     unsigned int n);
 
 void compute_vertical_interface_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H, 
-		const thrust::device_vector<double>& v, 
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
+		const thrust::device_vector<double>& H,
+		const thrust::device_vector<double>& v,
 		thrust::device_vector<double>& vertical, const unsigned int N_cols,
 		cudaStream_t stream);
 
@@ -161,30 +130,18 @@ __global__ void computeKernel_friction(
     double M_expo, unsigned int M_frictionModel,
     unsigned int n);
 
-// Horizontal friction
-void compute_horizontal_friction_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H_interface_horizontal, 
-		const thrust::device_vector<double>& u, const thrust::device_vector<double>& M_expo_r_x_vect, 
-		      thrust::device_vector<double>& alfa_x, 
-		const thrust::device_vector<double>& M_gamma_dt_DSV_x_, 
-		double M_dt_DSV, double M_coeff, double M_H_min, 
-                double M_expo, unsigned int M_frictionModel, cudaStream_t stream); 
-
-// Vertical friction
-void compute_vertical_friction_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H_interface_vertical, 
-		const thrust::device_vector<double>& v, 
-		const thrust::device_vector<double>& M_expo_r_y_vect, 
-		      thrust::device_vector<double>& alfa_y, 
-		const thrust::device_vector<double>& M_gamma_dt_DSV_y_, 
-		double M_dt_DSV, double M_coeff, double M_H_min, 
-                double M_expo, unsigned int M_frictionModel, cudaStream_t stream); 
+// Merged internal+boundary friction: single launch over the concatenated id
+// list, used for both directions (computeKernel_friction's formula doesn't
+// distinguish face type).
+void compute_friction_wrapper(
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<double>& H_interface_dir,
+		const thrust::device_vector<double>& vel,
+		const thrust::device_vector<double>& M_expo_r_dir_vect,
+		      thrust::device_vector<double>& alfa_dir,
+		const thrust::device_vector<double>& M_gamma_dt_DSV_dir_,
+		double M_dt_DSV, double M_coeff, double M_H_min,
+                double M_expo, unsigned int M_frictionModel, cudaStream_t stream);
 
 //==============================================================================
 
@@ -242,48 +199,23 @@ __global__ void computeKernel_sediment(
     const double c1,
     unsigned int n);
 
-// Horizontal sediment
-void computeResidualsTruncatedHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		thrust::device_vector<double>& Gamma_x_1, thrust::device_vector<double>& Gamma_x_2, 
-		const thrust::device_vector<double>& S_x_mod, 
-		const thrust::device_vector<double>& u, 
-                const double c1, cudaStream_t stream); 
-
-// Vertical sediment
-void computeResidualsTruncatedVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-                thrust::device_vector<double>& Gamma_y_1, thrust::device_vector<double>& Gamma_y_2,
-		const thrust::device_vector<double>& S_y_mod,
-		const thrust::device_vector<double>& v,
-		const double c1, cudaStream_t stream);
+// Sediment residuals, one direction: single launch over the concatenated
+// internal+boundary id list (computeKernel_sediment's formula doesn't
+// distinguish face type).
+void computeResidualsTruncated_wrapper(
+		const thrust::device_vector<unsigned int>& idAll,
+		thrust::device_vector<double>& Gamma_dir_1, thrust::device_vector<double>& Gamma_dir_2,
+		const thrust::device_vector<double>& S_dir_mod,
+		const thrust::device_vector<double>& vel,
+                const double c1, cudaStream_t stream);
 
 //==============================================================================
 
-__global__ void computeKernelHorizontalInternal_gravitational(
+// Gravitational layer, merged internal+West+East / internal+North+South
+// (0/1/2 tag), single launch per direction.
+__global__ void computeHorizontalMergedKernel_gravitational(
     const unsigned int* ids,
-    const double* coeff,
-    const double* n_x,
-    const double* h,
-    double* h_interface_x,
-    const unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeKernelHorizontalWest_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_x,
-    const double* h,
-    double* h_interface_x,
-    const unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeKernelHorizontalEast_gravitational(
-    const unsigned int* ids,
+    const unsigned int* tag,
     const double* coeff,
     const double* n_x,
     const double* h,
@@ -293,35 +225,17 @@ __global__ void computeKernelHorizontalEast_gravitational(
 
 // Horizontal gravitational layer
 void computeResidualsHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
 		const thrust::device_vector<double>& coeff,
 		const thrust::device_vector<double>& n_x,
-		const thrust::device_vector<double>& h, 
-		thrust::device_vector<double>& h_interface_x, 
+		const thrust::device_vector<double>& h,
+		thrust::device_vector<double>& h_interface_x,
                 const unsigned int N_cols, cudaStream_t stream);
 
-__global__ void computeKernelVerticalInternal_gravitational(
+__global__ void computeVerticalMergedKernel_gravitational(
     const unsigned int* ids,
-    const double* coeff,
-    const double* n_y,
-    const double* h,
-    double* h_interface_y,
-    const unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeKernelVerticalNorth_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_y,
-    const double* h,
-    double* h_interface_y,
-    const unsigned int N_cols,
-    unsigned int n);
-
-__global__ void computeKernelVerticalSouth_gravitational(
-    const unsigned int* ids,
+    const unsigned int* tag,
     const double* coeff,
     const double* n_y,
     const double* h,
@@ -331,13 +245,12 @@ __global__ void computeKernelVerticalSouth_gravitational(
 
 // Vertical gravitational layer
 void computeResidualsVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
 		const thrust::device_vector<double>& coeff,
 		const thrust::device_vector<double>& n_y,
-		const thrust::device_vector<double>& h, 
-		thrust::device_vector<double>& h_interface_y, 
+		const thrust::device_vector<double>& h,
+		thrust::device_vector<double>& h_interface_y,
                 const unsigned int N_cols, cudaStream_t stream);
 
 //==============================================================================
@@ -420,8 +333,13 @@ void computePrecipitation_wrapper(
 
 //==============================================================================
 
+// Bilinear back-trace, split as internal (tag==0) then merged boundary
+// (tag 1/2). Both kernels are launched over the whole concatenated
+// internal+West+East / internal+North+South list; the boundary pass must
+// stay a separate launch because it reads u_star/v_star the internal pass writes.
 __global__ void bilinearInterpolationHorizontal(
 		const unsigned int* __restrict__ ids,
+		const unsigned int* __restrict__ tag,
 		const double* __restrict__ u,
 		const double* __restrict__ v,
 		double* __restrict__ u_star,
@@ -430,17 +348,9 @@ __global__ void bilinearInterpolationHorizontal(
 		const unsigned int ncols,
 		unsigned int n);
 
-__global__ void bilinearInterpolationHorizontalWest(
+__global__ void bilinearInterpolationHorizontalBoundary(
 		const unsigned int* ids,
-                const double* u,
-		const double* v,
-                double* u_star,
-		const double scale,
-		const unsigned int N_rows, const unsigned int N_cols,
-		unsigned int n);
-
-__global__ void bilinearInterpolationHorizontalEast(
-		const unsigned int* ids,
+                const unsigned int* tag,
                 const double* u,
 		const double* v,
                 double* u_star,
@@ -450,18 +360,18 @@ __global__ void bilinearInterpolationHorizontalEast(
 
 
 void bilinearInterpolationHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
-                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-                const thrust::device_vector<double>& u, 
-		const thrust::device_vector<double>& v, 
-		thrust::device_vector<double>& u_star, 
-		const double scale, 
+		const thrust::device_vector<unsigned int>& idAll,
+                const thrust::device_vector<unsigned int>& tag,
+                const thrust::device_vector<double>& u,
+		const thrust::device_vector<double>& v,
+		thrust::device_vector<double>& u_star,
+		const double scale,
 		const unsigned int nrows, const unsigned int ncols, cudaStream_t stream);
 
 
 __global__ void bilinearInterpolationVertical(
 		const unsigned int* __restrict__ ids,
+		const unsigned int* __restrict__ tag,
 		const double* __restrict__ u,
 		const double* __restrict__ v,
 		double* __restrict__ v_star,
@@ -470,17 +380,9 @@ __global__ void bilinearInterpolationVertical(
 		const unsigned int ncols,
 		unsigned int n);
 
-__global__ void bilinearInterpolationVerticalNorth(
+__global__ void bilinearInterpolationVerticalBoundary(
 		const unsigned int* ids,
-                const double* u,
-		const double* v,
-                double* v_star,
-		const double scale,
-		const unsigned int N_rows, const unsigned int N_cols,
-		unsigned int n);
-
-__global__ void bilinearInterpolationVerticalSouth(
-		const unsigned int* ids,
+                const unsigned int* tag,
                 const double* u,
 		const double* v,
                 double* v_star,
@@ -490,12 +392,11 @@ __global__ void bilinearInterpolationVerticalSouth(
 
 
 void bilinearInterpolationVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
-                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-                const thrust::device_vector<double>& u, 
-		const thrust::device_vector<double>& v, 
-		thrust::device_vector<double>& v_star, 
+		const thrust::device_vector<unsigned int>& idAll,
+                const thrust::device_vector<unsigned int>& tag,
+                const thrust::device_vector<double>& u,
+		const thrust::device_vector<double>& v,
+		thrust::device_vector<double>& v_star,
 		const double scale,
 		const unsigned int nrows, const unsigned int ncols, cudaStream_t stream);
 
@@ -550,70 +451,22 @@ __global__ void buildMatrix_cell_gather(
 		double* d_A_values,
 		unsigned int n);
 
-__global__ void buildMatrix_horizontal_West(
+// Merged boundary rhs contribution; launched once per direction (horizontal
+// list + _x arrays + isHorizontal=1, vertical list + _y arrays + isHorizontal=0).
+// Replaces buildMatrix_{horizontal,vertical}_{West,East,North,South}.
+__global__ void buildMatrix_boundary_merged(
 		const unsigned int* ids,
-                const double* H_int_x,
-		const double* alfa_x,
+                const unsigned int* tag,
+                const double* H_int,
+		const double* alfa,
+		const double* vel_star,
                 const unsigned int* idBasinVectReIndex,
-		const double* u_star,
 		const unsigned int N_cols,
-		const double c1, 
+		const double c1,
 		const double H_min,
 		const bool isNonReflectingBC,
+		const int isHorizontal,
 		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n);
- 
-__global__ void buildMatrix_horizontal_East(
-		const unsigned int* ids,
-                const double* H_int_x,
-		const double* alfa_x,
-                const unsigned int* idBasinVectReIndex,
-		const double* u_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n);
-
-
-
-__global__ void buildMatrix_vertical_North(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n);
-
-__global__ void buildMatrix_vertical_South(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
 		unsigned int n);
 
 void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x, 
@@ -630,14 +483,12 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 		const double H_min, 
 		const thrust::device_vector<double>& precipitation,
 		const double dt_DSV, 
-		const thrust::device_vector<double>& alfa_x, 
-		const thrust::device_vector<double>& alfa_y, 
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth, 
+		const thrust::device_vector<double>& alfa_x,
+		const thrust::device_vector<double>& alfa_y,
+		const thrust::device_vector<unsigned int>& idHorizontalAll,
+		const thrust::device_vector<unsigned int>& horizontalTag,
+		const thrust::device_vector<unsigned int>& idVerticalAll,
+		const thrust::device_vector<unsigned int>& verticalTag,
 		const thrust::device_vector<unsigned int>& idBasinVect,
 		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
 		const thrust::device_vector<unsigned int>& basin_mask,
@@ -698,20 +549,13 @@ void updateH_wrapper(
     cudaStream_t stream);
 
 //==============================================================================
-// updateVel: horizontal kernels
-__global__ void updateVelHorizontalInternal(
+// updateVel: merged internal+boundary kernels (2 launches instead of 6; see
+// the tag-construction comment in main_final_H.cpp and the kernel comments
+// in cuda_utils_loop_H.cu for why membership is tagged at setup rather than
+// re-derived per face).
+__global__ void updateVelHorizontalMerged(
     const unsigned int* ids,
-    double* u,
-    const double* u_star,
-    const double* alfa_x,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void updateVelHorizontalWest(
-    const unsigned int* ids,
+    const unsigned int* tag,
     double* u,
     const double* u_star,
     const double* alfa_x,
@@ -722,44 +566,9 @@ __global__ void updateVelHorizontalWest(
     unsigned int N_cols,
     unsigned int n);
 
-__global__ void updateVelHorizontalEast(
+__global__ void updateVelVerticalMerged(
     const unsigned int* ids,
-    double* u,
-    const double* u_star,
-    const double* alfa_x,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    int isNonReflectingBC,
-    unsigned int N_cols,
-    unsigned int n);
-
-// updateVel: vertical kernels
-__global__ void updateVelVerticalInternal(
-    const unsigned int* ids,
-    double* v,
-    const double* v_star,
-    const double* alfa_y,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void updateVelVerticalNorth(
-    const unsigned int* ids,
-    double* v,
-    const double* v_star,
-    const double* alfa_y,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    int isNonReflectingBC,
-    unsigned int N_cols,
-    unsigned int n);
-
-__global__ void updateVelVerticalSouth(
-    const unsigned int* ids,
+    const unsigned int* tag,
     double* v,
     const double* v_star,
     const double* alfa_y,
@@ -782,12 +591,10 @@ void updateVel_wrapper(
     const thrust::device_vector<double>& eta,
     const thrust::device_vector<double>& H,
     const thrust::device_vector<double>& orography,
-    const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
-    const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+    const thrust::device_vector<unsigned int>& idHorizontalAll,
+    const thrust::device_vector<unsigned int>& horizontalTag,
+    const thrust::device_vector<unsigned int>& idVerticalAll,
+    const thrust::device_vector<unsigned int>& verticalTag,
     int isNonReflectingBC,
     cudaStream_t stream);
 

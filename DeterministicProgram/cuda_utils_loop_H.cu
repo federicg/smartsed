@@ -41,9 +41,11 @@ __device__ inline int signum_dev(double val) {
 }
 
 //==============================================================================
-// Horizontal upwind
-__global__ void computeHorizontalInternalKernel_interface(
+// Horizontal upwind, merged internal+West+East: single launch, tag-dispatched
+// (0=internal, 1=West, 2=East). See build_merged_ids_and_tags in utils_H.h.
+__global__ void computeHorizontalMergedKernel_interface(
     const unsigned int* ids,
+    const unsigned int* tag,
     const double* H,
     const double* u,
     double* horizontal,
@@ -55,112 +57,53 @@ __global__ void computeHorizontalInternalKernel_interface(
 
     unsigned int Id = ids[i];
     unsigned int ii = Id / (N_cols + 1);
+    unsigned int t  = tag[i];
 
-    unsigned int IDeast = Id - ii;
-    unsigned int IDwest = Id - ii - 1;
+    double H_left, H_right, s;
+    if (t == 0) {
+        unsigned int IDeast = Id - ii;
+        unsigned int IDwest = Id - ii - 1;
+        H_left  = H[IDwest];
+        H_right = H[IDeast];
+        s = (u[Id] > 0.0) - (u[Id] < 0.0);
+    } else if (t == 1) {
+        H_left  = 0.0;
+        H_right = H[Id - ii];
+        s = (u[Id + 1] > 0.0) - (u[Id + 1] < 0.0);
+    } else {
+        H_left  = H[Id - ii - 1];
+        H_right = 0.0;
+        s = (u[Id - 1] > 0.0) - (u[Id - 1] < 0.0);
+    }
 
-    double H_left  = H[IDwest];
-    double H_right = H[IDeast];
-
-    double s = (u[Id] > 0.0) - (u[Id] < 0.0);
-
-    horizontal[Id] =
-        0.5 * (H_left + H_right + s * (H_left - H_right));
-}
-
-__global__ void computeHorizontalWestKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* u,
-    double* horizontal,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    unsigned int Id = ids[i];
-    unsigned int ii = Id / (N_cols + 1);
-
-    double H_left  = 0.0;
-    double H_right = H[Id - ii];
-
-    double s = (u[Id + 1] > 0.0) - (u[Id + 1] < 0.0);
-
-    horizontal[Id] =
-        0.5 * (H_left + H_right + s * (H_left - H_right));
-}
-
-__global__ void computeHorizontalEastKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* u,
-    double* horizontal,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    unsigned int Id = ids[i];
-    unsigned int ii = Id / (N_cols + 1);
-
-    double H_left  = H[Id - ii - 1];
-    double H_right = 0.0;
-
-    double s = (u[Id - 1] > 0.0) - (u[Id - 1] < 0.0);
-
-    horizontal[Id] =
-        0.5 * (H_left + H_right + s * (H_left - H_right));
+    horizontal[Id] = 0.5 * (H_left + H_right + s * (H_left - H_right));
 }
 
 void compute_horizontal_interface_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H, 
-		const thrust::device_vector<double>& u, 
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
+		const thrust::device_vector<double>& H,
+		const thrust::device_vector<double>& u,
 		thrust::device_vector<double>& horizontal, const unsigned int N_cols,
 		cudaStream_t stream) {
 
     launch_kernel(
-      computeHorizontalInternalKernel_interface,
-      idStaggeredInternalVectHorizontal.size(),
+      computeHorizontalMergedKernel_interface,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(u.data()),
       thrust::raw_pointer_cast(horizontal.data()),
       N_cols
     );
-
-    launch_kernel(
-      computeHorizontalWestKernel_interface,
-      idStaggeredBoundaryVectWest.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
-      thrust::raw_pointer_cast(H.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(horizontal.data()),
-      N_cols
-    );
-
-    launch_kernel(
-      computeHorizontalEastKernel_interface,
-      idStaggeredBoundaryVectEast.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
-      thrust::raw_pointer_cast(H.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(horizontal.data()),
-      N_cols
-    );
-
 }
 
-// Vertical upwind
-__global__ void computeVerticalInternalKernel_interface(
+// Vertical upwind, merged internal+North+South (0=internal, 1=North, 2=South).
+__global__ void computeVerticalMergedKernel_interface(
     const unsigned int* ids,
+    const unsigned int* tag,
     const double* H,
     const double* v,
     double* vertical,
@@ -171,113 +114,49 @@ __global__ void computeVerticalInternalKernel_interface(
   if (i >= n) return;
 
   unsigned int Id = ids[i];
-  unsigned int IDsouth = Id, IDnorth = Id - N_cols;
-  
-  double H_left = H[IDnorth]; 
-  double H_right = H[IDsouth];
+  unsigned int t  = tag[i];
 
-  double v_cc = v[Id];
-  
-  double s = (v_cc > 0.0) - (v_cc < 0.0);
+  double H_left, H_right, s;
+  if (t == 0) {
+    unsigned int IDsouth = Id, IDnorth = Id - N_cols;
+    H_left = H[IDnorth];
+    H_right = H[IDsouth];
+    double v_cc = v[Id];
+    s = (v_cc > 0.0) - (v_cc < 0.0);
+  } else if (t == 1) {
+    H_left = 0;
+    H_right = H[Id];
+    double v_right = v[Id + N_cols];
+    s = (v_right > 0.0) - (v_right < 0.0);
+  } else {
+    H_left = H[Id - N_cols];
+    H_right = 0;
+    double v_left = v[Id - N_cols];
+    s = (v_left > 0.0) - (v_left < 0.0);
+  }
 
-  vertical[Id] =
-          (H_left + H_right) * .5 + s * (H_left - H_right) * .5;
-
-}
-
-__global__ void computeVerticalNorthKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* v,
-    double* vertical,
-    unsigned int N_cols,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  unsigned int Id = ids[i];
-
- 
-  double H_left = 0;
-  double H_right = H[Id];
-
-  double v_right = v[Id + N_cols];
-
-  double s = (v_right > 0.0) - (v_right < 0.0);
-
-  vertical[Id] = (H_left + H_right) * .5 +
-                     s * (H_left - H_right) * .5;
-
-}
-
-__global__ void computeVerticalSouthKernel_interface(
-    const unsigned int* ids,
-    const double* H,
-    const double* v,
-    double* vertical,
-    unsigned int N_cols,
-    unsigned int n)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-    
-  unsigned int Id = ids[i];
-  
-  double H_left = H[Id - N_cols]; 
-  double H_right = 0;
-
-  double v_left = v[Id - N_cols];
-  
-  double s = (v_left > 0.0) - (v_left < 0.0);
-
-  vertical[Id] = (H_left + H_right) * .5 +
-                     s * (H_left - H_right) * .5;
-
+  vertical[Id] = (H_left + H_right) * .5 + s * (H_left - H_right) * .5;
 }
 
 void compute_vertical_interface_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H, 
-		const thrust::device_vector<double>& v, 
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
+		const thrust::device_vector<double>& H,
+		const thrust::device_vector<double>& v,
 		thrust::device_vector<double>& vertical, const unsigned int N_cols,
 		cudaStream_t stream) {
 
     launch_kernel(
-      computeVerticalInternalKernel_interface,
-      idStaggeredInternalVectVertical.size(),
+      computeVerticalMergedKernel_interface,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(H.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(vertical.data()),
       N_cols
     );
-
-    launch_kernel(
-      computeVerticalNorthKernel_interface,
-      idStaggeredBoundaryVectNorth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
-      thrust::raw_pointer_cast(H.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(vertical.data()),
-      N_cols
-    );
-
-    launch_kernel(
-      computeVerticalSouthKernel_interface,
-      idStaggeredBoundaryVectSouth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-      thrust::raw_pointer_cast(H.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(vertical.data()),
-      N_cols
-    );
-
 }
 
 //==============================================================================
@@ -325,118 +204,33 @@ __global__ void computeKernel_friction(
   alfa_dir[Id] = alfa;
 }
 
-// Horizontal friction
-void compute_horizontal_friction_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<double>& H_interface_horizontal, 
-		const thrust::device_vector<double>& u, const thrust::device_vector<double>& M_expo_r_x_vect, 
-		      thrust::device_vector<double>& alfa_x, 
-	        const thrust::device_vector<double>& M_gamma_dt_DSV_x_, 
-		double M_dt_DSV, double M_coeff, double M_H_min, 
+// computeKernel_friction's formula doesn't distinguish internal from
+// boundary faces (it depends only on already-fully-populated per-face
+// arrays), so a single launch over the concatenated id list is equivalent
+// to the three separate internal/West-or-North/East-or-South launches.
+void compute_friction_wrapper(
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<double>& H_interface_dir,
+		const thrust::device_vector<double>& vel,
+		const thrust::device_vector<double>& M_expo_r_dir_vect,
+		      thrust::device_vector<double>& alfa_dir,
+		const thrust::device_vector<double>& M_gamma_dt_DSV_dir_,
+		double M_dt_DSV, double M_coeff, double M_H_min,
                 double M_expo, unsigned int M_frictionModel, cudaStream_t stream) {
 
     launch_kernel(
       computeKernel_friction,
-      idStaggeredInternalVectHorizontal.size(),
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
-      thrust::raw_pointer_cast(H_interface_horizontal.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
-      thrust::raw_pointer_cast(alfa_x.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(H_interface_dir.data()),
+      thrust::raw_pointer_cast(vel.data()),
+      thrust::raw_pointer_cast(M_expo_r_dir_vect.data()),
+      thrust::raw_pointer_cast(alfa_dir.data()),
+      thrust::raw_pointer_cast(M_gamma_dt_DSV_dir_.data()),
+      M_dt_DSV, M_coeff, M_H_min,
       M_expo, M_frictionModel
     );
-
-    launch_kernel(
-      computeKernel_friction,
-      idStaggeredBoundaryVectWest.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
-      thrust::raw_pointer_cast(H_interface_horizontal.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
-      thrust::raw_pointer_cast(alfa_x.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
-      M_expo, M_frictionModel
-    );
-
-    launch_kernel(
-      computeKernel_friction,
-      idStaggeredBoundaryVectEast.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
-      thrust::raw_pointer_cast(H_interface_horizontal.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(M_expo_r_x_vect.data()),
-      thrust::raw_pointer_cast(alfa_x.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_x_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
-      M_expo, M_frictionModel
-    );
-
-}
-
-// Vertical friction
-void compute_vertical_friction_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-		const thrust::device_vector<double>& H_interface_vertical, 
-		const thrust::device_vector<double>& v, 
-		const thrust::device_vector<double>& M_expo_r_y_vect, 
-		      thrust::device_vector<double>& alfa_y, 
-		const thrust::device_vector<double>& M_gamma_dt_DSV_y_, 
-		double M_dt_DSV, double M_coeff, double M_H_min, 
-                double M_expo, unsigned int M_frictionModel,
-		cudaStream_t stream) {
-
-    launch_kernel(
-      computeKernel_friction,
-      idStaggeredInternalVectVertical.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
-      thrust::raw_pointer_cast(H_interface_vertical.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
-      thrust::raw_pointer_cast(alfa_y.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
-      M_expo, M_frictionModel
-    );
-
-    launch_kernel(
-      computeKernel_friction,
-      idStaggeredBoundaryVectNorth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
-      thrust::raw_pointer_cast(H_interface_vertical.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
-      thrust::raw_pointer_cast(alfa_y.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
-      M_expo, M_frictionModel
-    );
-
-    launch_kernel(
-      computeKernel_friction,
-      idStaggeredBoundaryVectSouth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-      thrust::raw_pointer_cast(H_interface_vertical.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(M_expo_r_y_vect.data()),
-      thrust::raw_pointer_cast(alfa_y.data()),
-      thrust::raw_pointer_cast(M_gamma_dt_DSV_y_.data()),
-      M_dt_DSV, M_coeff, M_H_min, 
-      M_expo, M_frictionModel
-    );
-
 }
 
 //==============================================================================
@@ -529,8 +323,13 @@ void computeET_wrapper(
 
 //==============================================================================
 
-__global__ void computeKernelHorizontalInternal_gravitational(
+// Horizontal gravitational layer, merged internal+West+East: single launch,
+// tag-dispatched (0=internal, 1=West, 2=East). Each branch only sets
+// h_left/h_right/k_c_left/k_c_right; the closing expression is the verbatim
+// formula shared by the three kernels this replaces.
+__global__ void computeHorizontalMergedKernel_gravitational(
     const unsigned int* ids,
+    const unsigned int* tag,
     const double* coeff,
     const double* n_x,
     const double* h,
@@ -542,63 +341,21 @@ __global__ void computeKernelHorizontalInternal_gravitational(
   if (i >= n) return;
 
   const auto Id = ids[i];
- 
-  const unsigned int ii = Id / (N_cols + 1), // u
-	IDeast = Id - ii,                      // H
-	IDwest = Id - ii - 1;                  // H
-
-  const double &h_left = h[IDwest], &h_right = h[IDeast];
-
-  const double k_c_left = coeff[IDwest], k_c_right = coeff[IDeast];
-
-
-  h_interface_x[Id] = n_x[Id] *
-	  ((k_c_left * h_left + k_c_right * h_right) +
-	   n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
-	  .5;
-}
-
-__global__ void computeKernelHorizontalWest_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_x,
-    const double* h,
-    double* h_interface_x,
-    const unsigned int N_cols,
-    unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
- 
+  const unsigned int t  = tag[i];
   const unsigned int ii = Id / (N_cols + 1);
-  const double h_left = 0, h_right = h[Id - ii];
-  const double k_c_left = 0., k_c_right = coeff[Id - ii];
 
-  h_interface_x[Id] = n_x[Id] *
-	  ((k_c_left * h_left + k_c_right * h_right) +
-	   n_x[Id] * (k_c_left * h_left - k_c_right * h_right)) *
-	  .5;
-}
-
-__global__ void computeKernelHorizontalEast_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_x,
-    const double* h,
-    double* h_interface_x,
-    const unsigned int N_cols,
-    unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
- 
-  const unsigned int ii = Id / (N_cols + 1);
-  const double h_left = h[Id - ii - 1], h_right = 0;
-  const double k_c_left = coeff[Id - ii - 1], k_c_right = 0.;
+  double h_left, h_right, k_c_left, k_c_right;
+  if (t == 0) {
+    const unsigned int IDeast = Id - ii, IDwest = Id - ii - 1;
+    h_left  = h[IDwest];      h_right  = h[IDeast];
+    k_c_left = coeff[IDwest]; k_c_right = coeff[IDeast];
+  } else if (t == 1) {
+    h_left  = 0.;            h_right  = h[Id - ii];
+    k_c_left = 0.;           k_c_right = coeff[Id - ii];
+  } else {
+    h_left  = h[Id - ii - 1]; h_right  = 0.;
+    k_c_left = coeff[Id - ii - 1]; k_c_right = 0.;
+  }
 
   h_interface_x[Id] = n_x[Id] *
 	  ((k_c_left * h_left + k_c_right * h_right) +
@@ -609,55 +366,32 @@ __global__ void computeKernelHorizontalEast_gravitational(
 
 // Horizontal gravitational layer
 void computeResidualsHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
 		const thrust::device_vector<double>& coeff,
 		const thrust::device_vector<double>& n_x,
-		const thrust::device_vector<double>& h, 
-		thrust::device_vector<double>& h_interface_x, 
+		const thrust::device_vector<double>& h,
+		thrust::device_vector<double>& h_interface_x,
                 const unsigned int N_cols, cudaStream_t stream) {
 
     launch_kernel(
-      computeKernelHorizontalInternal_gravitational,
-      idStaggeredInternalVectHorizontal.size(),
+      computeHorizontalMergedKernel_gravitational,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(coeff.data()),
       thrust::raw_pointer_cast(n_x.data()),
       thrust::raw_pointer_cast(h.data()),
       thrust::raw_pointer_cast(h_interface_x.data()),
       N_cols
     );
-
-    launch_kernel(
-      computeKernelHorizontalWest_gravitational,
-      idStaggeredBoundaryVectWest.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
-      thrust::raw_pointer_cast(coeff.data()),
-      thrust::raw_pointer_cast(n_x.data()),
-      thrust::raw_pointer_cast(h.data()),
-      thrust::raw_pointer_cast(h_interface_x.data()),
-      N_cols
-    );
-
-    launch_kernel(
-      computeKernelHorizontalEast_gravitational,
-      idStaggeredBoundaryVectEast.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
-      thrust::raw_pointer_cast(coeff.data()),
-      thrust::raw_pointer_cast(n_x.data()),
-      thrust::raw_pointer_cast(h.data()),
-      thrust::raw_pointer_cast(h_interface_x.data()),
-      N_cols
-    );
-
 }
 
-__global__ void computeKernelVerticalInternal_gravitational(
+// Vertical gravitational layer, merged internal+North+South (0/1/2 tag).
+__global__ void computeVerticalMergedKernel_gravitational(
     const unsigned int* ids,
+    const unsigned int* tag,
     const double* coeff,
     const double* n_y,
     const double* h,
@@ -669,115 +403,49 @@ __global__ void computeKernelVerticalInternal_gravitational(
   if (i >= n) return;
 
   const auto Id = ids[i];
- 
-  const unsigned int IDsouth = Id, // H
-	IDnorth = Id - N_cols;       // H
+  const unsigned int t = tag[i];
 
-  const double h_left = h[IDnorth], h_right = h[IDsouth];
-
-  const double k_c_left = coeff[IDnorth], k_c_right = coeff[IDsouth];
-
-  h_interface_y[Id] = n_y[Id] *
-	  ((k_c_left * h_left + k_c_right * h_right) +
-	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
-	  .5;
-}
-
-__global__ void computeKernelVerticalNorth_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_y,
-    const double* h,
-    double* h_interface_y,
-    const unsigned int N_cols,
-    unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
-  const double h_left = 0, h_right = h[Id];
-
-  const double k_c_left = 0., k_c_right = coeff[Id];
+  double h_left, h_right, k_c_left, k_c_right;
+  if (t == 0) {
+    const unsigned int IDsouth = Id, IDnorth = Id - N_cols;
+    h_left  = h[IDnorth];      h_right  = h[IDsouth];
+    k_c_left = coeff[IDnorth]; k_c_right = coeff[IDsouth];
+  } else if (t == 1) {
+    h_left  = 0.;             h_right  = h[Id];
+    k_c_left = 0.;            k_c_right = coeff[Id];
+  } else {
+    h_left  = h[Id - N_cols]; h_right  = 0.;
+    k_c_left = coeff[Id - N_cols]; k_c_right = 0.;
+  }
 
   h_interface_y[Id] = n_y[Id] *
 	  ((k_c_left * h_left + k_c_right * h_right) +
 	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
 	  .5;
-
-}
-
-__global__ void computeKernelVerticalSouth_gravitational(
-    const unsigned int* ids,
-    const double* coeff,
-    const double* n_y,
-    const double* h,
-    double* h_interface_y,
-    const unsigned int N_cols,
-    unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
-  const double h_left = h[Id - N_cols], h_right = 0;
-
-  const double k_c_left = coeff[Id - N_cols], k_c_right = 0.;
-
-  h_interface_y[Id] = n_y[Id] *
-	  ((k_c_left * h_left + k_c_right * h_right) +
-	   n_y[Id] * (k_c_left * h_left - k_c_right * h_right)) *
-	  .5;
-
 }
 
 // Vertical gravitational layer
 void computeResidualsVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<unsigned int>& idAll,
+		const thrust::device_vector<unsigned int>& tag,
 		const thrust::device_vector<double>& coeff,
 		const thrust::device_vector<double>& n_y,
-		const thrust::device_vector<double>& h, 
-		thrust::device_vector<double>& h_interface_y, 
+		const thrust::device_vector<double>& h,
+		thrust::device_vector<double>& h_interface_y,
                 const unsigned int N_cols, cudaStream_t stream) {
 
     launch_kernel(
-      computeKernelVerticalInternal_gravitational,
-      idStaggeredInternalVectVertical.size(),
+      computeVerticalMergedKernel_gravitational,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(coeff.data()),
       thrust::raw_pointer_cast(n_y.data()),
       thrust::raw_pointer_cast(h.data()),
       thrust::raw_pointer_cast(h_interface_y.data()),
       N_cols
     );
-
-    launch_kernel(
-      computeKernelVerticalNorth_gravitational,
-      idStaggeredBoundaryVectNorth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
-      thrust::raw_pointer_cast(coeff.data()),
-      thrust::raw_pointer_cast(n_y.data()),
-      thrust::raw_pointer_cast(h.data()),
-      thrust::raw_pointer_cast(h_interface_y.data()),
-      N_cols
-    );
-
-    launch_kernel(
-      computeKernelVerticalSouth_gravitational,
-      idStaggeredBoundaryVectSouth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-      thrust::raw_pointer_cast(coeff.data()),
-      thrust::raw_pointer_cast(n_y.data()),
-      thrust::raw_pointer_cast(h.data()),
-      thrust::raw_pointer_cast(h_interface_y.data()),
-      N_cols
-    );
-
 }
 
 //==============================================================================
@@ -960,8 +628,14 @@ void computePrecipitation_wrapper(
 
 //==============================================================================
 
+// Internal-face back-trace. `ids`/`tag` are the concatenated internal+West+East
+// list: this kernel is launched over the whole list but only processes tag==0
+// (internal) entries, so the West/East kernel -- which reads u_star values this
+// kernel writes -- can safely run as a second launch on the same stream over
+// the same list. (Merging all three into one launch would race.)
 __global__ void bilinearInterpolationHorizontal(
     const unsigned int* __restrict__ ids,
+    const unsigned int* __restrict__ tag,
     const double* __restrict__ u,
     const double* __restrict__ v,
     double* __restrict__ u_star,
@@ -972,6 +646,7 @@ __global__ void bilinearInterpolationHorizontal(
 
   const unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) return;
+  if (__ldg(&tag[tid]) != 0u) return;
 
   const unsigned int Id  = __ldg(&ids[tid]);
   const unsigned int row = Id / (ncols + 1);
@@ -1031,8 +706,12 @@ __global__ void bilinearInterpolationHorizontal(
 }
 
 
-__global__ void bilinearInterpolationHorizontalWest(
+// Merged West+East boundary back-trace (tag 1=West, 2=East). Launched over the
+// full concatenated list as a second pass after bilinearInterpolationHorizontal;
+// each branch is the verbatim body of the kernel it replaces.
+__global__ void bilinearInterpolationHorizontalBoundary(
 		const unsigned int* ids,
+                const unsigned int* tag,
                 const double* u,
 		const double* v,
                 double* u_star,
@@ -1042,58 +721,35 @@ __global__ void bilinearInterpolationHorizontalWest(
 
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
+  const unsigned int t = tag[i];
+  if (t == 0u) return;
 
   const auto Id = ids[i];
-  
-  const auto Idd = Id + 1;
-  u_star[Id] = u_star[Idd] * (u[Idd] < 0.);
-}
-
-__global__ void bilinearInterpolationHorizontalEast(
-		const unsigned int* ids,
-                const double* u,
-		const double* v,
-                double* u_star,
-		const double scale,
-		const unsigned int N_rows, const unsigned int N_cols,
-		unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
- 
-  const auto Idd = Id - 1;
-  u_star[Id] = u_star[Idd] * (u[Idd] > 0.);
+  if (t == 1u) {                       // West
+    const auto Idd = Id + 1;
+    u_star[Id] = u_star[Idd] * (u[Idd] < 0.);
+  } else {                             // East
+    const auto Idd = Id - 1;
+    u_star[Id] = u_star[Idd] * (u[Idd] > 0.);
+  }
 }
 
 
 void bilinearInterpolationHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
-                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-                const thrust::device_vector<double>& u, 
-		const thrust::device_vector<double>& v, 
-		thrust::device_vector<double>& u_star, 
+		const thrust::device_vector<unsigned int>& idAll,
+                const thrust::device_vector<unsigned int>& tag,
+                const thrust::device_vector<double>& u,
+		const thrust::device_vector<double>& v,
+		thrust::device_vector<double>& u_star,
 		const double scale,
 		const unsigned int N_rows, const unsigned int N_cols, cudaStream_t stream) {
 
     launch_kernel(
       bilinearInterpolationHorizontal,
-      idStaggeredInternalVectHorizontal.size(),
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(u_star.data()),
-      scale, N_rows, N_cols
-    );
- 
-    launch_kernel(
-      bilinearInterpolationHorizontalWest,
-      idStaggeredBoundaryVectWest.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(u.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(u_star.data()),
@@ -1101,21 +757,24 @@ void bilinearInterpolationHorizontal_wrapper(
     );
 
     launch_kernel(
-      bilinearInterpolationHorizontalEast,
-      idStaggeredBoundaryVectEast.size(),
+      bilinearInterpolationHorizontalBoundary,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(u.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(u_star.data()),
       scale, N_rows, N_cols
     );
-
 }
 
 
+// Internal-face back-trace; see bilinearInterpolationHorizontal for why this is
+// launched over the whole internal+North+South list but only handles tag==0.
 __global__ void bilinearInterpolationVertical(
     const unsigned int* __restrict__ ids,
+    const unsigned int* __restrict__ tag,
     const double* __restrict__ u,
     const double* __restrict__ v,
     double* __restrict__ v_star,
@@ -1126,6 +785,7 @@ __global__ void bilinearInterpolationVertical(
 
   const unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n) return;
+  if (__ldg(&tag[tid]) != 0u) return;
 
   const unsigned int Id   = __ldg(&ids[tid]);
 
@@ -1183,8 +843,12 @@ __global__ void bilinearInterpolationVertical(
 }
 
 
-__global__ void bilinearInterpolationVerticalNorth(
+// Merged North+South boundary back-trace (tag 1=North, 2=South); second pass
+// after bilinearInterpolationVertical, each branch verbatim from the kernel
+// it replaces.
+__global__ void bilinearInterpolationVerticalBoundary(
 		const unsigned int* ids,
+                const unsigned int* tag,
                 const double* u,
 		const double* v,
                 double* v_star,
@@ -1194,59 +858,36 @@ __global__ void bilinearInterpolationVerticalNorth(
 
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
+  const unsigned int t = tag[i];
+  if (t == 0u) return;
 
   const auto Id = ids[i];
- 
-  const auto Idd = Id + ncols;
-  v_star[Id] = v_star[Idd] * (v[Idd] < 0.);
-}
-
-__global__ void bilinearInterpolationVerticalSouth(
-		const unsigned int* ids,
-                const double* u,
-		const double* v,
-                double* v_star,
-		const double scale, 
-		const unsigned int nrows, const unsigned int ncols,
-		unsigned int n) {
-
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
-
-  const auto Idd = Id - ncols;
-  v_star[Id] = v_star[Idd] * (v[Idd] > 0.);
+  if (t == 1u) {                       // North
+    const auto Idd = Id + ncols;
+    v_star[Id] = v_star[Idd] * (v[Idd] < 0.);
+  } else {                             // South
+    const auto Idd = Id - ncols;
+    v_star[Id] = v_star[Idd] * (v[Idd] > 0.);
+  }
 }
 
 
 
 void bilinearInterpolationVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
-                const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-                const thrust::device_vector<double>& u, 
-		const thrust::device_vector<double>& v, 
-		thrust::device_vector<double>& v_star, 
+		const thrust::device_vector<unsigned int>& idAll,
+                const thrust::device_vector<unsigned int>& tag,
+                const thrust::device_vector<double>& u,
+		const thrust::device_vector<double>& v,
+		thrust::device_vector<double>& v_star,
 		const double scale,
 		const unsigned int N_rows, const unsigned int N_cols, cudaStream_t stream) {
- 
+
     launch_kernel(
       bilinearInterpolationVertical,
-      idStaggeredInternalVectVertical.size(),
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
-      thrust::raw_pointer_cast(u.data()),
-      thrust::raw_pointer_cast(v.data()),
-      thrust::raw_pointer_cast(v_star.data()),
-      scale, N_rows, N_cols
-    );
- 
-    launch_kernel(
-      bilinearInterpolationVerticalNorth,
-      idStaggeredBoundaryVectNorth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(u.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(v_star.data()),
@@ -1254,16 +895,16 @@ void bilinearInterpolationVertical_wrapper(
     );
 
     launch_kernel(
-      bilinearInterpolationVerticalSouth,
-      idStaggeredBoundaryVectSouth.size(),
+      bilinearInterpolationVerticalBoundary,
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(tag.data()),
       thrust::raw_pointer_cast(u.data()),
       thrust::raw_pointer_cast(v.data()),
       thrust::raw_pointer_cast(v_star.data()),
       scale, N_rows, N_cols
     );
-
 }
 
 //==============================================================================
@@ -1291,100 +932,29 @@ __global__ void computeKernel_sediment(
   Gamma_dir_2[Id] = coeff_left;
 }
 
-// Horizontal sediment
-void computeResidualsTruncatedHorizontal_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		thrust::device_vector<double>& Gamma_x_1, thrust::device_vector<double>& Gamma_x_2, 
-		const thrust::device_vector<double>& S_x_mod, 
-		const thrust::device_vector<double>& u, 
+// Sediment residuals, one direction. computeKernel_sediment's formula depends
+// only on already-fully-populated per-face arrays (S_dir_mod, vel) and so is
+// identical for internal and boundary faces -- a single launch over the
+// concatenated id list is equivalent to the three internal/West-or-North/
+// East-or-South launches it replaces (same rationale as compute_friction_wrapper).
+void computeResidualsTruncated_wrapper(
+		const thrust::device_vector<unsigned int>& idAll,
+		thrust::device_vector<double>& Gamma_dir_1, thrust::device_vector<double>& Gamma_dir_2,
+		const thrust::device_vector<double>& S_dir_mod,
+		const thrust::device_vector<double>& vel,
                 const double c1, cudaStream_t stream) {
 
     launch_kernel(
       computeKernel_sediment,
-      idStaggeredInternalVectHorizontal.size(),
+      idAll.size(),
       stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
-      thrust::raw_pointer_cast(Gamma_x_1.data()),
-      thrust::raw_pointer_cast(Gamma_x_2.data()),
-      thrust::raw_pointer_cast(S_x_mod.data()),
-      thrust::raw_pointer_cast(u.data()),
+      thrust::raw_pointer_cast(idAll.data()),
+      thrust::raw_pointer_cast(Gamma_dir_1.data()),
+      thrust::raw_pointer_cast(Gamma_dir_2.data()),
+      thrust::raw_pointer_cast(S_dir_mod.data()),
+      thrust::raw_pointer_cast(vel.data()),
       c1
     );
-
-    launch_kernel(
-      computeKernel_sediment,
-      idStaggeredBoundaryVectWest.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
-      thrust::raw_pointer_cast(Gamma_x_1.data()),
-      thrust::raw_pointer_cast(Gamma_x_2.data()),
-      thrust::raw_pointer_cast(S_x_mod.data()),
-      thrust::raw_pointer_cast(u.data()),
-      c1
-    );
-
-    launch_kernel(
-      computeKernel_sediment,
-      idStaggeredBoundaryVectEast.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
-      thrust::raw_pointer_cast(Gamma_x_1.data()),
-      thrust::raw_pointer_cast(Gamma_x_2.data()),
-      thrust::raw_pointer_cast(S_x_mod.data()),
-      thrust::raw_pointer_cast(u.data()),
-      c1
-    );
-
-}
-
-// Vertical sediment
-void computeResidualsTruncatedVertical_wrapper(
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth, 
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
-                thrust::device_vector<double>& Gamma_y_1, thrust::device_vector<double>& Gamma_y_2,
-		const thrust::device_vector<double>& S_y_mod,
-		const thrust::device_vector<double>& v,
-		const double c1, cudaStream_t stream) {
-
-    launch_kernel(
-      computeKernel_sediment,
-      idStaggeredInternalVectVertical.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
-      thrust::raw_pointer_cast(Gamma_y_1.data()),
-      thrust::raw_pointer_cast(Gamma_y_2.data()),
-      thrust::raw_pointer_cast(S_y_mod.data()),
-      thrust::raw_pointer_cast(v.data()),
-      c1
-    );
-
-    launch_kernel(
-      computeKernel_sediment,
-      idStaggeredBoundaryVectNorth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
-      thrust::raw_pointer_cast(Gamma_y_1.data()),
-      thrust::raw_pointer_cast(Gamma_y_2.data()),
-      thrust::raw_pointer_cast(S_y_mod.data()),
-      thrust::raw_pointer_cast(v.data()),
-      c1
-    );
-
-    launch_kernel(
-      computeKernel_sediment,
-      idStaggeredBoundaryVectSouth.size(),
-      stream,
-      thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-      thrust::raw_pointer_cast(Gamma_y_1.data()),
-      thrust::raw_pointer_cast(Gamma_y_2.data()),
-      thrust::raw_pointer_cast(S_y_mod.data()),
-      thrust::raw_pointer_cast(v.data()),
-      c1
-    );
-
 }
 
 //==============================================================================
@@ -1584,146 +1154,60 @@ __global__ void buildMatrix_cell_gather(
   rhs[R] += rhs_acc;
 }
 
-__global__ void buildMatrix_horizontal_West(
+// Merged boundary rhs contribution, one direction. Launched twice: once over
+// the horizontal (internal+West+East) list with H_int_x/alfa_x/u_star and
+// isHorizontal=1, once over the vertical (internal+North+South) list with the
+// _y arrays and isHorizontal=0. tag==0 (internal) entries are skipped -- they
+// are handled by buildMatrix_cell_gather. This replaces the four separate
+// West/East/North/South kernels; each branch below is the verbatim formula of
+// the kernel it replaces (West==North sign, East==South sign; the reindex
+// stencil differs per direction/side).
+//
+// rhs is updated with atomicAdd because, unlike the old one-kernel-per-side
+// layout, West and East (resp. North and South) now run in the same launch and
+// a 1-cell-wide basin neck would let both touch the same row. Contention is at
+// most 2 and only on perimeter cells, so this is not the O(N) scatter the
+// internal assembly was deliberately de-atomized away from.
+__global__ void buildMatrix_boundary_merged(
 		const unsigned int* ids,
-                const double* H_int_x,
-		const double* alfa_x,
+                const unsigned int* tag,
+                const double* H_int,
+		const double* alfa,
+		const double* vel_star,
                 const unsigned int* idBasinVectReIndex,
-		const double* u_star,
 		const unsigned int N_cols,
-		const double c1, 
+		const double c1,
 		const double H_min,
 		const bool isNonReflectingBC,
+		const int isHorizontal,
 		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
 		unsigned int n) {
- 
+
   unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n) return;
 
-  const auto Id = ids[i];
- 
-  const unsigned int ii = Id / (N_cols + 1), IDright = Id - ii,
-	IDrightReIndex = idBasinVectReIndex[IDright]; // H
-
-  // define H at interfaces
-  const auto H_interface = H_int_x[Id];
-
-  const double coeff_m = H_interface * alfa_x[Id];
-
-  if (H_interface > H_min) {
-      rhs[IDrightReIndex] +=
-	      isNonReflectingBC * (-c1 * (-coeff_m * u_star[Id]));
-  }
-  
-}
-
-__global__ void buildMatrix_horizontal_East(
-		const unsigned int* ids,
-                const double* H_int_x,
-		const double* alfa_x,
-                const unsigned int* idBasinVectReIndex,
-		const double* u_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n) {
- 
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
+  const unsigned int t = tag[i];
+  if (t == 0u) return;                       // internal: see buildMatrix_cell_gather
 
   const auto Id = ids[i];
-  
-  const unsigned int ii = Id / (N_cols + 1), IDleft = Id - ii - 1,
-	IDleftReIndex = idBasinVectReIndex[IDleft]; // H
 
-  // define H at interfaces
-  const auto H_interface = H_int_x[Id];
-
-  const double coeff_m = H_interface * alfa_x[Id];
-
-  if (H_interface > H_min) {
-      rhs[IDleftReIndex] += isNonReflectingBC * (-c1 * (+coeff_m * u_star[Id]));
+  unsigned int IDReIndex;
+  if (isHorizontal) {
+    const unsigned int ii = Id / (N_cols + 1);
+    IDReIndex = idBasinVectReIndex[(t == 1u) ? (Id - ii) : (Id - ii - 1)]; // West : East
+  } else {
+    IDReIndex = idBasinVectReIndex[(t == 1u) ? Id : (Id - N_cols)];        // North : South
   }
 
-}
-
-__global__ void buildMatrix_vertical_North(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n) {
- 
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
- 
-  const unsigned int IDright = Id,
-	IDrightReIndex = idBasinVectReIndex[IDright]; // H
-
-  // define H at interfaces
-  const auto H_interface = H_int_y[Id];
-
-  const double coeff_m = H_interface * alfa_y[Id];
+  const auto H_interface = H_int[Id];
+  const double coeff_m = H_interface * alfa[Id];
 
   if (H_interface > H_min) {
-      rhs[IDrightReIndex] +=
-          isNonReflectingBC * (-c1 * (-coeff_m * v_star[Id]));
+    // West/North: -coeff_m ; East/South: +coeff_m  (negation is exact in IEEE754)
+    const double signed_coeff_m = (t == 1u) ? -coeff_m : coeff_m;
+    atomicAdd(&rhs[IDReIndex],
+              isNonReflectingBC * (-c1 * (signed_coeff_m * vel_star[Id])));
   }
-
-}
-
-__global__ void buildMatrix_vertical_South(
-		const unsigned int* ids,
-                const double* H_int_y,
-		const double* alfa_y,
-                const unsigned int* idBasinVectReIndex,
-		const double* v_star,
-		const unsigned int N_cols,
-		const double c1, 
-		const double H_min,
-		const bool isNonReflectingBC,
-		double* rhs,
-		const int* d_A_rows,
-		const int* d_A_columns,
-		double* d_A_values,
-		unsigned int n) {
- 
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n) return;
-
-  const auto Id = ids[i];
-  
-  const unsigned int IDleft = Id - N_cols,        // H
-        IDleftReIndex = idBasinVectReIndex[IDleft]; // H
-
-  // define H at interfaces
-  const auto H_interface = H_int_y[Id];
-
-  const double coeff_m = H_interface * alfa_y[Id];
-
-  if (H_interface > H_min) {
-      rhs[IDleftReIndex] += isNonReflectingBC * (-c1 * (+coeff_m * v_star[Id]));
-  }
-
 }
 
 
@@ -1745,12 +1229,10 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 		const double dt_DSV,
 		const thrust::device_vector<double>& alfa_x,
 		const thrust::device_vector<double>& alfa_y,
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
-		const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
-		const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+		const thrust::device_vector<unsigned int>& idHorizontalAll,
+		const thrust::device_vector<unsigned int>& horizontalTag,
+		const thrust::device_vector<unsigned int>& idVerticalAll,
+		const thrust::device_vector<unsigned int>& verticalTag,
 		const thrust::device_vector<unsigned int>& idBasinVect,
 		const thrust::device_vector<unsigned int>& idBasinVectReIndex,
 		const thrust::device_vector<unsigned int>& basin_mask,
@@ -1800,60 +1282,36 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
     );
 
     //--------------------------------------------------------------------------
-    // Boundary contributions (rhs only, matrix untouched -- unchanged)
+    // Boundary contributions (rhs only, matrix untouched). Two launches -- one
+    // over the horizontal (internal+West+East) list, one over the vertical
+    // (internal+North+South) list -- replace the four West/East/North/South
+    // kernels; tag==0 entries are skipped inside the kernel.
     launch_kernel(
-	buildMatrix_horizontal_West,
-        idStaggeredBoundaryVectWest.size(),
+	buildMatrix_boundary_merged,
+        idHorizontalAll.size(),
 	stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
+        thrust::raw_pointer_cast(idHorizontalAll.data()),
+        thrust::raw_pointer_cast(horizontalTag.data()),
 	thrust::raw_pointer_cast(H_int_x.data()),
         thrust::raw_pointer_cast(alfa_x.data()),
-	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
 	thrust::raw_pointer_cast(u_star.data()),
-	N_cols, c1, H_min, isNonReflectingBC,
-	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
+	N_cols, c1, H_min, isNonReflectingBC, /*isHorizontal=*/1,
+	rhs.ptr
     );
 
-
     launch_kernel(
-	buildMatrix_horizontal_East,
-        idStaggeredBoundaryVectEast.size(),
+	buildMatrix_boundary_merged,
+        idVerticalAll.size(),
 	stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
-	thrust::raw_pointer_cast(H_int_x.data()),
-        thrust::raw_pointer_cast(alfa_x.data()),
-	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
-	thrust::raw_pointer_cast(u_star.data()),
-	N_cols, c1, H_min, isNonReflectingBC,
-	rhs.ptr, d_A_rows, d_A_columns, d_A_values
-    );
-
-
-    launch_kernel(
-	buildMatrix_vertical_North,
-        idStaggeredBoundaryVectNorth.size(),
-	stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+        thrust::raw_pointer_cast(idVerticalAll.data()),
+        thrust::raw_pointer_cast(verticalTag.data()),
 	thrust::raw_pointer_cast(H_int_y.data()),
         thrust::raw_pointer_cast(alfa_y.data()),
-	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
 	thrust::raw_pointer_cast(v_star.data()),
-	N_cols, c1, H_min, isNonReflectingBC,
-	rhs.ptr, d_A_rows, d_A_columns, d_A_values
-    );
-
-
-    launch_kernel(
-	buildMatrix_vertical_South,
-        idStaggeredBoundaryVectSouth.size(),
-	stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-	thrust::raw_pointer_cast(H_int_y.data()),
-        thrust::raw_pointer_cast(alfa_y.data()),
 	thrust::raw_pointer_cast(idBasinVectReIndex.data()),
-	thrust::raw_pointer_cast(v_star.data()),
-	N_cols, c1, H_min, isNonReflectingBC,
-	rhs.ptr, d_A_rows, d_A_columns, d_A_values
+	N_cols, c1, H_min, isNonReflectingBC, /*isHorizontal=*/0,
+	rhs.ptr
     );
 
 }
@@ -2035,39 +1493,17 @@ void updateH_wrapper(
 //==============================================================================
 // updateVel kernels
 
-__global__ void updateVelHorizontalInternal(
+// Merged internal+West+East horizontal update: one launch instead of three.
+// `tag[i]` (0=internal, 1=West boundary, 2=East boundary) says which of the
+// three original id lists ids[i] came from -- set once at setup by directly
+// copying list membership, not re-derived here, so this carries no risk of
+// misclassifying a face (see the tag-construction comment in main_final_H.cpp
+// for why: the boundary lists mix index conventions in a way that isn't safe
+// to re-infer per-face from basin_mask alone). Each branch below is the
+// verbatim formula of the kernel it replaces.
+__global__ void updateVelHorizontalMerged(
     const unsigned int* ids,
-    double* u,
-    const double* u_star,
-    const double* alfa_x,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    const unsigned int Id    = ids[i];
-    const unsigned int ii    = Id / (N_cols + 1);
-    const unsigned int IDeast = Id - ii;
-    const unsigned int IDwest = Id - ii - 1;
-
-    const double H_e = H[IDeast], H_w = H[IDwest];
-    const double eta_diff = -eta[IDeast] + eta[IDwest];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = (H_e + H_w) * 0.5 + s * (-H_e + H_w) * 0.5;
-
-    if (H_interface > H_min)
-        u[Id] = alfa_x[Id] * (u_star[Id] - c2 * (eta[IDeast] - eta[IDwest]));
-    else
-        u[Id] = 0.0;
-}
-
-__global__ void updateVelHorizontalWest(
-    const unsigned int* ids,
+    const unsigned int* tag,
     double* u,
     const double* u_star,
     const double* alfa_x,
@@ -2081,87 +1517,46 @@ __global__ void updateVelHorizontalWest(
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
-    const unsigned int Id    = ids[i];
-    const unsigned int ii    = Id / (N_cols + 1);
-    const unsigned int IDeast = Id - ii + 1;
-    const unsigned int IDwest = Id - ii;
+    const unsigned int Id = ids[i];
+    const unsigned int ii = Id / (N_cols + 1);
+    const unsigned int t  = tag[i];
 
-    const double H_w = H[IDwest];
-    const double eta_diff = -eta[IDeast] + eta[IDwest];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = H_w * 0.5 + s * (-H_w) * 0.5;
-
-    if (H_interface > H_min)
-        u[Id] = isNonReflectingBC * alfa_x[Id] * u_star[Id];
-    else
-        u[Id] = 0.0;
+    if (t == 0) {
+        // ---- internal ----
+        const unsigned int IDeast = Id - ii;
+        const unsigned int IDwest = Id - ii - 1;
+        const double H_e = H[IDeast], H_w = H[IDwest];
+        const double eta_diff = -eta[IDeast] + eta[IDwest];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = (H_e + H_w) * 0.5 + s * (-H_e + H_w) * 0.5;
+        u[Id] = (H_interface > H_min)
+                    ? alfa_x[Id] * (u_star[Id] - c2 * (eta[IDeast] - eta[IDwest]))
+                    : 0.0;
+    } else if (t == 1) {
+        // ---- West boundary ----
+        const unsigned int IDeast = Id - ii + 1;
+        const unsigned int IDwest = Id - ii;
+        const double H_w = H[IDwest];
+        const double eta_diff = -eta[IDeast] + eta[IDwest];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = H_w * 0.5 + s * (-H_w) * 0.5;
+        u[Id] = (H_interface > H_min) ? isNonReflectingBC * alfa_x[Id] * u_star[Id] : 0.0;
+    } else {
+        // ---- East boundary ----
+        const unsigned int IDeast = Id - ii - 1;
+        const unsigned int IDwest = Id - ii - 2;
+        const double H_e = H[IDeast];
+        const double eta_diff = -eta[IDeast] + eta[IDwest];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = H_e * 0.5 + s * H_e * 0.5;
+        u[Id] = (H_interface > H_min) ? isNonReflectingBC * alfa_x[Id] * u_star[Id] : 0.0;
+    }
 }
 
-__global__ void updateVelHorizontalEast(
+// Merged internal+North+South vertical update, same rationale as above.
+__global__ void updateVelVerticalMerged(
     const unsigned int* ids,
-    double* u,
-    const double* u_star,
-    const double* alfa_x,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    int isNonReflectingBC,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    const unsigned int Id    = ids[i];
-    const unsigned int ii    = Id / (N_cols + 1);
-    const unsigned int IDeast = Id - ii - 1;
-    const unsigned int IDwest = Id - ii - 2;
-
-    const double H_e = H[IDeast];
-    const double eta_diff = -eta[IDeast] + eta[IDwest];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = H_e * 0.5 + s * H_e * 0.5;
-
-    if (H_interface > H_min)
-        u[Id] = isNonReflectingBC * alfa_x[Id] * u_star[Id];
-    else
-        u[Id] = 0.0;
-}
-
-__global__ void updateVelVerticalInternal(
-    const unsigned int* ids,
-    double* v,
-    const double* v_star,
-    const double* alfa_y,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    const unsigned int Id     = ids[i];
-    const unsigned int IDsouth = Id;
-    const unsigned int IDnorth = Id - N_cols;
-
-    const double H_s = H[IDsouth], H_n = H[IDnorth];
-    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = (H_s + H_n) * 0.5 + s * (-H_s + H_n) * 0.5;
-
-    if (H_interface > H_min)
-        v[Id] = alfa_y[Id] * (v_star[Id] - c2 * (eta[IDsouth] - eta[IDnorth]));
-    else
-        v[Id] = 0.0;
-}
-
-__global__ void updateVelVerticalNorth(
-    const unsigned int* ids,
+    const unsigned int* tag,
     double* v,
     const double* v_star,
     const double* alfa_y,
@@ -2175,51 +1570,39 @@ __global__ void updateVelVerticalNorth(
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
-    const unsigned int Id     = ids[i];
-    const unsigned int IDnorth = Id;
-    const unsigned int IDsouth = Id + N_cols;
+    const unsigned int Id = ids[i];
+    const unsigned int t  = tag[i];
 
-    const double H_n = H[IDnorth];
-    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = H_n * 0.5 + s * (-H_n) * 0.5;
-
-    if (H_interface > H_min)
-        v[Id] = isNonReflectingBC * alfa_y[Id] * v_star[Id];
-    else
-        v[Id] = 0.0;
-}
-
-__global__ void updateVelVerticalSouth(
-    const unsigned int* ids,
-    double* v,
-    const double* v_star,
-    const double* alfa_y,
-    const double* H,
-    const double* eta,
-    double c2, double H_min,
-    int isNonReflectingBC,
-    unsigned int N_cols,
-    unsigned int n)
-{
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
-
-    const unsigned int Id     = ids[i];
-    const unsigned int IDsouth = Id - N_cols;
-    const unsigned int IDnorth = Id - 2 * N_cols;
-
-    const double H_s = H[IDsouth];
-    const double eta_diff = -eta[IDsouth] + eta[IDnorth];
-    const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
-
-    const double H_interface = H_s * 0.5 + s * H_s * 0.5;
-
-    if (H_interface > H_min)
-        v[Id] = isNonReflectingBC * alfa_y[Id] * v_star[Id];
-    else
-        v[Id] = 0.0;
+    if (t == 0) {
+        // ---- internal ----
+        const unsigned int IDsouth = Id;
+        const unsigned int IDnorth = Id - N_cols;
+        const double H_s = H[IDsouth], H_n = H[IDnorth];
+        const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = (H_s + H_n) * 0.5 + s * (-H_s + H_n) * 0.5;
+        v[Id] = (H_interface > H_min)
+                    ? alfa_y[Id] * (v_star[Id] - c2 * (eta[IDsouth] - eta[IDnorth]))
+                    : 0.0;
+    } else if (t == 1) {
+        // ---- North boundary ----
+        const unsigned int IDnorth = Id;
+        const unsigned int IDsouth = Id + N_cols;
+        const double H_n = H[IDnorth];
+        const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = H_n * 0.5 + s * (-H_n) * 0.5;
+        v[Id] = (H_interface > H_min) ? isNonReflectingBC * alfa_y[Id] * v_star[Id] : 0.0;
+    } else {
+        // ---- South boundary ----
+        const unsigned int IDsouth = Id - N_cols;
+        const unsigned int IDnorth = Id - 2 * N_cols;
+        const double H_s = H[IDsouth];
+        const double eta_diff = -eta[IDsouth] + eta[IDnorth];
+        const double s = (eta_diff > 0.0) - (eta_diff < 0.0);
+        const double H_interface = H_s * 0.5 + s * H_s * 0.5;
+        v[Id] = (H_interface > H_min) ? isNonReflectingBC * alfa_y[Id] * v_star[Id] : 0.0;
+    }
 }
 
 void updateVel_wrapper(
@@ -2234,12 +1617,10 @@ void updateVel_wrapper(
     const thrust::device_vector<double>& eta,
     const thrust::device_vector<double>& H,
     const thrust::device_vector<double>& orography,
-    const thrust::device_vector<unsigned int>& idStaggeredInternalVectHorizontal,
-    const thrust::device_vector<unsigned int>& idStaggeredInternalVectVertical,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectWest,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectEast,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectNorth,
-    const thrust::device_vector<unsigned int>& idStaggeredBoundaryVectSouth,
+    const thrust::device_vector<unsigned int>& idHorizontalAll,
+    const thrust::device_vector<unsigned int>& horizontalTag,
+    const thrust::device_vector<unsigned int>& idVerticalAll,
+    const thrust::device_vector<unsigned int>& verticalTag,
     int isNonReflectingBC,
     cudaStream_t stream)
 {
@@ -2252,36 +1633,16 @@ void updateVel_wrapper(
     const double* ax_ptr  = thrust::raw_pointer_cast(alfa_x.data());
     const double* ay_ptr  = thrust::raw_pointer_cast(alfa_y.data());
 
-    // vertical
-    launch_kernel(updateVelVerticalInternal,
-        idStaggeredInternalVectVertical.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredInternalVectVertical.data()),
-        v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, N_cols);
-
-    launch_kernel(updateVelVerticalNorth,
-        idStaggeredBoundaryVectNorth.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectNorth.data()),
+    launch_kernel(updateVelVerticalMerged,
+        idVerticalAll.size(), stream,
+        thrust::raw_pointer_cast(idVerticalAll.data()),
+        thrust::raw_pointer_cast(verticalTag.data()),
         v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
 
-    launch_kernel(updateVelVerticalSouth,
-        idStaggeredBoundaryVectSouth.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectSouth.data()),
-        v_ptr, vs_ptr, ay_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
-
-    // horizontal
-    launch_kernel(updateVelHorizontalInternal,
-        idStaggeredInternalVectHorizontal.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredInternalVectHorizontal.data()),
-        u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, N_cols);
-
-    launch_kernel(updateVelHorizontalWest,
-        idStaggeredBoundaryVectWest.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectWest.data()),
-        u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
-
-    launch_kernel(updateVelHorizontalEast,
-        idStaggeredBoundaryVectEast.size(), stream,
-        thrust::raw_pointer_cast(idStaggeredBoundaryVectEast.data()),
+    launch_kernel(updateVelHorizontalMerged,
+        idHorizontalAll.size(), stream,
+        thrust::raw_pointer_cast(idHorizontalAll.data()),
+        thrust::raw_pointer_cast(horizontalTag.data()),
         u_ptr, us_ptr, ax_ptr, H_ptr, eta_ptr, c2, H_min, isNonReflectingBC, N_cols);
 }
 
