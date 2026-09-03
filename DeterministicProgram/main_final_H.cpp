@@ -69,6 +69,14 @@ int main(int argc, char **argv) {
 
   const bool direct_method = dataFile("linear_solver/direct_method", true);
 
+  // GPU-only: whether gpu_CG applies the IC(0) preconditioner (cusparseDcsric02
+  // + the two SpSV triangular solves) or runs plain CG. The CPU reference
+  // (LinearAlgebra::CG, cg.hpp) always uses the analogous Eigen
+  // IncompleteCholesky preconditioner, so this should normally stay true --
+  // it exists mainly to reproduce/compare against an unpreconditioned run.
+  const bool use_preconditioner =
+      dataFile("linear_solver/use_preconditioner", true);
+
   const bool is_precipitation =
       dataFile("files/meteo_data/precipitation", true);
   const bool constant_precipitation =
@@ -541,6 +549,12 @@ int main(int argc, char **argv) {
     if (rank == 0)
       std::cout << "[sparsity] m = " << m << ", nnz = " << nnz << std::endl;
 
+    // Uploaded once: buildMatrix_cell_gather uses this to tell an internal
+    // neighbor (basin-basin) from a boundary one; the mask never changes
+    // during the run.
+    const thrust::device_vector<unsigned int> basin_mask_gpu(
+        basin_mask_Vec.begin(), basin_mask_Vec.end());
+
     //--------------------------------------------------------------------------
     // allocate device memory for CSR matrices
     CHECK_CUDA( cudaMalloc((void**) &d_A_rows,    num_offsets * sizeof(int)) )
@@ -668,15 +682,14 @@ int main(int argc, char **argv) {
     CHECK_CUDA( cudaMalloc(&d_bufferL,  bufferSizeL) )
     CHECK_CUDA( cudaMalloc(&d_bufferLT, bufferSizeLT) )
 
-    CHECK_CUSPARSE( cusparseSpSV_analysis(
-			    cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-			    &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
-			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, d_bufferL) )
-    CHECK_CUSPARSE( cusparseSpSV_analysis(
-			    cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
-			    &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
-			    CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, d_bufferLT) )
-    
+    // NOTE: cusparseSpSV_analysis is NOT purely structural for
+    // CUSPARSE_SPSV_ALG_DEFAULT -- it depends on the actual matL VALUES
+    // (which row-dependency/level-scheduling it builds can differ depending
+    // on which entries are numerically zero). d_L_values here is still the
+    // cudaMemset(...,1,...) placeholder from above, not a real factorization,
+    // so analysis is deliberately NOT run yet -- it is redone every time step
+    // right after the real cusparseDcsric02 factorization, using the actual L.
+
     //--------------------------------------------------------------------------
     // Set the NetCDF library
     int ncid;
@@ -846,8 +859,6 @@ int main(int argc, char **argv) {
     H_basin.setZero(idBasinVect_excluded.size()); 
     rhs.setZero(idBasinVect_excluded.size());
 #endif
-    //std::cout << "stop here!!"<< std::endl;
-    //return 0; 
 
 #ifdef ENABLE_CUDA
     maxH = deviceMax(H);
@@ -1020,7 +1031,7 @@ int main(int argc, char **argv) {
 	cudaStreamWaitEvent(S(7), e_H_interface_x, 0);
 	cudaStreamWaitEvent(S(7), e_H_interface_y, 0);
 #endif
-/*
+
       buildMatrix(H_interface.horizontal, H_interface.vertical, orography,
                   u_star, v_star, u, v, H, N_cols, c1_DSV_, c3_DSV_,
                   0, precipitation.DP_cumulative, dt_DSV, alfa.alfa_x,
@@ -1035,14 +1046,84 @@ int main(int argc, char **argv) {
                   idStaggeredInternalVectVertical,
 #endif
                   idBasinVectReIndex_excluded, isNonReflectingBC, true,
-#ifdef ENABLE_CUDA		  
-		  d_A_rows, d_A_columns, d_A_values, d_B, nnz
+#ifdef ENABLE_CUDA
+		  basin_mask_gpu, d_A_rows, d_A_columns, d_A_values, d_B, nnz
 #endif
 		  CUDA_STREAM(S(7))
 #ifndef ENABLE_CUDA
 		  additional_source_term, excluded_ids, coefficients, rhs
 #endif
 		  );
+/*
+      // +-----------------------------------------------+
+      // |   TEMP: buildMatrix validation (CPU vs GPU)    |
+      // |   fingerprint the assembled A / rhs before the |
+      // |   (still-disabled) linear solve below          |
+      // +-----------------------------------------------+
+      {
+        auto fp_report = [&](const char *nm, long n, long double s,
+                              long double s2, long double mx) {
+          if (rank == 0)
+            printf("[MATRIX-FP] %-3s n=%ld  sum=%+.10Le  l2=%.10Le  max=%.10Le\n",
+                   nm, n, s, std::sqrt(s2), mx);
+        };
+
+#ifndef ENABLE_CUDA
+        A.setFromTriplets(coefficients.begin(), coefficients.end());
+        A.makeCompressed();
+        coefficients.clear();
+
+        {
+          const double *vals = A.valuePtr();
+          const long nnz_check = A.nonZeros();
+          long double s = 0.0L, s2 = 0.0L, mx = 0.0L;
+          for (long kk = 0; kk < nnz_check; kk++) {
+            const long double x = static_cast<long double>(vals[kk]);
+            const long double a = x < 0.0L ? -x : x;
+            s += x; s2 += x * x; if (a > mx) mx = a;
+          }
+          fp_report("A", nnz_check, s, s2, mx);
+        }
+        {
+          const long n_rhs = static_cast<long>(rhs.size());
+          long double s = 0.0L, s2 = 0.0L, mx = 0.0L;
+          for (long kk = 0; kk < n_rhs; kk++) {
+            const long double x = static_cast<long double>(rhs(kk));
+            const long double a = x < 0.0L ? -x : x;
+            s += x; s2 += x * x; if (a > mx) mx = a;
+          }
+          fp_report("rhs", n_rhs, s, s2, mx);
+        }
+#else
+        CHECK_CUDA( cudaStreamSynchronize(S(7)) )
+        std::vector<double> h_A_values_check(nnz), h_rhs_check(m);
+        CHECK_CUDA( cudaMemcpy(h_A_values_check.data(), d_A_values,
+                                nnz * sizeof(double), cudaMemcpyDeviceToHost) )
+        CHECK_CUDA( cudaMemcpy(h_rhs_check.data(), d_B.ptr,
+                                m * sizeof(double), cudaMemcpyDeviceToHost) )
+
+        {
+          long double s = 0.0L, s2 = 0.0L, mx = 0.0L;
+          for (int kk = 0; kk < nnz; kk++) {
+            const long double x = static_cast<long double>(h_A_values_check[kk]);
+            const long double a = x < 0.0L ? -x : x;
+            s += x; s2 += x * x; if (a > mx) mx = a;
+          }
+          fp_report("A", nnz, s, s2, mx);
+        }
+        {
+          long double s = 0.0L, s2 = 0.0L, mx = 0.0L;
+          for (int kk = 0; kk < m; kk++) {
+            const long double x = static_cast<long double>(h_rhs_check[kk]);
+            const long double a = x < 0.0L ? -x : x;
+            s += x; s2 += x * x; if (a > mx) mx = a;
+          }
+          fp_report("rhs", m, s, s2, mx);
+        }
+#endif
+        if (rank == 0) fflush(stdout);
+      }
+*/
 
 #ifndef ENABLE_CUDA
 
@@ -1122,16 +1203,43 @@ int main(int argc, char **argv) {
 			      cudaMemcpyDeviceToDevice) )
 
       //--------------------------------------------------------------------------
-      CHECK_CUDA( cudaMemset(d_X.ptr, 0x0, m * sizeof(double)) )
+      // Warm start: d_X is intentionally NOT reset to zero here. It carries
+      // over the previous solve's result (zeroed once at setup) as the
+      // initial guess for CG, exactly like the CPU reference's H_basin,
+      // which persists across steps/retries -- H changes smoothly enough
+      // step to step that this sharply cuts the iteration count needed
+      // (matches the CPU behavior we already see: 420/61/8/2/1 CG iterations
+      // across successive adaptive-dt retries within one accepted step).
       // M = L * L^T
       CHECK_CUSPARSE( cusparseDcsric02(
 			      cusparseHandle, m, nnz, descrM, d_L_values,
 			      d_A_rows, d_A_columns, infoM,
 			      CUSPARSE_SOLVE_POLICY_NO_LEVEL, d_bufferIC) )
-      // Find numerical zero
-      int numerical_zero;
+      // Find numerical zero. NOTE: cusparseXcsric02_zeroPivot's own return
+      // status is about whether the *query* succeeded (always SUCCESS in
+      // practice) -- CHECK_CUSPARSE does NOT catch a zero/negative pivot,
+      // that information is only in the output value, which must be checked
+      // explicitly.
+      int numerical_zero = -1;
       CHECK_CUSPARSE( cusparseXcsric02_zeroPivot(cusparseHandle, infoM,
 			      &numerical_zero) )
+      if (numerical_zero >= 0 && rank == 0)
+        std::cout << "[CG] WARNING: IC(0) factorization hit a non-positive "
+                     "pivot at reindexed row " << numerical_zero
+                  << " -- preconditioner is invalid this step." << std::endl;
+
+      // Re-analyze the triangular solves against the REAL, just-factorized L
+      // (cusparseSpSV_analysis is not purely structural for ALG_DEFAULT; A/L
+      // change every step, so a one-time analysis against a placeholder is
+      // not valid here).
+      CHECK_CUSPARSE( cusparseSpSV_analysis(
+			      cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+			      &one, matL, d_R.vec, d_tmp.vec, CUDA_R_64F,
+			      CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrL, d_bufferL) )
+      CHECK_CUSPARSE( cusparseSpSV_analysis(
+			      cusparseHandle, CUSPARSE_OPERATION_TRANSPOSE,
+			      &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
+			      CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, d_bufferLT) )
 
       //--------------------------------------------------------------------------
       // ### Run CG computation ###
@@ -1139,9 +1247,9 @@ int main(int argc, char **argv) {
       gpu_CG(cublasHandle, cusparseHandle, m,
 		      matA, matL, d_B, d_X, d_R, d_R_aux, d_P, d_T,
 		      d_tmp, d_bufferMV, spsvDescrL, spsvDescrLT,
-		      1000,  // max iterations 
+		      1000,  // max iterations
 		      1e-6,  // tolerance
-		      false);
+		      use_preconditioner);
       //--------------------------------------------------------------------------
 
       minH = deviceMin(d_X.ptr, m);
@@ -1169,7 +1277,7 @@ int main(int argc, char **argv) {
                       H, eta, orography, d_X.ptr, S(7));
 
 #endif
-
+/*
       // +-----------------------------------------------+
       // |                  Update u, v                  |
       // +-----------------------------------------------+
@@ -1182,7 +1290,7 @@ int main(int argc, char **argv) {
                 idStaggeredBoundaryVectEast_excluded,
                 idStaggeredBoundaryVectNorth_excluded,
                 idStaggeredBoundaryVectSouth_excluded, isNonReflectingBC CUDA_STREAM(S(7)));
-*/
+
       // +-----------------------------------------------+
       // |        Debug field stats (validation)         |
       // +-----------------------------------------------+
@@ -1212,7 +1320,7 @@ int main(int argc, char **argv) {
                time, hG_mx, hG_l2, hsn_mx, hsn_l2, u_mx, u_l2, v_mx, v_l2);
         fflush(stdout);
       }
-
+*/
       // +-----------------------------------------------+
       // |             Sediment Transport                |
       // +-----------------------------------------------+

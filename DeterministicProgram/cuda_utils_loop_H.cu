@@ -1894,9 +1894,9 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 
     // ### 2 ### R_aux_0 = L^-1 L^-T R_0
     if (use_preconditioner) {
-        // IC solve: L^-1 L^-T R
-        CHECK_CUDA( cudaMemset(d_tmp.ptr,   0x0, m * sizeof(double)) )
-        CHECK_CUDA( cudaMemset(d_R_aux.ptr, 0x0, m * sizeof(double)) )
+        // IC solve: L^-1 L^-T R. No memset of d_tmp/d_R_aux needed first:
+        // cusparseSpSV_solve is a full triangular solve, every element of
+        // the output is written, none are accumulated onto prior content.
 	CHECK_CUSPARSE( cusparseSpSV_solve(cusparseHandle,
 				CUSPARSE_OPERATION_NON_TRANSPOSE,
 				&one, matL, d_R.vec, d_tmp.vec,
@@ -1925,6 +1925,7 @@ int gpu_CG(cublasHandle_t       cublasHandle,
     CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_R.ptr, 1, d_R_aux.ptr, 1, &delta) )
 
     // ### 4 ### CG iterations
+    int iterations_used = maxIterations;
     for (int i = 0; i < maxIterations; i++) {
 
         // ### 5 ### alpha = delta / (A*P, P)
@@ -1949,13 +1950,13 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 
         // ### 8 ### convergence check
         CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
-        if (nrm_R < threshold)
+        if (nrm_R < threshold) {
+            iterations_used = i + 1;
             break;
+        }
 
-        // ### 9 ### R_aux_i+1 = L^-1 L^-T R_i+1
+        // ### 9 ### R_aux_i+1 = L^-1 L^-T R_i+1 (no memset needed, see above)
 	if (use_preconditioner) {
-	    CHECK_CUDA( cudaMemset(d_tmp.ptr,   0x0, m * sizeof(double)) )
-	    CHECK_CUDA( cudaMemset(d_R_aux.ptr, 0x0, m * sizeof(double)) )
 	    CHECK_CUSPARSE( cusparseSpSV_solve(cusparseHandle,
 				CUSPARSE_OPERATION_NON_TRANSPOSE,
 				&one, matL, d_R.vec, d_tmp.vec,
@@ -1985,6 +1986,9 @@ int gpu_CG(cublasHandle_t       cublasHandle,
         CHECK_CUBLAS( cublasDaxpy(cublasHandle, m, &one, d_R_aux.ptr, 1,
                                   d_P.ptr, 1) )
     }
+
+    printf("GPU CG: iterations performed: %d, residual achieved: %e\n",
+           iterations_used, nrm_R);
 
     return EXIT_SUCCESS;
 }
