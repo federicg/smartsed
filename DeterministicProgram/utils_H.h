@@ -267,13 +267,22 @@ public:
 
     for (int i = 0; i < Hyetograph.size(); i++)
 	    for (int j = 0; j < Hyetograph[i].size(); j++)
-		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j] 
+		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j]
 			    = Hyetograph[i][j];
 
-     for (int i = 0; i < IDW_weights.size(); i++)
-	    for (int j = 0; j < IDW_weights[i].size(); j++)
-		    flat_IDW[std::accumulate(size_IDW.begin(), size_IDW.begin()+i, 0) + j] 
-			    = IDW_weights[i][j];
+     // Dense per-cell IDW layout: flat_IDW[cell * n_st + station].
+     // The GPU kernel (computePrecipitation) indexes
+     //   IDW_weights_gpu[IDcenter * Hyetograph_size + station]
+     // with IDcenter the *raw* cell id, so every cell must occupy exactly
+     // n_st slots; non-basin cells contribute zeros. IDW_precipitation only
+     // pushes weights for basin cells, so the previous prefix-sum packing was
+     // both wrong (compacted index vs. raw cell id -> out-of-bounds read at
+     // fine grids, garbage weights otherwise) and O(N^2).
+     const unsigned int n_st = Hyetograph.size();
+     flat_IDW.assign(static_cast<size_t>(n_st) * IDW_weights.size(), 0.0);
+     for (size_t cell = 0; cell < IDW_weights.size(); ++cell)
+	     for (size_t s = 0; s < IDW_weights[cell].size(); ++s)
+		     flat_IDW[cell * n_st + s] = IDW_weights[cell][s];
 
      Hyetograph_gpu = flat_hy;
      IDW_weights_gpu = flat_IDW;
@@ -449,13 +458,22 @@ public:
 
     for (int i = 0; i < Hyetograph.size(); i++)
 	    for (int j = 0; j < Hyetograph[i].size(); j++)
-		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j] 
+		    flat_hy[std::accumulate(size_hy.begin(), size_hy.begin()+i, 0) + j]
 			    = Hyetograph[i][j];
 
-     for (int i = 0; i < IDW_weights.size(); i++)
-	    for (int j = 0; j < IDW_weights[i].size(); j++)
-		    flat_IDW[std::accumulate(size_IDW.begin(), size_IDW.begin()+i, 0) + j] 
-			    = IDW_weights[i][j];
+     // Dense per-cell IDW layout: flat_IDW[cell * n_st + station].
+     // The GPU kernel (computePrecipitation) indexes
+     //   IDW_weights_gpu[IDcenter * Hyetograph_size + station]
+     // with IDcenter the *raw* cell id, so every cell must occupy exactly
+     // n_st slots; non-basin cells contribute zeros. IDW_precipitation only
+     // pushes weights for basin cells, so the previous prefix-sum packing was
+     // both wrong (compacted index vs. raw cell id -> out-of-bounds read at
+     // fine grids, garbage weights otherwise) and O(N^2).
+     const unsigned int n_st = Hyetograph.size();
+     flat_IDW.assign(static_cast<size_t>(n_st) * IDW_weights.size(), 0.0);
+     for (size_t cell = 0; cell < IDW_weights.size(); ++cell)
+	     for (size_t s = 0; s < IDW_weights[cell].size(); ++s)
+		     flat_IDW[cell * n_st + s] = IDW_weights[cell][s];
 
      Hyetograph_gpu = flat_hy;
      IDW_weights_gpu = flat_IDW;
