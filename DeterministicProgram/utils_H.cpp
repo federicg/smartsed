@@ -17,30 +17,16 @@
 
 double compute_dt_sediment(const double alpha, const double beta,
                            const double S_x, const double S_y,
-                           const std::vector<double> &u,
-                           const std::vector<double> &v,
+                           const double u_absmax, const double v_absmax,
                            const double pixel_size, const double dt_DSV,
                            unsigned int *numberOfSteps) {
   static constexpr double max_courant_number = .95;
-  // +-----------------------------------------------+
-  // |      Estimate vertical max Courant number     |
-  // +-----------------------------------------------+
 
+  // vertical / horizontal max Courant number estimates
   const double dt_y =
-      max_courant_number * pixel_size /
-      (alpha * std::pow(S_y, beta) *
-       std::max(*std::max_element(v.begin(), v.end()),
-                std::abs(*std::min_element(v.begin(), v.end()))));
-
-  // +-----------------------------------------------+
-  // |    Estimate horizontal max Courant number     |
-  // +-----------------------------------------------+
-
+      max_courant_number * pixel_size / (alpha * std::pow(S_y, beta) * v_absmax);
   const double dt_x =
-      max_courant_number * pixel_size /
-      (alpha * std::pow(S_x, beta) *
-       std::max(*std::max_element(u.begin(), u.end()),
-                std::abs(*std::min_element(u.begin(), u.end()))));
+      max_courant_number * pixel_size / (alpha * std::pow(S_x, beta) * u_absmax);
 
   double dt_sed = std::min(dt_y, dt_x);
 
@@ -49,6 +35,21 @@ double compute_dt_sediment(const double alpha, const double beta,
   *numberOfSteps = std::floor(dt_DSV / dt_sed);
 
   return dt_sed;
+}
+
+double compute_dt_sediment(const double alpha, const double beta,
+                           const double S_x, const double S_y,
+                           const std::vector<double> &u,
+                           const std::vector<double> &v,
+                           const double pixel_size, const double dt_DSV,
+                           unsigned int *numberOfSteps) {
+  // std::max(max_element, |min_element|) == max_i |x_i| for any sign mix.
+  const double u_absmax = std::max(*std::max_element(u.begin(), u.end()),
+                                   std::abs(*std::min_element(u.begin(), u.end())));
+  const double v_absmax = std::max(*std::max_element(v.begin(), v.end()),
+                                   std::abs(*std::min_element(v.begin(), v.end())));
+  return compute_dt_sediment(alpha, beta, S_x, S_y, u_absmax, v_absmax,
+                             pixel_size, dt_DSV, numberOfSteps);
 }
 
 //==============================================================================

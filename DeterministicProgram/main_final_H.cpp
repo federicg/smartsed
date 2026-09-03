@@ -1416,16 +1416,32 @@ int main(int argc, char **argv) {
       // +-----------------------------------------------+
       // |             Sediment Transport                |
       // +-----------------------------------------------+
-/*
+
       if (is_sediment_transport) {
         // tic();
 
+#ifdef ENABLE_CUDA
+        // dt_sed only needs max|u| / max|v|. u,v were just written by updateVel
+        // on S(7); wait for it, take the extrema with a device reduction (2
+        // scalars, no full array copy) and finish the scalar dt_sed math on
+        // the host.
+        cudaStreamSynchronize(S(7));
+        const auto mm_u = deviceMinMax(u);
+        const auto mm_v = deviceMinMax(v);
+        const double u_absmax = std::max(mm_u.max_val, std::abs(mm_u.min_val));
+        const double v_absmax = std::max(mm_v.max_val, std::abs(mm_v.min_val));
+        dt_sed = compute_dt_sediment(alfa_coeff, beta_coeff, slope_x_max,
+                                     slope_y_max, u_absmax, v_absmax,
+                                     pixel_size, dt_DSV, &numberOfSteps);
+#else
         dt_sed = compute_dt_sediment(alfa_coeff, beta_coeff, slope_x_max,
                                      slope_y_max, u, v, pixel_size, dt_DSV,
                                      &numberOfSteps);
+#endif
         c1_sed = dt_sed / pixel_size;
 
         // vertical and horizontal residuals truncated for Sediment Transport
+        // (S(7): same stream as updateVel, which produces the u/v it reads).
         computeResidualsTruncated(
             u, v, N_cols, N_rows, N, (dt_sed / pixel_size), slope_x, slope_y,
             alfa_coeff,  // alfa
@@ -1434,7 +1450,7 @@ int main(int argc, char **argv) {
 #ifdef ENABLE_CUDA
 	    idHorizontalAll_excluded, idVerticalAll_excluded,
 	    Gamma_vect_x_1, Gamma_vect_x_2, Gamma_vect_y_1, Gamma_vect_y_2,
-	    slope_x_mod, slope_y_mod CUDA_STREAM(S(11))
+	    slope_x_mod, slope_y_mod CUDA_STREAM(S(7))
 #else
             idStaggeredInternalVectHorizontal_excluded,
             idStaggeredInternalVectVertical_excluded,
@@ -1446,8 +1462,10 @@ int main(int argc, char **argv) {
 #endif
 	    );
 
+#ifndef ENABLE_CUDA
         additional_source_term.assign(N, 0.);
-
+#endif
+/*
         for (const auto &k : idBasinVect) {
           const auto &current_tuple = excluded_ids[k];
           if (std::get<0>(current_tuple)) {
@@ -1594,9 +1612,9 @@ int main(int argc, char **argv) {
                         additional_source_term[Id];
           }
         }
-
-      } // End of if(sediment_transport)
 */
+      } // End of if(sediment_transport)
+
       // +-----------------------------------------------+
       // |               Update time                     |
       // +-----------------------------------------------+

@@ -2283,6 +2283,16 @@ double maxCourant(const T_type &H, const double c1,
 
 //==============================================================================
 
+// Scalar core: everything compute_dt_sediment does once it has the two
+// velocity extrema (max|u|, max|v|). Kept host-side; the GPU path computes the
+// extrema with a device reduction and calls this, so no full u/v array is
+// copied to the host.
+double compute_dt_sediment(const double alpha, const double beta,
+                           const double S_x, const double S_y,
+                           const double u_absmax, const double v_absmax,
+                           const double pixel_size, const double dt_DSV,
+                           unsigned int *numberOfSteps);
+
 double compute_dt_sediment(const double alpha, const double beta,
                            const double S_x, const double S_y,
                            const std::vector<double> &u,
