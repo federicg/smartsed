@@ -16,6 +16,9 @@
 //! wall-clock benchmarking of the time loop
 #include <chrono>
 
+//! std::sort (CSR row sorting for the red-black reindex)
+#include <algorithm>
+
 #ifdef ENABLE_CUDA
 //! NetCDF
 #include <netcdf.h>
@@ -540,10 +543,52 @@ int main(int argc, char **argv) {
     int*    h_A_rows    = (int*)malloc(num_offsets * sizeof(int));
     int*    h_A_columns = (int*)malloc((size_t)5 * m * sizeof(int)); // safe upper bound
 
-    make_sparsity_pattern(idBasinVect_excluded_pot, basin_mask_Vec,
-                          idBasinVectReIndex_excluded_pot,
+    // Red-black reordering of the basin-cell row/column numbering, used only
+    // for the sparse system (buildMatrix / IC(0) / CG / updateH). IC(0)'s
+    // triangular solve is inherently sequential along the matrix's
+    // dependency graph; cuSPARSE's SpSV analysis builds that graph via
+    // level-scheduling, and for the natural raster-scan ordering of a
+    // 5-point-stencil 2D grid the number of levels scales with the grid
+    // dimension. Red-black ordering (all "red" cells i+j even first, then
+    // all "black" cells) makes every red cell's neighbors black and vice
+    // versa, collapsing the dependency graph to 2 levels regardless of grid
+    // size. This is purely a relabeling (same nnz, same physics, same
+    // solution) so it is applied GPU-only: CPU keeps the natural ordering
+    // fed to Eigen, which reorders internally (AMD) anyway.
+    thrust::host_vector<unsigned int> idBasinVect_rb(m);
+    thrust::host_vector<unsigned int> idBasinVectReIndex_rb(
+        idBasinVectReIndex_excluded_pot.size());
+    {
+      unsigned int n_red = 0;
+      for (const auto Id : idBasinVect_excluded_pot) {
+        const unsigned int i = Id / N_cols, j = Id % N_cols;
+        if (((i + j) & 1u) == 0) n_red++;
+      }
+      unsigned int next_red = 0, next_black = n_red;
+      for (const auto Id : idBasinVect_excluded_pot) {
+        const unsigned int i = Id / N_cols, j = Id % N_cols;
+        const unsigned int pos =
+            (((i + j) & 1u) == 0) ? next_red++ : next_black++;
+        idBasinVect_rb[pos] = Id;
+        idBasinVectReIndex_rb[Id] = pos;
+      }
+    }
+
+    make_sparsity_pattern(idBasinVect_rb, basin_mask_Vec,
+                          idBasinVectReIndex_rb,
                           h_A_rows, h_A_columns,
                           N_rows, N_cols);
+
+    // make_sparsity_pattern inserts a row's neighbors in fixed geometric
+    // order (N, W, self, E, S). Under the natural reindex that happens to
+    // come out ascending, but red-black scrambles it (a cell's neighbors are
+    // all the opposite color, with no relation between geometric direction
+    // and their reindex value) -- and cuSPARSE's CSR routines (csric02,
+    // SpMV, SpSV) require sorted column indices per row. Sort each row here;
+    // findPosition's linear search doesn't care about order either way.
+    for (int row = 0; row < m; row++) {
+      std::sort(h_A_columns + h_A_rows[row], h_A_columns + h_A_rows[row + 1]);
+    }
 
     const int nnz = h_A_rows[m];
     if (rank == 0)
@@ -554,6 +599,11 @@ int main(int argc, char **argv) {
     // during the run.
     const thrust::device_vector<unsigned int> basin_mask_gpu(
         basin_mask_Vec.begin(), basin_mask_Vec.end());
+
+    // Device copy of the red-black reindex, used in place of
+    // idBasinVectReIndex_excluded for buildMatrix/updateH on the GPU path.
+    const thrust::device_vector<unsigned int> idBasinVectReIndex_rb_gpu(
+        idBasinVectReIndex_rb.begin(), idBasinVectReIndex_rb.end());
 
     //--------------------------------------------------------------------------
     // allocate device memory for CSR matrices
@@ -1045,7 +1095,12 @@ int main(int argc, char **argv) {
                   idBasinVect, idStaggeredInternalVectHorizontal,
                   idStaggeredInternalVectVertical,
 #endif
-                  idBasinVectReIndex_excluded, isNonReflectingBC, true,
+#ifdef ENABLE_CUDA
+                  idBasinVectReIndex_rb_gpu,
+#else
+                  idBasinVectReIndex_excluded,
+#endif
+                  isNonReflectingBC, true,
 #ifdef ENABLE_CUDA
 		  basin_mask_gpu, d_A_rows, d_A_columns, d_A_values, d_B, nnz
 #endif
@@ -1273,7 +1328,7 @@ int main(int argc, char **argv) {
       H_old.swap(H);
 
       // Scatter solver result into H and update eta = H + orography
-      updateH_wrapper(idBasinVect_excluded, idBasinVectReIndex_excluded,
+      updateH_wrapper(idBasinVect_excluded, idBasinVectReIndex_rb_gpu,
                       H, eta, orography, d_X.ptr, S(7));
 
 #endif
