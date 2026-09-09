@@ -22,7 +22,7 @@
     constant_precipitation      = false  # false: IDW
 
     # comune lecco files
-    rain_file                   = pioggia_id.txt #100_anni.txt #rain/event/pioggia_id.txt 
+    rain_file                   = rain/pioggia_id_constant.txt #pioggia_id.txt #100_anni.txt #rain/event/pioggia_id.txt 
     time_spacing_rain           = 1 #0.1667
 
     # arpa files
@@ -88,10 +88,10 @@
     snow_file                   = ../Outputs/restart/hsn_1.asc
 
     restart_sediment            = false
-    sediment_file               = ../Outputs/restart/hsd_1.asc
+    sediment_file               = ../Outputs/initial_cond/hsd_ev.asc
 
-    restart_gravitational       = false
-    gravitational_file          = ../Outputs/restart/hG_1.asc
+    restart_gravitational       = true
+    gravitational_file          = ../Outputs/initial_cond/hG_ev_5.asc
 
     restart_soilMoisture        = true
     clay_file                   = ../Outputs/initial_cond/clay_0.asc 
@@ -168,6 +168,7 @@
 
 [linear_solver]
     direct_method = false
+    use_preconditioner = true   # GPU only: apply the IC(0) preconditioner in gpu_CG (matches the CPU IncompleteCholesky path). Set false to run plain CG for comparison.
 
 
 [debug]
