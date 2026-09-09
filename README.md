@@ -13,7 +13,7 @@ The project has two parts:
 
 | Part | Language | What it does |
 |------|----------|--------------|
-| **Geostatistical pre-processor** | R | Downscales coarse SoilGrids clay/silt/sand maps to the DEM resolution (kriging + optional conditional simulations) to produce the soil-texture inputs. |
+| **Geostatistical pre-processor** | R (+ a QGIS/Python helper) | Downscales coarse SoilGrids clay/silt/sand maps to the DEM resolution (kriging + optional conditional simulations) to produce the soil-texture inputs. This is the code in [`Geostatistics/`](Geostatistics/). |
 | **Deterministic solver** | C++17 (+ optional CUDA), MPI | Time-marches the coupled PDE system on the basin grid. This is the code in [`DeterministicProgram/`](DeterministicProgram/). |
 
 MPI is used only to run several **stochastic realisations** in parallel (one rank
@@ -30,6 +30,8 @@ input file, see **[`Userguide_SMARTSED.pdf`](Userguide_SMARTSED.pdf)**.
 smartsed/
 ├── DeterministicProgram/   C++/CUDA solver + bundled headers (Eigen IML++, GetPot)
 │                           see DeterministicProgram/README.md
+├── Geostatistics/          R/Python geostatistical pre-processor (SoilGrids downscaling)
+│                           see Geostatistics/README.md
 ├── Inputs/                 example input datasets (DEM, masks, meteo, soil, land cover)
 │                           see Inputs/README.md
 ├── Outputs/                simulation output goes here at run time (git-ignored);
