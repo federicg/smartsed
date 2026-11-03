@@ -1,0 +1,37 @@
+# GPU benchmark image: CUDA build of SMART-SED + the Caldone event inputs.
+#
+# Build (from the repository root):
+#   docker build -f run/Docker/Dockerfile.cuda -t smartsed-cuda .
+# Run (results land in ./results):
+#   docker run --rm --gpus all -v $PWD/results:/results smartsed-cuda [res ...]
+# Apptainer:
+#   apptainer build smartsed-cuda.sif docker-daemon://smartsed-cuda:latest   (or docker-archive://smartsed-cuda.tar)
+#   mkdir -p results && apptainer run --nv -B $PWD/results:/results smartsed-cuda.sif [res ...]
+#
+# CUDA 12.6 runs on any driver >= 525 (minor-version compatibility); code is
+# built for sm_86 (Ampere) and sm_89 (Ada).
+
+FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS build
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        cmake g++ make libopenmpi-dev openmpi-bin libeigen3-dev libnetcdf-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY DeterministicProgram /src/DeterministicProgram
+RUN cmake -S /src/DeterministicProgram -B /build -DENABLE_CUDA=ON \
+    && cmake --build /build -j \
+    && cmake -S /src/DeterministicProgram -B /build-cpu \
+    && cmake --build /build-cpu -j
+
+FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04
+# R + raster: the solver shells out to Rscript to resample the input rasters
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        libopenmpi3t64 openmpi-bin libnetcdf19t64 r-base-core r-cran-raster \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /build/main.exe /opt/smartsed/DeterministicProgram/main.exe
+COPY --from=build /build-cpu/main.exe /opt/smartsed/DeterministicProgram/main_cpu.exe
+COPY Inputs /opt/smartsed/Inputs
+COPY Outputs/initial_cond /opt/smartsed/Outputs/initial_cond
+COPY run/SMARTSED_input_ev /opt/smartsed/run/SMARTSED_input_ev
+COPY run/Docker/bench_container.sh /usr/local/bin/smartsed-bench
+ENV OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 LC_ALL=C.UTF-8
+WORKDIR /results
+ENTRYPOINT ["smartsed-bench"]
