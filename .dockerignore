@@ -1,0 +1,9 @@
+Zeus
+contratto
+report
+DeterministicProgram/build*
+Outputs/*
+!Outputs/initial_cond
+*.pdf
+.git
+*.tar.gz

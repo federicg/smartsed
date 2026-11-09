@@ -19,6 +19,7 @@ benchmark harness, and a Docker environment.
 | `submission_cuda.sh` | Stage + launch the **CUDA** build (`build-cuda` by default). |
 | `benchmark_sweep.sh` | Run both builds over a list of resolutions and collect the `[BENCH]`/`[FP]` lines into `../Outputs/bench_sweep/summary.txt`. |
 | `Docker/` | Ubuntu 20.04 image with all C++ and R dependencies (no CUDA). `buildDocker*` builds it, `runUnix.sh` / `runWINDOWS.bat` mount the repo at `/smartsed` and open a shell. |
+| `Docker/Dockerfile.cuda` | Self-contained **GPU benchmark image** (CUDA 12.6, sm_86 + sm_89, Caldone event inputs baked in). Entry point `Docker/bench_container.sh`; build/run instructions (Docker and Apptainer) in the Dockerfile header. |
 
 ---
 
