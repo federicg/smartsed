@@ -1568,7 +1568,10 @@ int gpu_CG(cublasHandle_t       cublasHandle,
                            cudaMemcpyDeviceToDevice) )
 
     double nrm_R;
-    CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
+    // ||R|| via dot + sqrt: cublasDnrm2 uses an overflow-safe scaled algorithm
+    // that profiled at ~3% of peak bandwidth (30% of GPU time at 15 m).
+    CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_R.ptr, 1, d_R.ptr, 1, &nrm_R) )
+    nrm_R = sqrt(nrm_R);
     double threshold = tolerance * nrm_R;
 
     double delta;
@@ -1599,7 +1602,10 @@ int gpu_CG(cublasHandle_t       cublasHandle,
                                   d_R.ptr, 1) )
 
         // ### 8 ### convergence check
-        CHECK_CUBLAS( cublasDnrm2(cublasHandle, m, d_R.ptr, 1, &nrm_R) )
+        // ||R|| via dot + sqrt: cublasDnrm2 uses an overflow-safe scaled algorithm
+        // that profiled at ~3% of peak bandwidth (30% of GPU time at 15 m).
+        CHECK_CUBLAS( cublasDdot(cublasHandle, m, d_R.ptr, 1, d_R.ptr, 1, &nrm_R) )
+        nrm_R = sqrt(nrm_R);
         if (nrm_R < threshold) {
             iterations_used = i + 1;
             break;
