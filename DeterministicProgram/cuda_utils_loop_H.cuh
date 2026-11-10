@@ -571,6 +571,9 @@ void make_laplace_matrix(int * n_out,
 
 //==============================================================================
 
+void invDiag_wrapper(const int* d_A_rows, const int* d_A_columns,
+                     const double* d_A_values, double* d_invdiag, int m);
+
 int gpu_CG(cublasHandle_t       cublasHandle,
            cusparseHandle_t     cusparseHandle,
            int                  m,
@@ -588,7 +591,8 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            cusparseSpSVDescr_t  spsvDescrLT,
            int                  maxIterations,
            double               tolerance,
-	   const bool           use_preconditioner);
+	   const bool           use_preconditioner,
+	   const bool           jacobi = false);
 
 //==============================================================================
 // Scatter CG solution d_X back into H and update eta = H + orography

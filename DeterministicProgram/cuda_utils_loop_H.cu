@@ -1,3 +1,6 @@
+#include <thrust/transform.h>
+#include <thrust/functional.h>
+#include <thrust/execution_policy.h>
 #include <thrust/extrema.h>      // for thrust::max_element, min_element, minmax_element
 #include <thrust/reduce.h>       // for thrust::reduce
 #include <thrust/device_vector.h>
@@ -1509,6 +1512,22 @@ void buildMatrix_wrapper(const thrust::device_vector<double>& H_int_x,
 }
  
 //==============================================================================
+// Jacobi preconditioner setup: invd = 1 / diag(A), one thread per CSR row.
+__global__ void invDiag_kernel(const int* d_A_rows, const int* d_A_columns,
+                               const double* d_A_values, double* invd,
+                               unsigned int n) {
+  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  invd[i] = 1.0 / d_A_values[findPosition(d_A_rows, d_A_columns, i, i)];
+}
+
+void invDiag_wrapper(const int* d_A_rows, const int* d_A_columns,
+                     const double* d_A_values, double* d_invdiag, int m) {
+  launch_kernel(invDiag_kernel, m, (cudaStream_t)0,
+                d_A_rows, d_A_columns, d_A_values, d_invdiag);
+}
+
+//==============================================================================
 // https://github.com/NVIDIA/cuda-samples
 int gpu_CG(cublasHandle_t       cublasHandle,
            cusparseHandle_t     cusparseHandle,
@@ -1527,7 +1546,8 @@ int gpu_CG(cublasHandle_t       cublasHandle,
            cusparseSpSVDescr_t  spsvDescrLT,
            int                  maxIterations,
            double               tolerance,
-	   const bool           use_preconditioner = true) {
+	   const bool           use_preconditioner = true,
+	   const bool           jacobi) {
 
     const double zero      = 0.0;
     const double one       = 1.0;
@@ -1557,6 +1577,11 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 				&one, matL, d_tmp.vec, d_R_aux.vec,
 				CUDA_R_64F, CUSPARSE_SPSV_ALG_DEFAULT,
 				spsvDescrLT) )
+    } else if (jacobi) {
+        // Jacobi: R_aux = D^-1 R; d_tmp holds 1/diag(A) (invDiag_wrapper),
+        // it is free here because no triangular solve uses it.
+        thrust::transform(thrust::device, d_R.ptr, d_R.ptr + m, d_tmp.ptr,
+                          d_R_aux.ptr, thrust::multiplies<double>());
     } else {
         // no preconditioner: R_aux = R
         CHECK_CUDA( cudaMemcpy(d_R_aux.ptr, d_R.ptr, m * sizeof(double),
@@ -1623,8 +1648,12 @@ int gpu_CG(cublasHandle_t       cublasHandle,
 				&one, matL, d_tmp.vec, d_R_aux.vec,
 				CUDA_R_64F, CUSPARSE_SPSV_ALG_DEFAULT,
 				spsvDescrLT) )
-	}
-	else {
+	} else if (jacobi) {
+        // Jacobi: R_aux = D^-1 R; d_tmp holds 1/diag(A) (invDiag_wrapper),
+        // it is free here because no triangular solve uses it.
+        thrust::transform(thrust::device, d_R.ptr, d_R.ptr + m, d_tmp.ptr,
+                          d_R_aux.ptr, thrust::multiplies<double>());
+	} else {
 	    // no preconditioner: R_aux = R
             CHECK_CUDA( cudaMemcpy(d_R_aux.ptr, d_R.ptr, m * sizeof(double),
                                    cudaMemcpyDeviceToDevice) )

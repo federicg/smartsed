@@ -22,6 +22,7 @@
 #ifdef ENABLE_CUDA
 //! NetCDF
 #include <netcdf.h>
+#include <cuda_profiler_api.h>  // nsys --capture-range=cudaProfilerApi
 #endif
 
 //
@@ -79,6 +80,14 @@ int main(int argc, char **argv) {
   // it exists mainly to reproduce/compare against an unpreconditioned run.
   const bool use_preconditioner =
       dataFile("linear_solver/use_preconditioner", true);
+  // GPU-only: with use_preconditioner = true, use Jacobi (1/diag(A)) instead of
+  // IC(0). No factorisation and no triangular solves: every kernel of the CG
+  // is then fully parallel. Default: A is strictly diagonally dominant with
+  // cond(D^-1 A) <= 1 + 8 C^2 (C = celerity Courant number), and at 5 m the
+  // loop is 1.27x faster than with IC(0) (set jacobi = false to get IC(0)).
+  const bool use_jacobi = use_preconditioner &&
+      dataFile("linear_solver/jacobi", true);
+  const bool use_ic0 = use_preconditioner && !use_jacobi;
 
   const bool is_precipitation =
       dataFile("files/meteo_data/precipitation", true);
@@ -969,6 +978,9 @@ int main(int argc, char **argv) {
     cudaEventCreate(&e_alfa_y);
 #endif
 
+#ifdef ENABLE_CUDA
+    cudaProfilerStart();  // profile the time loop only (no-op without a profiler)
+#endif
     const auto bench_t0 = std::chrono::steady_clock::now();
 
     while (!is_last_step) {
@@ -1283,6 +1295,7 @@ int main(int argc, char **argv) {
 
 #else
 
+      if (use_ic0) {
       // reset L = A for IC factorization
       CHECK_CUDA( cudaMemcpy(d_L_values, d_A_values,
 			      nnz * sizeof(double),
@@ -1327,6 +1340,10 @@ int main(int argc, char **argv) {
 			      &one, matL, d_tmp.vec, d_R_aux.vec, CUDA_R_64F,
 			      CUSPARSE_SPSV_ALG_DEFAULT, spsvDescrLT, d_bufferLT) )
 
+      } else if (use_jacobi) {
+        invDiag_wrapper(d_A_rows, d_A_columns, d_A_values, d_tmp.ptr, m);
+      }
+
       //--------------------------------------------------------------------------
       // ### Run CG computation ###
       printf("CG loop:\n"); //TODO: check the stream used here after, because it should depend on the stream used in buildMatrix
@@ -1335,7 +1352,7 @@ int main(int argc, char **argv) {
 		      d_tmp, d_bufferMV, spsvDescrL, spsvDescrLT,
 		      1000,  // max iterations
 		      1e-6,  // tolerance
-		      use_preconditioner);
+		      use_ic0, use_jacobi);
       //--------------------------------------------------------------------------
 
       minH = deviceMin(d_X.ptr, m);
@@ -1874,6 +1891,7 @@ int main(int argc, char **argv) {
     {
 #ifdef ENABLE_CUDA
       cudaDeviceSynchronize();
+      cudaProfilerStop();
 #endif
       const double bench_wall_s =
           std::chrono::duration<double>(

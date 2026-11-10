@@ -169,6 +169,7 @@
 [linear_solver]
     direct_method = false
     use_preconditioner = true   # GPU only: apply the IC(0) preconditioner in gpu_CG (matches the CPU IncompleteCholesky path). Set false to run plain CG for comparison.
+    jacobi = true               # GPU only: Jacobi preconditioner (default); false: IC(0), as in the CPU reference
 
 
 [debug]
